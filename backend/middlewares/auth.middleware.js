@@ -39,19 +39,41 @@ const validatePassword = (password) => {
 };
 
 export const validateAuthInput = (req, res, next) => {
-    const { email, password } = req.body;
+    try {
+        const { email, password } = req.body;
 
-    req.body.email = validateEmail(email);
-    req.body.password = validatePassword(password);
+        req.body.email = validateEmail(email);
+        req.body.password = validatePassword(password);
 
-    next();
+        next();
+    } catch (error) {
+        next(error);
+    }
 };
 
 export const validatePasswordInput = (req, res, next) => {
-    const { password } = req.body;
-    console.log(password);
-    
-    req.body.password = validatePassword(password);
-
-    next();
+    try {
+        const { password } = req.body;
+        req.body.password = validatePassword(password);
+        next();
+    } catch (error) {
+        next(error);
+    }
 };
+
+export const validateEmailInput = (req, res, next) => {
+    try {
+        const { email } = req.body;
+        req.body.email = validateEmail(email);
+        next();
+    } catch (error) {
+        next(error);
+    }
+};
+    // const { password } = req.body;
+    // console.log(password);
+    
+    // req.body.password = validatePassword(password);
+
+    // next();
+

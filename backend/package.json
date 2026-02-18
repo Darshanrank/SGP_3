@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "migrate": "prisma migrate dev"
   },
   "author": "",
   "license": "ISC",
@@ -14,12 +15,13 @@
     "@prisma/client": "^6.19.1",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^7.0.13"
   },
-  "devDependencies": { 
+  "devDependencies": {
     "nodemon": "^3.1.11",
     "prisma": "^6.19.2"
   }
