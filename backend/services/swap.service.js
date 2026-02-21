@@ -1,10 +1,15 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../prisma/client.js';
 import { NotFound, ValidationError, ForbiddenError } from '../errors/generic.errors.js';
-
-const prisma = new PrismaClient();
 
 export const createSwapRequestService = async (fromUserId, data) => {
     const { toUserId, teachSkillId, learnSkillId, message } = data;
+
+    if (fromUserId === toUserId) {
+        throw new ValidationError('You cannot create a swap request with yourself', 'INVALID_SWAP_TARGET');
+    }
+
+    const targetUser = await prisma.users.findUnique({ where: { userId: toUserId } });
+    if (!targetUser) throw new NotFound('Target user not found');
 
     // Validate own skill (optional now)
     if (teachSkillId) {
@@ -21,6 +26,19 @@ export const createSwapRequestService = async (fromUserId, data) => {
     });
 
     if (!learnSkill) throw new ValidationError('Target skill not found');
+
+    const existing = await prisma.swapRequest.findFirst({
+        where: {
+            fromUserId,
+            toUserId,
+            learnSkillId: parseInt(learnSkillId),
+            status: 'PENDING'
+        }
+    });
+
+    if (existing) {
+        throw new ValidationError('A pending swap request already exists');
+    }
 
     const request = await prisma.swapRequest.create({
         data: {
@@ -44,22 +62,48 @@ export const createSwapRequestService = async (fromUserId, data) => {
     return request;
 };
 
-export const getMyRequestsService = async (userId, type) => {
-    const whereClause = type === 'sent' ? { fromUserId: userId } : { toUserId: userId };
+export const getMyRequestsService = async (userId, type, { page = 1, limit = 20 } = {}) => {
+    const whereClause = type === 'sent'
+        ? { fromUserId: userId }
+        : type === 'received'
+            ? { toUserId: userId }
+            : { OR: [{ fromUserId: userId }, { toUserId: userId }] };
 
-    return await prisma.swapRequest.findMany({
-        where: whereClause,
-        include: {
-            fromUser: { select: { username: true, userId: true } },
-            toUser: { select: { username: true, userId: true } },
-            teachSkill: { include: { skill: true } },
-            learnSkill: { include: { skill: true } }
+    const skip = (page - 1) * limit;
+
+    const [requests, total] = await Promise.all([
+        prisma.swapRequest.findMany({
+            where: whereClause,
+            include: {
+                fromUser: { select: { username: true, userId: true } },
+                toUser: { select: { username: true, userId: true } },
+                teachSkill: { include: { skill: true } },
+                learnSkill: { include: { skill: true } }
+            },
+            orderBy: { id: 'desc' },
+            skip,
+            take: limit
+        }),
+        prisma.swapRequest.count({ where: whereClause })
+    ]);
+
+    return {
+        data: requests,
+        meta: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
         }
-    });
+    };
 };
 
 export const updateRequestStatusService = async (userId, requestId, data) => {
     const { status, cancelReason } = data;
+    const allowedStatuses = ['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED'];
+    if (!allowedStatuses.includes(status)) {
+        throw new ValidationError('Invalid status');
+    }
 
     const request = await prisma.swapRequest.findUnique({ where: { id: requestId } });
     if (!request) throw new NotFound('Request not found');
@@ -72,65 +116,144 @@ export const updateRequestStatusService = async (userId, requestId, data) => {
         if (request.toUserId !== userId) throw new ForbiddenError('Only receiver can accept/reject');
     }
 
-    const updated = await prisma.swapRequest.update({
-        where: { id: requestId },
-        data: { status, cancelReason }
-    });
+    if (status === 'CANCELLED' && request.fromUserId !== userId && request.toUserId !== userId) {
+        throw new ForbiddenError('Not authorized');
+    }
+
+    if (request.status === 'REJECTED' || request.status === 'CANCELLED') {
+        throw new ValidationError('Request is already closed');
+    }
+
+    if (request.status !== 'PENDING' && status !== 'CANCELLED') {
+        throw new ValidationError('Request is already processed');
+    }
 
     const notifyUserId = request.fromUserId === userId ? request.toUserId : request.fromUserId;
 
-    if (status === 'ACCEPTED') {
-        await prisma.swapClass.create({
-            data: { swapRequestId: request.id }
+    return await prisma.$transaction(async (tx) => {
+        const updated = await tx.swapRequest.update({
+            where: { id: requestId },
+            data: { status, cancelReason: cancelReason || null }
         });
 
-        await prisma.notification.create({
-            data: {
-                userId: notifyUserId,
-                type: 'ACCEPTED',
-                message: `Your swap request has been accepted!`
+        if (status === 'ACCEPTED') {
+            const existingClass = await tx.swapClass.findUnique({
+                where: { swapRequestId: request.id }
+            });
+            if (!existingClass) {
+                await tx.swapClass.create({
+                    data: { swapRequestId: request.id }
+                });
             }
-        });
-    }
 
-    return updated;
-};
-
-export const getMyClassesService = async (userId) => {
-    return await prisma.swapClass.findMany({
-        where: {
-            swapRequest: {
-                OR: [
-                    { fromUserId: userId },
-                    { toUserId: userId }
-                ]
-            }
-        },
-        include: {
-            swapRequest: {
-                include: {
-                    fromUser: { select: { username: true } },
-                    toUser: { select: { username: true } },
-                    teachSkill: { include: { skill: true } },
-                    learnSkill: { include: { skill: true } }
+            await tx.notification.create({
+                data: {
+                    userId: notifyUserId,
+                    type: 'ACCEPTED',
+                    message: 'Your swap request has been accepted!'
                 }
-            },
-            completion: true
+            });
         }
+
+        if (status === 'REJECTED') {
+            await tx.notification.create({
+                data: {
+                    userId: notifyUserId,
+                    type: 'SYSTEM',
+                    message: 'Your swap request was rejected.'
+                }
+            });
+        }
+
+        if (status === 'CANCELLED') {
+            await tx.swapClass.updateMany({
+                where: { swapRequestId: request.id },
+                data: { status: 'CANCELLED', endedAt: new Date() }
+            });
+            await tx.notification.create({
+                data: {
+                    userId: notifyUserId,
+                    type: 'SYSTEM',
+                    message: 'A swap request was cancelled.'
+                }
+            });
+        }
+
+        return updated;
     });
 };
 
-export const getClassDetailsService = async (classId) => {
+export const getMyClassesService = async (userId, { page = 1, limit = 20 } = {}) => {
+    const skip = (page - 1) * limit;
+    const where = {
+        swapRequest: {
+            OR: [
+                { fromUserId: userId },
+                { toUserId: userId }
+            ]
+        }
+    };
+
+    const [classes, total] = await Promise.all([
+        prisma.swapClass.findMany({
+            where,
+            include: {
+                swapRequest: {
+                    include: {
+                        fromUser: { select: { username: true } },
+                        toUser: { select: { username: true } },
+                        teachSkill: { include: { skill: true } },
+                        learnSkill: { include: { skill: true } }
+                    }
+                },
+                completion: true
+            },
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit
+        }),
+        prisma.swapClass.count({ where })
+    ]);
+
+    return {
+        data: classes,
+        meta: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        }
+    };
+};
+
+const assertUserInClass = async (userId, classId) => {
     const swapClass = await prisma.swapClass.findUnique({
         where: { id: classId },
-        include: { todos: true, chatRoom: true, swapRequest: true }
+        include: {
+            swapRequest: { select: { fromUserId: true, toUserId: true } }
+        }
     });
+
     if (!swapClass) throw new NotFound('Class not found');
+
+    const isMember = swapClass.swapRequest.fromUserId === userId || swapClass.swapRequest.toUserId === userId;
+    if (!isMember) throw new ForbiddenError('Not authorized');
+
     return swapClass;
 };
 
-export const addClassTodoService = async (classId, data) => {
+export const getClassDetailsService = async (userId, classId) => {
+    await assertUserInClass(userId, classId);
+    return await prisma.swapClass.findUnique({
+        where: { id: classId },
+        include: { todos: true, chatRoom: true, swapRequest: true }
+    });
+};
+
+export const addClassTodoService = async (userId, classId, data) => {
     const { title, description, dueDate } = data;
+
+    await assertUserInClass(userId, classId);
     
     return await prisma.classTodo.create({
         data: {
@@ -142,7 +265,19 @@ export const addClassTodoService = async (classId, data) => {
     });
 };
 
-export const toggleTodoService = async (todoId, isCompleted) => {
+export const toggleTodoService = async (userId, todoId, isCompleted) => {
+    const todo = await prisma.classTodo.findUnique({
+        where: { id: todoId },
+        include: {
+            swapClass: { include: { swapRequest: { select: { fromUserId: true, toUserId: true } } } }
+        }
+    });
+
+    if (!todo) throw new NotFound('Todo not found');
+
+    const isMember = todo.swapClass.swapRequest.fromUserId === userId || todo.swapClass.swapRequest.toUserId === userId;
+    if (!isMember) throw new ForbiddenError('Not authorized');
+
     return await prisma.classTodo.update({
         where: { id: todoId },
         data: { isCompleted }
@@ -161,6 +296,16 @@ export const completeClassService = async (userId, classId) => {
     const isUser2 = swapClass.swapRequest.toUserId === userId;
 
     if (!isUser1 && !isUser2) throw new ForbiddenError('Not authorized');
+
+    if (swapClass.status === 'CANCELLED') {
+        throw new ValidationError('Cannot complete a cancelled class');
+    }
+
+    if (swapClass.status === 'COMPLETED') {
+        return await prisma.swapCompletion.findUnique({
+            where: { swapClassId: classId }
+        });
+    }
 
     await prisma.swapCompletion.upsert({
         where: { swapClassId: classId },

@@ -6,12 +6,20 @@ import {
     removeUserSkillService,
     getUsersWithSkillService
 } from '../services/skill.service.js';
+import { conf } from '../conf/conf.js';
+import { ValidationError } from '../errors/generic.errors.js';
 
 // Get all Skills (Master List)
 export const getAllSkills = async (req, res, next) => {
     try {
-        const skills = await getAllSkillsService();
-        res.json(skills);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const search = req.query.search || '';
+        
+        const skip = (page - 1) * limit;
+
+        const result = await getAllSkillsService({ skip, take: limit, search });
+        res.json(result);
     } catch (error) {
         next(error);
     }
@@ -21,8 +29,28 @@ export const getAllSkills = async (req, res, next) => {
 export const getUsersWithSkill = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const users = await getUsersWithSkillService(id);
-        res.json(users);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const type = req.query.type;
+        const level = req.query.level;
+
+        const skillId = Number.parseInt(id, 10);
+        if (!Number.isInteger(skillId)) {
+            throw new ValidationError('Invalid skill id', 'INVALID_SKILL_ID');
+        }
+
+        if (type && !['TEACH', 'LEARN'].includes(type)) {
+            throw new ValidationError('Invalid skill type', 'INVALID_SKILL_TYPE');
+        }
+
+        if (level && !['LOW', 'MEDIUM', 'HIGH'].includes(level)) {
+            throw new ValidationError('Invalid skill level', 'INVALID_SKILL_LEVEL');
+        }
+        
+        const skip = (page - 1) * limit;
+
+        const result = await getUsersWithSkillService(skillId, { skip, take: limit, type, level });
+        res.json(result);
     } catch (error) {
         next(error);
     }
@@ -65,8 +93,28 @@ export const removeUserSkill = async (req, res, next) => {
     try {
         const skillId = parseInt(req.params.id);
         const userId = req.user.userId;
+        if (!Number.isInteger(skillId)) {
+            throw new ValidationError('Invalid user skill id', 'INVALID_USER_SKILL_ID');
+        }
         const result = await removeUserSkillService(userId, skillId);
         res.json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const uploadSkillDemo = async (req, res, next) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'Video file is required' });
+        }
+
+        const url = req.file.location || `${conf.BACKEND_URL || `http://localhost:${conf.PORT}`}/uploads/${req.file.filename}`;
+
+        return res.status(200).json({
+            url,
+            message: 'Skill demo uploaded successfully'
+        });
     } catch (error) {
         next(error);
     }

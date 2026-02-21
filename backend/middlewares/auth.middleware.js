@@ -1,75 +1,66 @@
+import { z } from 'zod';
 import { ValidationError } from '../errors/generic.errors.js';
 
-const validateEmail = (email) => {
-    if (!email) {
-        throw new ValidationError('Missing required fields');
-    }
+// Schemas
+const emailSchema = z.string({ required_error: "Missing required fields" })
+    .email('Invalid email format')
+    .transform(val => val.trim().toLowerCase());
 
-    email = email.trim().toLowerCase();
+const loginPasswordSchema = z.string({ required_error: "Missing required fields" })
+    .min(1, 'Password is required')
+    .transform(val => val.trim());
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-        throw new ValidationError('Invalid email format');
-    }
+const passwordSchema = z.string({ required_error: "Missing required fields" })
+    .min(8, 'Password must be at least 8 characters long')
+    .regex(/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/, 'Password must include uppercase, lowercase, number, and special character')
+    .transform(val => val.trim());
 
-    return email;
-};
+const registerSchema = z.object({
+    username: z.string({ required_error: 'Username is required' })
+        .trim()
+        .min(3, 'Username must be at least 3 characters long'),
+    email: emailSchema,
+    password: passwordSchema,
+});
 
-const validatePassword = (password) => {
-    if (!password) {
-        throw new ValidationError('Missing required fields');
-    }
+const loginSchema = z.object({
+    email: emailSchema,
+    password: loginPasswordSchema,
+    rememberMe: z.boolean().optional()
+}).catchall(z.any());
 
-    password = password.trim();
+// Specific Schemas
+const emailOnlySchema = z.object({ email: emailSchema });
+const passwordOnlySchema = z.object({ password: passwordSchema });
 
-    if (password.length < 8) {
-        throw new ValidationError('Password must be at least 8 characters long');
-    }
-
-    const passwordRegex =
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/;
-
-    if (!passwordRegex.test(password)) {
-        throw new ValidationError(
-            'Password must include uppercase, lowercase, number, and special character'
-        );
-    }
-
-    return password;
-};
-
-export const validateAuthInput = (req, res, next) => {
+// Middleware Factory
+const validate = (schema) => (req, res, next) => {
     try {
-        const { email, password } = req.body;
-
-        req.body.email = validateEmail(email);
-        req.body.password = validatePassword(password);
-
+        // Parse body. Zod .parse returns the parsed data.
+        // We use .parse() which throws on error.
+        // We might want to use .safeParse() if we want custom error handling without try/catch
+        const parsed = schema.parse(req.body);
+        
+        // Merge parsed data back to req.body (preserves other fields if schema allows, or use strict/passthrough)
+        // Here we just update the validated fields to their transformed values
+        Object.assign(req.body, parsed);
+        
         next();
     } catch (error) {
-        next(error);
+        if (error instanceof z.ZodError) {
+            const message = error.issues?.[0]?.message || 'Invalid input';
+            next(new ValidationError(message));
+        } else {
+            next(error);
+        }
     }
 };
 
-export const validatePasswordInput = (req, res, next) => {
-    try {
-        const { password } = req.body;
-        req.body.password = validatePassword(password);
-        next();
-    } catch (error) {
-        next(error);
-    }
-};
+export const validateRegisterInput = validate(registerSchema);
+export const validateLoginInput = validate(loginSchema);
+export const validatePasswordInput = validate(passwordOnlySchema);
+export const validateEmailInput = validate(emailOnlySchema);
 
-export const validateEmailInput = (req, res, next) => {
-    try {
-        const { email } = req.body;
-        req.body.email = validateEmail(email);
-        next();
-    } catch (error) {
-        next(error);
-    }
-};
     // const { password } = req.body;
     // console.log(password);
     

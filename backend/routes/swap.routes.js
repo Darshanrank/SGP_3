@@ -10,23 +10,24 @@ import {
     getMyClasses 
 } from '../controllers/swap.controller.js';
 import { validateTokenMiddleware } from '../middlewares/token.middleware.js';
+import { validateSwapRequestInput, validateSwapStatusInput, validateTodoInput, validateToggleTodoInput } from '../middlewares/validation.middleware.js';
 
 const router = express.Router();
 
 router.use(validateTokenMiddleware);
 
 // Swap Requests
-router.post('/requests', createSwapRequest);
+router.post('/requests', validateSwapRequestInput, createSwapRequest);
 router.get('/requests', getMyRequests); // ?type=sent|received
-router.put('/requests/:id', updateRequestStatus);
+router.put('/requests/:id', validateSwapStatusInput, updateRequestStatus);
 
 // Classes
 router.get('/classes', getMyClasses);
 router.get('/classes/:id', getClassDetails);
 
 // Class Todos
-router.post('/classes/:id/todos', addClassTodo);
-router.put('/classes/todos/:todoId', toggleTodo);
+router.post('/classes/:id/todos', validateTodoInput, addClassTodo);
+router.put('/classes/todos/:todoId', validateToggleTodoInput, toggleTodo);
 
 // Completion
 router.post('/classes/:id/complete', completeClass);

@@ -1,0 +1,101 @@
+// src/pages/Notifications.jsx
+import { useEffect, useState } from 'react';
+import { getNotifications, markNotificationRead, markAllNotificationsRead, getUnreadCount } from '../services/meta.service';
+import { Bell, Check } from 'lucide-react';
+import { Button } from '../components/ui/Button';
+
+const Notifications = () => {
+    const [notifications, setNotifications] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    useEffect(() => {
+        fetchNotifications();
+    }, []);
+
+    const fetchNotifications = async () => {
+        try {
+            const data = await getNotifications();
+            const items = Array.isArray(data) ? data : data?.data || [];
+            setNotifications(items);
+            const countRes = await getUnreadCount();
+            setUnreadCount(countRes?.unread ?? 0);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleMarkAsRead = async (id) => {
+        try {
+            await markNotificationRead(id);
+            setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+            setUnreadCount((c) => Math.max(0, c - 1));
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const handleMarkAll = async () => {
+        try {
+            await markAllNotificationsRead();
+            setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+            setUnreadCount(0);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    if (loading) return <div>Loading...</div>;
+
+    return (
+        <div className="max-w-3xl mx-auto space-y-6">
+            <header className="flex justify-between items-center">
+                <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+                <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-600">Unread: {unreadCount}</span>
+                    {notifications.length > 0 && (
+                        <Button size="sm" variant="secondary" onClick={handleMarkAll}>Mark all read</Button>
+                    )}
+                </div>
+            </header>
+
+            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+                <ul role="list" className="divide-y divide-gray-200">
+                    {notifications.length === 0 && (
+                        <li className="px-4 py-8 text-center text-gray-500">
+                            No notifications yet.
+                        </li>
+                    )}
+                    {notifications.map((notification) => (
+                        <li key={notification.id} className={`px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors ${notification.isRead ? 'opacity-60' : 'bg-blue-50'}`}>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                    <div className="flex-shrink-0">
+                                        <Bell className={`h-6 w-6 ${notification.isRead ? 'text-gray-400' : 'text-blue-500'}`} />
+                                    </div>
+                                    <div className="ml-4">
+                                        <p className={`text-sm font-medium ${notification.isRead ? 'text-gray-900' : 'text-blue-900 font-semibold'}`}>
+                                            {notification.message}
+                                        </p>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            {new Date(notification.createdAt).toLocaleDateString()} at {new Date(notification.createdAt).toLocaleTimeString()}
+                                        </p>
+                                    </div>
+                                </div>
+                                {!notification.isRead && (
+                                    <Button size="sm" variant="ghost" onClick={() => handleMarkAsRead(notification.id)} title="Mark as read">
+                                        <Check className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
+};
+
+export default Notifications;

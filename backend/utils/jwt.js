@@ -28,3 +28,5 @@ export const verifyUrlToken = (token, secret = conf.JWT_ACCESS_SECRET) => {
 export const verifyRefreshToken =(token,refresh = conf.JWT_REFRESH_SECRET)=>{
     return jwt.verify(token,refresh);
 }
+
+export const decodeToken = (token) => jwt.decode(token);

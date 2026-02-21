@@ -1,278 +1,328 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+  // This is your Prisma schema file,
+  // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-generator client {
-  provider = "prisma-client-js"
-  // output   = "../src/generated"
-}
+  // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+  // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+  generator client {
+    provider = "prisma-client-js"
+    // output   = "../src/generated"
+  }
 
-datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
-}
+  datasource db {
+    provider = "mysql"
+    url      = env("DATABASE_URL")
+  }
 
 
-model Users {
-  userId        Int            @id @default(autoincrement())
-  email         String         @unique
-  passwordHash  String
-  username      String
-  isVerified    Boolean        @default(false)
-  salt          String
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  model Users {
+    userId        Int            @id @default(autoincrement())
+    email         String         @unique
+    passwordHash  String
+    username      String
+    isVerified    Boolean        @default(false)
+    salt          String
+    createdAt     DateTime       @default(now())
+    updatedAt     DateTime       @updatedAt
 
-  // Profile
-  profile       UserProfile?
+    // Profile
+    profile       UserProfile?
 
-  // Skills
-  userSkills    UserSkill[]
+    // Skills
+    userSkills    UserSkill[]
 
-  // Swaps
-  sentRequests      SwapRequest[]  @relation("SentRequests")
-  receivedRequests  SwapRequest[]  @relation("ReceivedRequests")
+    // Swaps
+    sentRequests      SwapRequest[]  @relation("SentRequests")
+    receivedRequests  SwapRequest[]  @relation("ReceivedRequests")
 
-  // Chat
-  messages          ChatMessage[]
+    // Chat
+    messages          ChatMessage[]
 
-  // Gamification
-  rewards           UserReward?
-  badges            UserBadge[]
+    // Gamification
+    rewards           UserReward?
+    badges            UserBadge[]
 
-  // Notifications & Calendar
-  notifications     Notification[]
-  calendarEvents    CalendarEvent[]
+    // Notifications & Calendar
+    notifications     Notification[]
+    calendarEvents    CalendarEvent[]
+    availability      UserAvailability[]
 
-  // Moderation
-  reportsFiled      Report[]       @relation("Reporter")
-  reportsReceived   Report[]       @relation("ReportedUser")
-  penalties         AdminPenalty[]
-}
+    // Moderation
+    reportsFiled      Report[]       @relation("Reporter")
+    reportsReceived   Report[]       @relation("ReportedUser")
+    penalties         AdminPenalty[]
 
-model UserProfile {
-  id               Int      @id @default(autoincrement())
-  userId           Int      @unique
-  user             Users    @relation(fields: [userId], references: [userId])
-  bio              String?  @db.Text
-  avatarUrl        String?
-  learningLanguage String?
-  createdAt        DateTime @default(now())
-}
+    // Sessions
+    refreshTokens    RefreshToken[]
+  }
 
-model Skill {
-  id        Int         @id @default(autoincrement())
-  name      String      @unique
-  category  String
-  createdAt DateTime    @default(now())
-  userSkills UserSkill[]
-}
+  model UserProfile {
+    id               Int      @id @default(autoincrement())
+    userId           Int      @unique
+    user             Users    @relation(fields: [userId], references: [userId])
+    fullName         String?
+    bio              String?  @db.Text
+    avatarUrl        String?
+    learningLanguage String?
+    timezone         String?
+    upcomingSessions String?  @db.Text
+    emailRemindersEnabled Boolean @default(false)
+    profileCompleted Boolean  @default(false)
+    
+    // Social Links
+    githubLink       String?
+    linkedinLink     String?
+    portfolioLink    String?
+    youtubeLink      String?
 
-enum SkillType {
-  TEACH
-  LEARN
-}
+    createdAt        DateTime @default(now())
+  }
 
-enum SkillLevel {
-  LOW
-  MEDIUM
-  HIGH
-}
+  model UserAvailability {
+    id        Int      @id @default(autoincrement())
+    userId    Int
+    user      Users    @relation(fields: [userId], references: [userId])
+    dayOfWeek String   // MONDAY, TUESDAY, etc.
+    startTime String   // "09:00"
+    endTime   String   // "17:00"
+    timezone  String   // "UTC", "Asia/Kolkata"
+    createdAt DateTime @default(now())
+  }
 
-model UserSkill {
-  id        Int       @id @default(autoincrement())
-  userId    Int
-  user      Users     @relation(fields: [userId], references: [userId])
-  skillId   Int
-  skill     Skill     @relation(fields: [skillId], references: [id])
-  type      SkillType
-  level     SkillLevel
-  proofUrl  String?
-  createdAt DateTime  @default(now())
 
-  // Relations
-  preview       SkillPreview?
-  swapsToTeach  SwapRequest[] @relation("TeachSkill")
-  swapsToLearn  SwapRequest[] @relation("LearnSkill")
-}
+  model Skill {
+    id        Int         @id @default(autoincrement())
+    name      String      @unique
+    category  String
+    createdAt DateTime    @default(now())
+    userSkills UserSkill[]
+  }
 
-model SkillPreview {
-  id              Int       @id @default(autoincrement())
-  userSkillId     Int       @unique
-  userSkill       UserSkill @relation(fields: [userSkillId], references: [id])
-  videoUrl        String?
-  description     String?   @db.Text
-  syllabusOutline String?   @db.Text
-  createdAt       DateTime  @default(now())
-}
+  enum SkillType {
+    TEACH
+    LEARN
+  }
 
-enum SwapStatus {
-  PENDING
-  ACCEPTED
-  REJECTED
-  CANCELLED
-}
+  enum SkillLevel {
+    LOW
+    MEDIUM
+    HIGH
+  }
 
-model SwapRequest {
-  id            Int        @id @default(autoincrement())
-  fromUserId    Int
-  fromUser      Users      @relation("SentRequests", fields: [fromUserId], references: [userId])
-  toUserId      Int
-  toUser        Users      @relation("ReceivedRequests", fields: [toUserId], references: [userId])
-  teachSkillId  Int?
-  teachSkill    UserSkill?  @relation("TeachSkill", fields: [teachSkillId], references: [id])
-  learnSkillId  Int
-  learnSkill    UserSkill  @relation("LearnSkill", fields: [learnSkillId], references: [id])
-  message       String?    @db.Text
-  status        SwapStatus @default(PENDING)
-  cancelReason  String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  model UserSkill {
+    id        Int       @id @default(autoincrement())
+    userId    Int
+    user      Users     @relation(fields: [userId], references: [userId])
+    skillId   Int
+    skill     Skill     @relation(fields: [skillId], references: [id])
+    type      SkillType
+    level     SkillLevel
+    proofUrl  String?
+    createdAt DateTime  @default(now())
 
-  swapClass     SwapClass?
-}
+    // Relations
+    preview       SkillPreview?
+    swapsToTeach  SwapRequest[] @relation("TeachSkill")
+    swapsToLearn  SwapRequest[] @relation("LearnSkill")
 
-enum ClassStatus {
-  ONGOING
-  COMPLETED
-  CANCELLED
-}
+    @@unique([userId, skillId, type])
+  }
 
-model SwapClass {
-  id             Int             @id @default(autoincrement())
-  swapRequestId  Int             @unique
-  swapRequest    SwapRequest     @relation(fields: [swapRequestId], references: [id])
-  classroomCode  String?
-  meetLink       String?
-  status         ClassStatus     @default(ONGOING)
-  startedAt      DateTime?
-  endedAt        DateTime?
-  
-  todos          ClassTodo[]
-  chatRoom       ChatRoom?
-  completion     SwapCompletion?
-  calendarEvents CalendarEvent[]
-}
+  model SkillPreview {
+    id              Int       @id @default(autoincrement())
+    userSkillId     Int       @unique
+    userSkill       UserSkill @relation(fields: [userSkillId], references: [id])
+    videoUrl        String?
+    description     String?   @db.Text
+    syllabusOutline String?   @db.Text
+    createdAt       DateTime  @default(now())
+  }
 
-model ClassTodo {
-  id           Int       @id @default(autoincrement())
-  swapClassId  Int
-  swapClass    SwapClass @relation(fields: [swapClassId], references: [id])
-  title        String
-  description  String?
-  dueDate      DateTime?
-  isCompleted  Boolean   @default(false)
-}
+  enum SwapStatus {
+    PENDING
+    ACCEPTED
+    REJECTED
+    CANCELLED
+  }
 
-model ChatRoom {
-  id           Int           @id @default(autoincrement())
-  swapClassId  Int           @unique
-  swapClass    SwapClass     @relation(fields: [swapClassId], references: [id])
-  createdAt    DateTime      @default(now())
-  messages     ChatMessage[]
-}
+  model SwapRequest {
+    id            Int        @id @default(autoincrement())
+    fromUserId    Int
+    fromUser      Users      @relation("SentRequests", fields: [fromUserId], references: [userId])
+    toUserId      Int
+    toUser        Users      @relation("ReceivedRequests", fields: [toUserId], references: [userId])
+    teachSkillId  Int?
+    teachSkill    UserSkill?  @relation("TeachSkill", fields: [teachSkillId], references: [id])
+    learnSkillId  Int
+    learnSkill    UserSkill  @relation("LearnSkill", fields: [learnSkillId], references: [id])
+    message       String?    @db.Text
+    status        SwapStatus @default(PENDING)
+    cancelReason  String?
+    createdAt     DateTime   @default(now())
+    updatedAt     DateTime   @updatedAt
 
-model ChatMessage {
-  id          Int      @id @default(autoincrement())
-  chatRoomId  Int
-  chatRoom    ChatRoom @relation(fields: [chatRoomId], references: [id])
-  senderId    Int
-  sender      Users    @relation(fields: [senderId], references: [userId])
-  message     String   @db.Text
-  createdAt   DateTime @default(now())
-}
+    swapClass     SwapClass?
+  }
 
-model SwapCompletion {
-  id               Int       @id @default(autoincrement())
-  swapClassId      Int       @unique
-  swapClass        SwapClass @relation(fields: [swapClassId], references: [id])
-  completedByUser1 Boolean   @default(false)
-  completedByUser2 Boolean   @default(false)
-  completedAt      DateTime?
-}
+  enum ClassStatus {
+    ONGOING
+    COMPLETED
+    CANCELLED
+  }
 
-model UserReward {
-  id         Int   @id @default(autoincrement())
-  userId     Int   @unique
-  user       Users @relation(fields: [userId], references: [userId])
-  points     Int   @default(0)
-  totalSwaps Int   @default(0)
-}
+  model SwapClass {
+    id             Int             @id @default(autoincrement())
+    swapRequestId  Int             @unique
+    swapRequest    SwapRequest     @relation(fields: [swapRequestId], references: [id])
+    classroomCode  String?
+    meetLink       String?
+    status         ClassStatus     @default(ONGOING)
+    startedAt      DateTime?
+    endedAt        DateTime?
+    
+    todos          ClassTodo[]
+    chatRoom       ChatRoom?
+    completion     SwapCompletion?
+    calendarEvents CalendarEvent[]
+  }
 
-model Badge {
-  id        Int         @id @default(autoincrement())
-  name      String      @unique
-  condition String
-  users     UserBadge[]
-}
+  model ClassTodo {
+    id           Int       @id @default(autoincrement())
+    swapClassId  Int
+    swapClass    SwapClass @relation(fields: [swapClassId], references: [id])
+    title        String
+    description  String?
+    dueDate      DateTime?
+    isCompleted  Boolean   @default(false)
+  }
 
-model UserBadge {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      Users    @relation(fields: [userId], references: [userId])
-  badgeId   Int
-  badge     Badge    @relation(fields: [badgeId], references: [id])
-  earnedAt  DateTime @default(now())
-}
+  model ChatRoom {
+    id           Int           @id @default(autoincrement())
+    swapClassId  Int           @unique
+    swapClass    SwapClass     @relation(fields: [swapClassId], references: [id])
+    createdAt    DateTime      @default(now())
+    messages     ChatMessage[]
+  }
 
-enum NotificationType {
-  SWAP_REQUEST
-  ACCEPTED
-  CLASS_REMINDER
-  SYSTEM
-  ADMIN
-}
+  model ChatMessage {
+    id          Int      @id @default(autoincrement())
+    chatRoomId  Int
+    chatRoom    ChatRoom @relation(fields: [chatRoomId], references: [id])
+    senderId    Int
+    sender      Users    @relation(fields: [senderId], references: [userId])
+    message     String   @db.Text
+    createdAt   DateTime @default(now())
+  }
 
-model Notification {
-  id        Int              @id @default(autoincrement())
-  userId    Int
-  user      Users            @relation(fields: [userId], references: [userId])
-  type      NotificationType
-  message   String
-  isRead    Boolean          @default(false)
-  createdAt DateTime         @default(now())
-}
+  model SwapCompletion {
+    id               Int       @id @default(autoincrement())
+    swapClassId      Int       @unique
+    swapClass        SwapClass @relation(fields: [swapClassId], references: [id])
+    completedByUser1 Boolean   @default(false)
+    completedByUser2 Boolean   @default(false)
+    completedAt      DateTime?
+  }
 
-model CalendarEvent {
-  id          Int        @id @default(autoincrement())
-  userId      Int
-  user        Users      @relation(fields: [userId], references: [userId])
-  swapClassId Int?
-  swapClass   SwapClass? @relation(fields: [swapClassId], references: [id])
-  title       String
-  eventDate   DateTime
-  description String?
-}
+  model UserReward {
+    id         Int   @id @default(autoincrement())
+    userId     Int   @unique
+    user       Users @relation(fields: [userId], references: [userId])
+    points     Int   @default(0)
+    totalSwaps Int   @default(0)
+  }
 
-enum ReportStatus {
-  OPEN
-  RESOLVED
-  REJECTED
-}
+  model Badge {
+    id        Int         @id @default(autoincrement())
+    name      String      @unique
+    condition String
+    users     UserBadge[]
+  }
 
-model Report {
-  id             Int          @id @default(autoincrement())
-  reporterId     Int
-  reporter       Users        @relation("Reporter", fields: [reporterId], references: [userId])
-  reportedUserId Int
-  reportedUser   Users        @relation("ReportedUser", fields: [reportedUserId], references: [userId])
-  reason         String
-  status         ReportStatus @default(OPEN)
-  createdAt      DateTime     @default(now())
-}
+  model UserBadge {
+    id        Int      @id @default(autoincrement())
+    userId    Int
+    user      Users    @relation(fields: [userId], references: [userId])
+    badgeId   Int
+    badge     Badge    @relation(fields: [badgeId], references: [id])
+    earnedAt  DateTime @default(now())
+  }
 
-enum PenaltyType {
-  WARNING
-  SUSPEND
-  BAN
-}
+  enum NotificationType {
+    SWAP_REQUEST
+    ACCEPTED
+    CLASS_REMINDER
+    SYSTEM
+    ADMIN
+  }
 
-model AdminPenalty {
-  id          Int         @id @default(autoincrement())
-  userId      Int
-  user        Users       @relation(fields: [userId], references: [userId])
-  reason      String
-  penaltyType PenaltyType
-  createdAt   DateTime    @default(now())
-}
+  model Notification {
+    id        Int              @id @default(autoincrement())
+    userId    Int
+    user      Users            @relation(fields: [userId], references: [userId])
+    type      NotificationType
+    message   String
+    isRead    Boolean          @default(false)
+    createdAt DateTime         @default(now())
+  }
+
+  model CalendarEvent {
+    id          Int        @id @default(autoincrement())
+    userId      Int
+    user        Users      @relation(fields: [userId], references: [userId])
+    swapClassId Int?
+    swapClass   SwapClass? @relation(fields: [swapClassId], references: [id])
+    title       String
+    eventDate   DateTime
+    description String?
+  }
+
+  enum ReportStatus {
+    OPEN
+    RESOLVED
+    REJECTED
+  }
+
+  model Report {
+    id             Int          @id @default(autoincrement())
+    reporterId     Int
+    reporter       Users        @relation("Reporter", fields: [reporterId], references: [userId])
+    reportedUserId Int
+    reportedUser   Users        @relation("ReportedUser", fields: [reportedUserId], references: [userId])
+    reason         String
+    status         ReportStatus @default(OPEN)
+    createdAt      DateTime     @default(now())
+  }
+
+  enum PenaltyType {
+    WARNING
+    SUSPEND
+    BAN
+  }
+
+  model AdminPenalty {
+    id          Int         @id @default(autoincrement())
+    userId      Int
+    user        Users       @relation(fields: [userId], references: [userId])
+    reason      String
+    penaltyType PenaltyType
+    createdAt   DateTime    @default(now())
+  }
+
+  model RefreshToken {
+    id                 Int      @id @default(autoincrement())
+    tokenId            String   @unique
+    tokenHash          String
+    userId             Int
+    user               Users    @relation(fields: [userId], references: [userId])
+    userAgent          String?
+    ip                 String?
+    revoked            Boolean  @default(false)
+    revokedAt          DateTime?
+    replacedByTokenId  String?
+    expiresAt          DateTime
+    createdAt          DateTime @default(now())
+    updatedAt          DateTime @updatedAt
+
+    @@index([userId])
+    @@index([tokenId])
+    @@index([expiresAt])
+  }

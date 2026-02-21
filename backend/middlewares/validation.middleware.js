@@ -1,0 +1,129 @@
+import { z } from 'zod';
+import { ValidationError } from '../errors/generic.errors.js';
+
+const toInt = (value) => {
+    if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        return Number.isNaN(parsed) ? value : parsed;
+    }
+    return value;
+};
+
+const toDate = (value) => {
+    if (value instanceof Date) return value;
+    if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? value : parsed;
+    }
+    return value;
+};
+
+const emptyToUndefined = (value) => {
+    if (value === '') return undefined;
+    return value;
+};
+
+const validate = (schema) => (req, _res, next) => {
+    try {
+        const parsed = schema.parse(req.body);
+        Object.assign(req.body, parsed);
+        next();
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            const message = error.issues?.[0]?.message || 'Invalid input';
+            next(new ValidationError(message));
+        } else {
+            next(error);
+        }
+    }
+};
+
+const paginationSchema = z.object({
+    page: z.preprocess(toInt, z.number().int().positive()).optional(),
+    limit: z.preprocess(toInt, z.number().int().positive().max(100)).optional()
+}).partial();
+
+const swapRequestSchema = z.object({
+    toUserId: z.preprocess(toInt, z.number().int().positive()),
+    learnSkillId: z.preprocess(toInt, z.number().int().positive()),
+    teachSkillId: z.preprocess(toInt, z.number().int().positive()).optional().nullable(),
+    message: z.string().max(1000).optional().nullable()
+});
+
+const swapStatusSchema = z.object({
+    status: z.enum(['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED']),
+    cancelReason: z.string().max(500).optional().nullable()
+});
+
+const todoSchema = z.object({
+    title: z.string().min(1).max(200),
+    description: z.string().max(1000).optional().nullable(),
+    dueDate: z.preprocess(toDate, z.date()).optional().nullable()
+});
+
+const toggleTodoSchema = z.object({
+    isCompleted: z.boolean()
+});
+
+const createSkillSchema = z.object({
+    name: z.string().min(2).max(50),
+    category: z.string().min(2).max(50)
+});
+
+const userSkillSchema = z.object({
+    skillId: z.preprocess(toInt, z.number().int().positive()),
+    type: z.enum(['TEACH', 'LEARN']),
+    level: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+    proofUrl: z.preprocess(emptyToUndefined, z.string().url().optional().nullable()),
+    preview: z.object({
+        videoUrl: z.preprocess(emptyToUndefined, z.string().url().optional().nullable()),
+        description: z.string().max(2000).optional().nullable(),
+        syllabusOutline: z.string().max(2000).optional().nullable()
+    }).optional().nullable()
+});
+
+const reportSchema = z.object({
+    reportedUserId: z.preprocess(toInt, z.number().int().positive()),
+    reason: z.string().min(5).max(1000)
+});
+
+const calendarEventSchema = z.object({
+    title: z.string().min(2).max(100),
+    eventDate: z.preprocess(toDate, z.date()),
+    description: z.string().max(1000).optional().nullable(),
+    swapClassId: z.preprocess(toInt, z.number().int().positive()).optional().nullable()
+});
+
+const badgeSchema = z.object({
+    name: z.string().min(2).max(60),
+    condition: z.string().min(2).max(255)
+});
+
+const assignBadgeSchema = z.object({
+    userId: z.preprocess(toInt, z.number().int().positive()),
+    badgeId: z.preprocess(toInt, z.number().int().positive())
+});
+
+const penaltySchema = z.object({
+    userId: z.preprocess(toInt, z.number().int().positive()),
+    reason: z.string().min(5).max(500),
+    penaltyType: z.enum(['WARNING', 'SUSPEND', 'BAN'])
+});
+
+const messageSchema = z.object({
+    message: z.string().min(1).max(2000)
+});
+
+export const validateSwapRequestInput = validate(swapRequestSchema);
+export const validateSwapStatusInput = validate(swapStatusSchema);
+export const validateTodoInput = validate(todoSchema);
+export const validateToggleTodoInput = validate(toggleTodoSchema);
+export const validateCreateSkillInput = validate(createSkillSchema);
+export const validateUserSkillInput = validate(userSkillSchema);
+export const validateReportInput = validate(reportSchema);
+export const validateCalendarEventInput = validate(calendarEventSchema);
+export const validateBadgeInput = validate(badgeSchema);
+export const validateAssignBadgeInput = validate(assignBadgeSchema);
+export const validatePenaltyInput = validate(penaltySchema);
+export const validateMessageInput = validate(messageSchema);
+export const validatePaginationInput = validate(paginationSchema);

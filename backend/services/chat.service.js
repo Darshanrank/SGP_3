@@ -1,28 +1,60 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { ForbiddenError, NotFound, ValidationError } from '../errors/generic.errors.js';
+import prisma from '../prisma/client.js';
 
-export const getMessagesService = async (classId) => {
+const assertUserInClass = async (userId, classId) => {
+    const swapClass = await prisma.swapClass.findUnique({
+        where: { id: classId },
+        include: { swapRequest: { select: { fromUserId: true, toUserId: true } } }
+    });
+
+    if (!swapClass) throw new NotFound('Class not found');
+    const isMember = swapClass.swapRequest.fromUserId === userId || swapClass.swapRequest.toUserId === userId;
+    if (!isMember) throw new ForbiddenError('Not authorized');
+
+    return swapClass;
+};
+
+export const getMessagesService = async (userId, classId, { skip = 0, take = 20 }) => {
+    await assertUserInClass(userId, classId);
     let chatRoom = await prisma.chatRoom.findUnique({
-        where: { swapClassId: classId },
-        include: {
-            messages: {
-                include: { sender: { select: { username: true, userId: true } } },
-                orderBy: { createdAt: 'asc' }
-            }
-        }
+        where: { swapClassId: classId }
     });
 
     if (!chatRoom) {
+        // Create room if it doesn't exist (legacy behavior)
         chatRoom = await prisma.chatRoom.create({
             data: { swapClassId: classId }
         });
-        return [];
+        return { data: [], meta: { total: 0, page: 1, limit: take } };
     }
 
-    return chatRoom.messages;
+    const [messages, total] = await Promise.all([
+        prisma.chatMessage.findMany({
+            where: { chatRoomId: chatRoom.id },
+            include: { sender: { select: { username: true, userId: true } } },
+            orderBy: { createdAt: 'desc' }, // Latest first for pagination usually
+            skip,
+            take
+        }),
+        prisma.chatMessage.count({ where: { chatRoomId: chatRoom.id } })
+    ]);
+
+
+    return {
+        data: messages.reverse(), // Client usually wants oldest first for chat flow
+        meta: {
+            total,
+            page: Math.floor(skip / take) + 1,
+            limit: take
+        }
+    };
 };
 
 export const sendMessageService = async (classId, userId, message) => {
+    await assertUserInClass(userId, classId);
+    if (!message || !message.trim()) {
+        throw new ValidationError('Message is required');
+    }
     let chatRoom = await prisma.chatRoom.findUnique({
         where: { swapClassId: classId }
     });

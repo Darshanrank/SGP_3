@@ -1,12 +1,14 @@
 import express from "express";
 const router = express.Router();
-import { login, register, verify, resetPassword, setPassword } from "../controllers/auth.controller.js";
-import { validateAuthInput, validatePasswordInput, validateEmailInput } from '../middlewares/auth.middleware.js'
+import { login, register, verify, resetPassword, setPassword, logout, refresh } from "../controllers/auth.controller.js";
+import { validateRegisterInput, validateLoginInput, validatePasswordInput, validateEmailInput } from '../middlewares/auth.middleware.js'
 
-router.post('/register', validateAuthInput, register);
-router.post('/login', validateAuthInput, login);
+router.post('/register', validateRegisterInput, register);
+router.post('/login', validateLoginInput, login);
+router.post('/refresh', refresh);
 router.get('/verify/:token', verify);
 router.post('/reset-password', validateEmailInput, resetPassword);
 router.post('/reset-password/:token', validatePasswordInput, setPassword);
+router.post('/logout', logout);
 
 export default router;
