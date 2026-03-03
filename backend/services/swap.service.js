@@ -246,7 +246,25 @@ export const getClassDetailsService = async (userId, classId) => {
     await assertUserInClass(userId, classId);
     return await prisma.swapClass.findUnique({
         where: { id: classId },
-        include: { todos: true, chatRoom: true, swapRequest: true }
+        include: {
+            todos: true,
+            chatRoom: true,
+            completion: true,
+            reviews: {
+                include: {
+                    reviewer: { select: { userId: true, username: true } },
+                    reviewee: { select: { userId: true, username: true } }
+                }
+            },
+            swapRequest: {
+                include: {
+                    fromUser: { select: { userId: true, username: true } },
+                    toUser: { select: { userId: true, username: true } },
+                    teachSkill: { include: { skill: true } },
+                    learnSkill: { include: { skill: true } }
+                }
+            }
+        }
     });
 };
 

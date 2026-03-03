@@ -9,12 +9,23 @@ import {
     completeClassService 
 } from '../services/swap.service.js';
 import { ValidationError } from '../errors/generic.errors.js';
+import { pushNotification } from '../utils/pushNotification.js';
+import prisma from '../prisma/client.js';
 
 // Create Swap Request
 export const createSwapRequest = async (req, res, next) => {
     try {
         const userId = req.user.userId;
         const request = await createSwapRequestService(userId, req.body);
+
+        // Push real-time notification to the target user
+        const io = req.app.get('io');
+        const latestNotif = await prisma.notification.findFirst({
+            where: { userId: request.toUserId, type: 'SWAP_REQUEST' },
+            orderBy: { createdAt: 'desc' }
+        });
+        if (latestNotif) pushNotification(io, request.toUserId, latestNotif);
+
         res.status(201).json(request);
     } catch (error) {
         next(error);
@@ -43,7 +54,21 @@ export const updateRequestStatus = async (req, res, next) => {
         if (!Number.isInteger(requestId)) {
             throw new ValidationError('Invalid request id', 'INVALID_REQUEST_ID');
         }
+        // Get request before update to know who to notify
+        const original = await prisma.swapRequest.findUnique({ where: { id: requestId } });
         const result = await updateRequestStatusService(userId, requestId, req.body);
+
+        // Push real-time notification to the other user
+        if (original) {
+            const notifyUserId = original.fromUserId === userId ? original.toUserId : original.fromUserId;
+            const io = req.app.get('io');
+            const latestNotif = await prisma.notification.findFirst({
+                where: { userId: notifyUserId },
+                orderBy: { createdAt: 'desc' }
+            });
+            if (latestNotif) pushNotification(io, notifyUserId, latestNotif);
+        }
+
         res.json(result);
     } catch (error) {
         next(error);

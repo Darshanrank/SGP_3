@@ -1,31 +1,45 @@
 // src/pages/Notifications.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getNotifications, markNotificationRead, markAllNotificationsRead, getUnreadCount } from '../services/meta.service';
 import { Bell, Check } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { useSocket } from '../context/SocketContext';
 
 const Notifications = () => {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [unreadCount, setUnreadCount] = useState(0);
+    const { socket, setUnreadCount: setGlobalUnread } = useSocket() || {};
 
-    useEffect(() => {
-        fetchNotifications();
-    }, []);
-
-    const fetchNotifications = async () => {
+    const fetchNotifications = useCallback(async () => {
         try {
             const data = await getNotifications();
             const items = Array.isArray(data) ? data : data?.data || [];
             setNotifications(items);
             const countRes = await getUnreadCount();
-            setUnreadCount(countRes?.unread ?? 0);
+            const count = countRes?.unread ?? 0;
+            setUnreadCount(count);
+            if (setGlobalUnread) setGlobalUnread(count);
         } catch (error) {
             console.error(error);
         } finally {
             setLoading(false);
         }
-    };
+    }, [setGlobalUnread]);
+
+    useEffect(() => {
+        fetchNotifications();
+    }, [fetchNotifications]);
+
+    // Listen for real-time new notifications and refresh the list
+    useEffect(() => {
+        if (!socket) return;
+        const handleNew = () => {
+            fetchNotifications();
+        };
+        socket.on('new_notification', handleNew);
+        return () => socket.off('new_notification', handleNew);
+    }, [socket, fetchNotifications]);
 
     const handleMarkAsRead = async (id) => {
         try {

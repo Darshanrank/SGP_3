@@ -46,6 +46,10 @@
     calendarEvents    CalendarEvent[]
     availability      UserAvailability[]
 
+    // Reviews
+    reviewsGiven      SwapReview[]   @relation("ReviewsGiven")
+    reviewsReceived   SwapReview[]   @relation("ReviewsReceived")
+
     // Moderation
     reportsFiled      Report[]       @relation("Reporter")
     reportsReceived   Report[]       @relation("ReportedUser")
@@ -182,6 +186,7 @@
     todos          ClassTodo[]
     chatRoom       ChatRoom?
     completion     SwapCompletion?
+    reviews        SwapReview[]
     calendarEvents CalendarEvent[]
   }
 
@@ -220,6 +225,21 @@
     completedByUser1 Boolean   @default(false)
     completedByUser2 Boolean   @default(false)
     completedAt      DateTime?
+  }
+
+  model SwapReview {
+    id              Int       @id @default(autoincrement())
+    swapClassId     Int
+    swapClass       SwapClass @relation(fields: [swapClassId], references: [id])
+    reviewerId      Int
+    reviewer        Users     @relation("ReviewsGiven", fields: [reviewerId], references: [userId])
+    revieweeId      Int
+    reviewee        Users     @relation("ReviewsReceived", fields: [revieweeId], references: [userId])
+    rating          Int       // 1-5
+    comment         String?   @db.Text
+    createdAt       DateTime  @default(now())
+
+    @@unique([swapClassId, reviewerId])
   }
 
   model UserReward {

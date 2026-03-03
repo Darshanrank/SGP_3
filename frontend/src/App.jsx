@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Layout from './components/layout/Layout';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SocketProvider } from './context/SocketContext';
 import Home from './pages/Home';
 
 const queryClient = new QueryClient({
@@ -75,6 +76,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <SocketProvider>
         <Layout>
           <Routes>
           <Route path="/" element={<HomeRoute />} />
@@ -100,6 +102,7 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Layout>
+    </SocketProvider>
     </AuthProvider>
     </QueryClientProvider>
   );

@@ -12,6 +12,8 @@ import skillRoute from './routes/skill.routes.js'
 import swapRoute from './routes/swap.routes.js'
 import chatRoute from './routes/chat.routes.js'
 import metaRoute from './routes/meta.routes.js'
+import matchingRoute from './routes/matching.routes.js'
+import reviewRoute from './routes/review.routes.js'
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { verifyAccessToken } from './utils/jwt.js';
@@ -60,6 +62,11 @@ app.set('io', io);
 // Socket.io Connection Handler
 io.on('connection', (socket) => {
     logger.info('User connected to socket', { socketId: socket.id, userId: socket.user?.userId });
+
+    // Join personal notification room so server can push to this user
+    const userRoom = `user_${socket.user?.userId}`;
+    socket.join(userRoom);
+    logger.info(`Socket ${socket.id} joined notification room ${userRoom}`);
 
     // Join a class/chat room
     socket.on('join_chat', async (classId) => {
@@ -116,6 +123,8 @@ app.use('/api/skills', skillRoute);
 app.use('/api/swaps', swapRoute);
 app.use('/api/chat', chatRoute);
 app.use('/api/meta', metaRoute);
+app.use('/api/matching', matchingRoute);
+app.use('/api/reviews', reviewRoute);
 
 app.use((err, req, res, next) => {
     logger[err.severity === "CRITICAL" ? "critical" : "warn"](err.message, {

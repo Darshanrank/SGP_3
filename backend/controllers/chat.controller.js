@@ -1,5 +1,7 @@
 import { getMessagesService, sendMessageService } from '../services/chat.service.js';
 import { ValidationError } from '../errors/generic.errors.js';
+import { pushNotification } from '../utils/pushNotification.js';
+import prisma from '../prisma/client.js';
 
 // Get Messages for a Class
 export const getMessages = async (req, res, next) => {
@@ -34,10 +36,30 @@ export const sendMessage = async (req, res, next) => {
         
         const newMessage = await sendMessageService(classId, userId, message);
         
-        // Emit Socket.io event for real-time update
+        // Emit Socket.io event for real-time chat update
         const io = req.app.get('io');
         if (io) {
             io.to(`chat_${classId}`).emit('receive_message', newMessage);
+        }
+
+        // Push a notification to the other participant
+        const swapClass = await prisma.swapClass.findUnique({
+            where: { id: classId },
+            include: { swapRequest: { select: { fromUserId: true, toUserId: true } } }
+        });
+        if (swapClass) {
+            const otherUserId = swapClass.swapRequest.fromUserId === userId
+                ? swapClass.swapRequest.toUserId
+                : swapClass.swapRequest.fromUserId;
+            // Lightweight push — no DB notification for every chat msg, just socket event
+            if (io) {
+                io.to(`user_${otherUserId}`).emit('new_chat_message', {
+                    classId,
+                    senderId: userId,
+                    senderName: newMessage.sender?.username,
+                    preview: message.substring(0, 80)
+                });
+            }
         }
 
         res.status(201).json(newMessage);
