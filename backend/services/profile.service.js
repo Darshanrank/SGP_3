@@ -1,6 +1,21 @@
 import { NotFound, ValidationError } from '../errors/generic.errors.js';
 import { sendEmailService } from './sendEmail.service.js';
 import prisma from '../prisma/client.js';
+import sanitizeHtml from 'sanitize-html';
+import { conf } from '../conf/conf.js';
+
+// Allow safe HTML in bio (from TinyMCE) but strip dangerous tags/attributes
+const sanitizeBio = (html) => sanitizeHtml(html, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'u', 'span']),
+    allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        span: ['style'],
+        img: ['src', 'alt', 'width', 'height']
+    },
+    allowedSchemes: ['http', 'https'],
+    // Strip all event handlers (onload, onerror, etc.)
+    disallowedTagsMode: 'discard'
+});
 
 export const getMyProfileService = async (userId) => {
     const user = await prisma.users.findUnique({
@@ -22,7 +37,7 @@ export const getMyProfileService = async (userId) => {
     }
 
     const { passwordHash, salt, ...userInfo } = user;
-    return userInfo;
+    return { ...userInfo, isAdmin: conf.ADMIN_USER_IDS.includes(userId) };
 };
 
 export const updateProfileService = async (userId, data) => {
@@ -47,6 +62,9 @@ export const updateProfileService = async (userId, data) => {
         ? availability.filter((slot) => slot?.dayOfWeek && slot?.startTime && slot?.endTime && slot?.timezone)
         : [];
 
+    // Sanitize bio if provided
+    const safeBio = bio ? sanitizeBio(bio) : bio;
+
     return await prisma.$transaction(async (tx) => {
         if (username) {
             const existing = await tx.users.findFirst({
@@ -70,7 +88,7 @@ export const updateProfileService = async (userId, data) => {
             where: { userId },
             update: {
                 fullName,
-                bio,
+                bio: safeBio,
                 avatarUrl,
                 learningLanguage,
                 githubLink,
@@ -85,7 +103,7 @@ export const updateProfileService = async (userId, data) => {
             create: {
                 userId,
                 fullName,
-                bio,
+                bio: safeBio,
                 avatarUrl,
                 learningLanguage,
                 githubLink,

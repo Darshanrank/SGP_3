@@ -1,10 +1,10 @@
 import prisma from '../prisma/client.js';
 import { ValidationError, ForbiddenError, NotFound } from '../errors/generic.errors.js';
 
-export const getAllSkillsService = async ({ skip = 0, take = 20, search = '' }) => {
-    const where = search 
-        ? { name: { contains: search } } // Removed 'mode: insensitive' since MySQL case-insensitivity depends on collation
-        : {};
+export const getAllSkillsService = async ({ skip = 0, take = 20, search = '', category = '' }) => {
+    const where = {};
+    if (search) where.name = { contains: search };
+    if (category) where.category = category;
 
     const [skills, total] = await Promise.all([
         prisma.skill.findMany({

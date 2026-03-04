@@ -17,7 +17,9 @@ import {
     getMyPenaltiesService,
     getPenaltiesService,
     markAllNotificationsReadService,
-    getUnreadCountService
+    getUnreadCountService,
+    getLeaderboardService,
+    getSkillCategoriesService
 } from '../services/meta.service.js';
 import { ValidationError } from '../errors/generic.errors.js';
 
@@ -227,6 +229,28 @@ export const getPenalties = async (req, res, next) => {
         const limit = Number.parseInt(req.query.limit, 10) || 20;
         const penalties = await getPenaltiesService({ page, limit });
         res.json(penalties);
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Leaderboard
+export const getLeaderboard = async (req, res, next) => {
+    try {
+        const page = Number.parseInt(req.query.page, 10) || 1;
+        const limit = Number.parseInt(req.query.limit, 10) || 20;
+        const leaderboard = await getLeaderboardService({ page, limit });
+        res.json(leaderboard);
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Skill Categories
+export const getSkillCategories = async (_req, res, next) => {
+    try {
+        const categories = await getSkillCategoriesService();
+        res.json(categories);
     } catch (error) {
         next(error);
     }

@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { getMyProfile, sendUpcomingReminder, updateProfile } from '../services/profile.service';
+import { getMyProfile, sendUpcomingReminder, updateProfile, deleteAccount } from '../services/profile.service';
 import { addSkill, createSkill, getAllSkills, getUserSkills, removeSkill, uploadSkillDemo } from '../services/skill.service';
 import { Editor } from '@tinymce/tinymce-react';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 const emptyTeachSkill = () => ({
     id: null,
@@ -22,6 +23,16 @@ const emptyAvailability = (timezone = 'UTC') => ({ dayOfWeek: 'MONDAY', startTim
 
 const languageOptions = ['English', 'Hindi', 'Spanish', 'French', 'German', 'Arabic', 'Chinese', 'Japanese'];
 
+const BIO_MAX_LENGTH = 2000;
+const USERNAME_MIN = 3;
+const USERNAME_MAX = 30;
+const URL_REGEX = /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}(\/\S*)?$/i;
+
+const validateUrl = (url) => {
+    if (!url) return null; // optional
+    return URL_REGEX.test(url) ? null : 'Enter a valid URL';
+};
+
 const Profile = () => {
     const { refreshUser } = useAuth();
     const location = useLocation();
@@ -35,6 +46,10 @@ const Profile = () => {
     const [sendingReminder, setSendingReminder] = useState(false);
     const [existingUserSkills, setExistingUserSkills] = useState([]);
     const [avatarPreview, setAvatarPreview] = useState('');
+    const [fieldErrors, setFieldErrors] = useState({});
+    const [touched, setTouched] = useState({});
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     const [formData, setFormData] = useState({
         fullName: '',
@@ -128,6 +143,54 @@ const Profile = () => {
 
     const updateField = (key, value) => {
         setFormData((prev) => ({ ...prev, [key]: value }));
+        // Live validation
+        validateField(key, value);
+    };
+
+    const markTouched = (key) => {
+        setTouched((prev) => ({ ...prev, [key]: true }));
+        validateField(key, formData[key]);
+    };
+
+    const validateField = (key, value) => {
+        let error = null;
+        switch (key) {
+            case 'fullName':
+                if (!value?.trim()) error = 'Full name is required';
+                break;
+            case 'username':
+                if (!value?.trim()) error = 'Username is required';
+                else if (value.trim().length < USERNAME_MIN) error = `At least ${USERNAME_MIN} characters`;
+                else if (value.trim().length > USERNAME_MAX) error = `Max ${USERNAME_MAX} characters`;
+                break;
+            case 'bio':
+                if (value && value.replace(/<[^>]*>/g, '').length > BIO_MAX_LENGTH) error = `Bio exceeds ${BIO_MAX_LENGTH} characters`;
+                break;
+            case 'githubLink':
+            case 'linkedinLink':
+            case 'portfolioLink':
+            case 'youtubeLink':
+                error = validateUrl(value);
+                break;
+            default:
+                break;
+        }
+        setFieldErrors((prev) => ({ ...prev, [key]: error }));
+        return error;
+    };
+
+    const hasValidationErrors = () => {
+        const errs = {};
+        errs.fullName = validateField('fullName', formData.fullName);
+        errs.username = validateField('username', formData.username);
+        errs.bio = validateField('bio', formData.bio);
+        errs.githubLink = validateField('githubLink', formData.githubLink);
+        errs.linkedinLink = validateField('linkedinLink', formData.linkedinLink);
+        errs.portfolioLink = validateField('portfolioLink', formData.portfolioLink);
+        errs.youtubeLink = validateField('youtubeLink', formData.youtubeLink);
+        // Mark all as touched to show errors
+        setTouched({ fullName: true, username: true, bio: true, githubLink: true, linkedinLink: true, portfolioLink: true, youtubeLink: true });
+        return Object.values(errs).some(Boolean);
     };
 
     const updateArrayItem = (arrayName, index, key, value) => {
@@ -190,6 +253,10 @@ const Profile = () => {
     };
 
     const submitAll = async () => {
+        if (hasValidationErrors()) {
+            toast.error('Please fix the highlighted errors before saving');
+            return;
+        }
         setSaving(true);
         try {
             const profilePayload = new FormData();
@@ -215,6 +282,9 @@ const Profile = () => {
 
             const retainedSkillIds = new Set();
 
+            // Prepare teach skills (uploads must be sequential per-skill, but
+            // we can prepare all payloads first, then batch the addSkill calls)
+            const teachPayloads = [];
             for (let i = 0; i < formData.teachSkills.length; i += 1) {
                 const teachSkill = formData.teachSkills[i];
                 if (!teachSkill.skillName.trim()) continue;
@@ -232,7 +302,7 @@ const Profile = () => {
                     updateTeachSkillUpload(i, { isUploading: false, uploadProgress: 100, videoUrl });
                 }
 
-                await addSkill({
+                teachPayloads.push({
                     skillId,
                     type: 'TEACH',
                     level: teachSkill.level,
@@ -241,31 +311,35 @@ const Profile = () => {
                         videoUrl,
                         description: `Skill demo for ${teachSkill.skillName}`,
                         syllabusOutline: ''
-                    }
+                    },
+                    _retainId: teachSkill.id
                 });
-
-                if (teachSkill.id) retainedSkillIds.add(teachSkill.id);
             }
 
+            // Prepare learn skills payloads
+            const learnPayloads = [];
             for (const learnSkill of formData.learnSkills) {
                 if (!learnSkill.skillName.trim()) continue;
-
                 const skillId = learnSkill.skillId || await resolveSkillId(learnSkill.skillName);
                 if (!skillId) continue;
-
-                await addSkill({
+                learnPayloads.push({
                     skillId,
                     type: 'LEARN',
-                    level: learnSkill.level
+                    level: learnSkill.level,
+                    _retainId: learnSkill.id
                 });
-
-                if (learnSkill.id) retainedSkillIds.add(learnSkill.id);
             }
 
+            // Batch all addSkill calls in parallel
+            const allPayloads = [...teachPayloads, ...learnPayloads];
+            const results = await Promise.all(
+                allPayloads.map(({ _retainId, ...payload }) => addSkill(payload).then(() => _retainId))
+            );
+            results.forEach(retainId => { if (retainId) retainedSkillIds.add(retainId); });
+
+            // Batch all removeSkill calls in parallel
             const removed = existingUserSkills.filter((item) => !retainedSkillIds.has(item.id));
-            for (const item of removed) {
-                await removeSkill(item.id);
-            }
+            await Promise.all(removed.map(item => removeSkill(item.id)));
 
             await refreshUser();
             toast.success('Profile setup saved successfully');
@@ -324,8 +398,15 @@ const Profile = () => {
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-4">
-                            <input className="border rounded px-3 py-2" placeholder="Full Name" value={formData.fullName} onChange={(e) => updateField('fullName', e.target.value)} />
-                            <input className="border rounded px-3 py-2" placeholder="Username" value={formData.username} onChange={(e) => updateField('username', e.target.value)} />
+                            <div>
+                                <input className={`w-full border rounded px-3 py-2 ${touched.fullName && fieldErrors.fullName ? 'border-red-500' : ''}`} placeholder="Full Name *" value={formData.fullName} onChange={(e) => updateField('fullName', e.target.value)} onBlur={() => markTouched('fullName')} />
+                                {touched.fullName && fieldErrors.fullName && <p className="text-xs text-red-600 mt-1">{fieldErrors.fullName}</p>}
+                            </div>
+                            <div>
+                                <input className={`w-full border rounded px-3 py-2 ${touched.username && fieldErrors.username ? 'border-red-500' : ''}`} placeholder="Username *" value={formData.username} onChange={(e) => updateField('username', e.target.value)} onBlur={() => markTouched('username')} />
+                                {touched.username && fieldErrors.username && <p className="text-xs text-red-600 mt-1">{fieldErrors.username}</p>}
+                                {!fieldErrors.username && formData.username && <p className="text-xs text-gray-400 mt-1">{formData.username.length}/{USERNAME_MAX}</p>}
+                            </div>
                         </div>
 
                         <div>
@@ -343,6 +424,8 @@ const Profile = () => {
                                     content_style: 'body { font-family: ui-sans-serif, system-ui; font-size: 14px; }'
                                 }}
                             />
+                            {touched.bio && fieldErrors.bio && <p className="text-xs text-red-600 mt-1">{fieldErrors.bio}</p>}
+                            <p className="text-xs text-gray-400 mt-1">{(formData.bio || '').replace(/<[^>]*>/g, '').length} / {BIO_MAX_LENGTH} characters</p>
                         </div>
 
                         <div>
@@ -359,10 +442,22 @@ const Profile = () => {
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-4">
-                            <input className="border rounded px-3 py-2" placeholder="GitHub (optional)" value={formData.githubLink} onChange={(e) => updateField('githubLink', e.target.value)} />
-                            <input className="border rounded px-3 py-2" placeholder="LinkedIn (optional)" value={formData.linkedinLink} onChange={(e) => updateField('linkedinLink', e.target.value)} />
-                            <input className="border rounded px-3 py-2" placeholder="Portfolio (optional)" value={formData.portfolioLink} onChange={(e) => updateField('portfolioLink', e.target.value)} />
-                            <input className="border rounded px-3 py-2" placeholder="YouTube (optional)" value={formData.youtubeLink} onChange={(e) => updateField('youtubeLink', e.target.value)} />
+                            <div>
+                                <input className={`w-full border rounded px-3 py-2 ${touched.githubLink && fieldErrors.githubLink ? 'border-red-500' : ''}`} placeholder="GitHub (optional)" value={formData.githubLink} onChange={(e) => updateField('githubLink', e.target.value)} onBlur={() => markTouched('githubLink')} />
+                                {touched.githubLink && fieldErrors.githubLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.githubLink}</p>}
+                            </div>
+                            <div>
+                                <input className={`w-full border rounded px-3 py-2 ${touched.linkedinLink && fieldErrors.linkedinLink ? 'border-red-500' : ''}`} placeholder="LinkedIn (optional)" value={formData.linkedinLink} onChange={(e) => updateField('linkedinLink', e.target.value)} onBlur={() => markTouched('linkedinLink')} />
+                                {touched.linkedinLink && fieldErrors.linkedinLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.linkedinLink}</p>}
+                            </div>
+                            <div>
+                                <input className={`w-full border rounded px-3 py-2 ${touched.portfolioLink && fieldErrors.portfolioLink ? 'border-red-500' : ''}`} placeholder="Portfolio (optional)" value={formData.portfolioLink} onChange={(e) => updateField('portfolioLink', e.target.value)} onBlur={() => markTouched('portfolioLink')} />
+                                {touched.portfolioLink && fieldErrors.portfolioLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.portfolioLink}</p>}
+                            </div>
+                            <div>
+                                <input className={`w-full border rounded px-3 py-2 ${touched.youtubeLink && fieldErrors.youtubeLink ? 'border-red-500' : ''}`} placeholder="YouTube (optional)" value={formData.youtubeLink} onChange={(e) => updateField('youtubeLink', e.target.value)} onBlur={() => markTouched('youtubeLink')} />
+                                {touched.youtubeLink && fieldErrors.youtubeLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.youtubeLink}</p>}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -526,6 +621,45 @@ const Profile = () => {
                     )}
                 </div>
             </div>
+
+            {/* Danger Zone — Delete Account */}
+            {!isSetupMode && (
+                <div className="mt-8 bg-white rounded-xl shadow-sm border border-red-200 p-6">
+                    <h2 className="text-lg font-semibold text-red-700">Danger Zone</h2>
+                    <p className="text-sm text-gray-600 mt-1">Permanently delete your account and all associated data. This action cannot be undone.</p>
+                    <button
+                        type="button"
+                        onClick={() => setDeleteDialogOpen(true)}
+                        disabled={deleting}
+                        className="mt-4 px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+                    >
+                        {deleting ? 'Deleting...' : 'Delete My Account'}
+                    </button>
+                    <ConfirmDialog
+                        open={deleteDialogOpen}
+                        title="Delete Account"
+                        message="This will permanently delete your account, all your skills, swap history, messages, and reviews. This cannot be undone. Are you absolutely sure?"
+                        confirmLabel="Delete Everything"
+                        variant="danger"
+                        onConfirm={async () => {
+                            setDeleteDialogOpen(false);
+                            setDeleting(true);
+                            try {
+                                await deleteAccount();
+                                toast.success('Your account has been deleted.');
+                                localStorage.removeItem('token');
+                                sessionStorage.removeItem('token');
+                                window.location.href = '/';
+                            } catch (err) {
+                                toast.error(err.response?.data?.message || 'Failed to delete account');
+                            } finally {
+                                setDeleting(false);
+                            }
+                        }}
+                        onCancel={() => setDeleteDialogOpen(false)}
+                    />
+                </div>
+            )}
         </div>
     );
 };

@@ -18,7 +18,9 @@ import {
     getMyPenalties,
     getPenalties,
     getUnreadCount,
-    markAllNotificationsRead
+    markAllNotificationsRead,
+    getLeaderboard,
+    getSkillCategories
 } from '../controllers/meta.controller.js';
 import { validateTokenMiddleware } from '../middlewares/token.middleware.js';
 import { requireAdmin } from '../middlewares/admin.middleware.js';
@@ -37,6 +39,8 @@ router.put('/notifications/read-all', markAllNotificationsRead);
 // Dashboard / Gamification
 router.get('/dashboard', getDashboardStats);
 router.get('/dashboard/stats', getDashboardStats);
+router.get('/leaderboard', getLeaderboard);
+router.get('/skill-categories', getSkillCategories);
 
 // Calendar
 router.get('/calendar', getCalendarEvents);

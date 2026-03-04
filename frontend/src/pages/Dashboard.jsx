@@ -8,12 +8,18 @@ import { getMatchedUsers } from '../services/matching.service';
 import { createSwapRequest } from '../services/swap.service';
 import { Button } from '../components/ui/Button';
 import { toast } from 'react-hot-toast';
+import InputDialog from '../components/ui/InputDialog';
+import { StatCardSkeleton } from '../components/ui/Skeleton';
 
 const Dashboard = () => {
     const { user } = useAuth();
     const [statsData, setStatsData] = useState(null);
     const [matches, setMatches] = useState([]);
     const [recentNotifs, setRecentNotifs] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Input dialog state (replaces prompt())
+    const [swapDialog, setSwapDialog] = useState({ open: false, targetUserId: null, skillId: null });
 
     useEffect(() => {
         const loadAll = async () => {
@@ -29,15 +35,21 @@ const Dashboard = () => {
                 setRecentNotifs(notifs.slice(0, 5));
             } catch (error) {
                 console.error('Failed to load dashboard data', error);
+            } finally {
+                setLoading(false);
             }
         };
 
         loadAll();
     }, []);
 
-    const handleQuickSwap = async (targetUserId, skillId) => {
-        const message = prompt("Enter a message for your swap request:");
-        if (!message) return;
+    const handleQuickSwap = (targetUserId, skillId) => {
+        setSwapDialog({ open: true, targetUserId, skillId });
+    };
+
+    const handleSwapDialogSubmit = async (message) => {
+        const { targetUserId, skillId } = swapDialog;
+        setSwapDialog({ open: false, targetUserId: null, skillId: null });
         try {
             await createSwapRequest({ toUserId: targetUserId, learnSkillId: skillId, message });
             toast.success("Swap request sent!");
@@ -55,6 +67,16 @@ const Dashboard = () => {
 
     return (
         <div className="space-y-6">
+            {/* Input dialog for swap request message */}
+            <InputDialog
+                open={swapDialog.open}
+                title="Send Swap Request"
+                placeholder="Enter a message for your swap request..."
+                submitLabel="Send Request"
+                onSubmit={handleSwapDialogSubmit}
+                onCancel={() => setSwapDialog({ open: false, targetUserId: null, skillId: null })}
+            />
+
             <header>
                 <h1 className="text-3xl font-bold leading-tight text-gray-900">Dashboard</h1>
                 <p className="mt-1 text-sm text-gray-500">Welcome back, {user?.username}!</p>
@@ -62,19 +84,28 @@ const Dashboard = () => {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                {stats.map((item) => (
-                    <div key={item.name} className="relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden border border-gray-100">
-                        <dt>
-                            <div className={`absolute rounded-md p-3 ${item.color}`}>
-                                <item.icon className="h-6 w-6 text-white" aria-hidden="true" />
-                            </div>
-                            <p className="ml-16 text-sm font-medium text-gray-500 truncate">{item.name}</p>
-                        </dt>
-                        <dd className="ml-16 pb-6 flex items-baseline sm:pb-7">
-                            <p className="text-2xl font-semibold text-gray-900">{item.stat}</p>
-                        </dd>
-                    </div>
-                ))}
+                {loading ? (
+                    <>
+                        <StatCardSkeleton />
+                        <StatCardSkeleton />
+                        <StatCardSkeleton />
+                        <StatCardSkeleton />
+                    </>
+                ) : (
+                    stats.map((item) => (
+                        <div key={item.name} className="relative bg-white pt-5 px-4 pb-12 sm:pt-6 sm:px-6 shadow rounded-lg overflow-hidden border border-gray-100">
+                            <dt>
+                                <div className={`absolute rounded-md p-3 ${item.color}`}>
+                                    <item.icon className="h-6 w-6 text-white" aria-hidden="true" />
+                                </div>
+                                <p className="ml-16 text-sm font-medium text-gray-500 truncate">{item.name}</p>
+                            </dt>
+                            <dd className="ml-16 pb-6 flex items-baseline sm:pb-7">
+                                <p className="text-2xl font-semibold text-gray-900">{item.stat}</p>
+                            </dd>
+                        </div>
+                    ))
+                )}
             </div>
 
             {/* Suggested Swaps */}

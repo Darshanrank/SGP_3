@@ -19,6 +19,11 @@ export const sendUpcomingReminder = async () => {
     return response.data;
 };
 
+export const deleteAccount = async () => {
+    const response = await api.delete('/profile/me');
+    return response.data;
+};
+
 export const getPublicProfile = async (userId) => {
     const response = await api.get(`/profile/${userId}`);
     return response.data;

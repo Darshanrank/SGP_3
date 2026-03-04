@@ -304,3 +304,53 @@ export const getPenaltiesService = async ({ page = 1, limit = 20 } = {}) => {
         }
     };
 };
+
+// Leaderboard
+export const getLeaderboardService = async ({ page = 1, limit = 20 } = {}) => {
+    const skip = (page - 1) * limit;
+    const [leaders, total] = await Promise.all([
+        prisma.userReward.findMany({
+            orderBy: { points: 'desc' },
+            skip,
+            take: limit,
+            include: {
+                user: {
+                    select: {
+                        userId: true,
+                        username: true,
+                        profile: { select: { fullName: true, avatarUrl: true } }
+                    }
+                }
+            }
+        }),
+        prisma.userReward.count()
+    ]);
+
+    return {
+        data: leaders.map((entry, index) => ({
+            rank: skip + index + 1,
+            userId: entry.user.userId,
+            username: entry.user.username,
+            fullName: entry.user.profile?.fullName || null,
+            avatarUrl: entry.user.profile?.avatarUrl || null,
+            points: entry.points,
+            totalSwaps: entry.totalSwaps,
+        })),
+        meta: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        }
+    };
+};
+
+// Skill categories
+export const getSkillCategoriesService = async () => {
+    const skills = await prisma.skill.findMany({
+        select: { category: true },
+        distinct: ['category'],
+        orderBy: { category: 'asc' }
+    });
+    return skills.map(s => s.category);
+};

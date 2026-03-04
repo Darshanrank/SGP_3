@@ -1,5 +1,7 @@
 import prisma from '../prisma/client.js';
 import { NotFound, ValidationError, ForbiddenError } from '../errors/generic.errors.js';
+import { assertUserInClass } from '../utils/assertUserInClass.js';
+import { evaluateBadges } from '../utils/badgeEvaluator.js';
 
 export const createSwapRequestService = async (fromUserId, data) => {
     const { toUserId, teachSkillId, learnSkillId, message } = data;
@@ -226,22 +228,6 @@ export const getMyClassesService = async (userId, { page = 1, limit = 20 } = {})
     };
 };
 
-const assertUserInClass = async (userId, classId) => {
-    const swapClass = await prisma.swapClass.findUnique({
-        where: { id: classId },
-        include: {
-            swapRequest: { select: { fromUserId: true, toUserId: true } }
-        }
-    });
-
-    if (!swapClass) throw new NotFound('Class not found');
-
-    const isMember = swapClass.swapRequest.fromUserId === userId || swapClass.swapRequest.toUserId === userId;
-    if (!isMember) throw new ForbiddenError('Not authorized');
-
-    return swapClass;
-};
-
 export const getClassDetailsService = async (userId, classId) => {
     await assertUserInClass(userId, classId);
     return await prisma.swapClass.findUnique({
@@ -364,6 +350,12 @@ export const completeClassService = async (userId, classId) => {
              create: { userId: swapClass.swapRequest.toUserId, points: 10, totalSwaps: 1 },
              update: { points: { increment: 10 }, totalSwaps: { increment: 1 } }
          });
+
+         // Evaluate badges for both users after swap completion
+         await Promise.all([
+             evaluateBadges(swapClass.swapRequest.fromUserId),
+             evaluateBadges(swapClass.swapRequest.toUserId),
+         ]);
     }
 
     return updatedCompletion;

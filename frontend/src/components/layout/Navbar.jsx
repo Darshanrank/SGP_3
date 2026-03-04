@@ -1,9 +1,25 @@
 // src/components/layout/Navbar.jsx
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { LogOut, User, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
+
+const navLinkClass = ({ isActive }) =>
+    clsx(
+        'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
+        isActive
+            ? 'border-blue-500 text-blue-600'
+            : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+    );
+
+const mobileLinkClass = ({ isActive }) =>
+    clsx(
+        'block pl-3 pr-4 py-2 border-l-4 text-base font-medium',
+        isActive
+            ? 'bg-blue-50 border-blue-500 text-blue-700'
+            : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
+    );
 
 const Navbar = () => {
     const { user, logout } = useAuth();
@@ -30,34 +46,37 @@ const Navbar = () => {
                         </Link>
                         <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
                             {!user && (
-                                <Link to="/" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                <NavLink to="/" className={navLinkClass}>
                                     Home
-                                </Link>
+                                </NavLink>
                             )}
                             {user && (
                                 <>
-                                    <Link to="/dashboard" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                    <NavLink to="/dashboard" className={navLinkClass}>
                                         Dashboard
-                                    </Link>
-                                    <Link to="/skills" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                    </NavLink>
+                                    <NavLink to="/skills" className={navLinkClass}>
                                         Skills
-                                    </Link>
-                                     <Link to="/swaps" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                    </NavLink>
+                                     <NavLink to="/swaps" className={navLinkClass}>
                                         Swaps
-                                    </Link>
-                                    <Link to="/calendar" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                    </NavLink>
+                                    <NavLink to="/calendar" className={navLinkClass}>
                                         Calendar
-                                    </Link>
-                                    <Link to="/notifications" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                    </NavLink>
+                                    <NavLink to="/notifications" className={navLinkClass}>
                                         Notifications
-                                    </Link>
-                                    <Link to="/rewards" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                    </NavLink>
+                                    <NavLink to="/rewards" className={navLinkClass}>
                                         Rewards
-                                    </Link>
+                                    </NavLink>
+                                    <NavLink to="/leaderboard" className={navLinkClass}>
+                                        Leaderboard
+                                    </NavLink>
                                     {isAdmin && (
-                                        <Link to="/admin/reports" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                                        <NavLink to="/admin/reports" className={navLinkClass}>
                                             Admin
-                                        </Link>
+                                        </NavLink>
                                     )}
                                 </>
                             )}
@@ -110,43 +129,46 @@ const Navbar = () => {
             <div className={clsx("sm:hidden", isMenuOpen ? "block" : "hidden")}>
                 <div className="pt-2 pb-3 space-y-1">
                     {!user && (
-                        <Link to="/" className="bg-blue-50 border-blue-500 text-blue-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                        <NavLink to="/" className={mobileLinkClass}>
                             Home
-                        </Link>
+                        </NavLink>
                     )}
                     {user && (
                         <>
-                            <Link to="/dashboard" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                            <NavLink to="/dashboard" className={mobileLinkClass}>
                                 Dashboard
-                            </Link>
-                            <Link to="/swaps" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                            </NavLink>
+                            <NavLink to="/swaps" className={mobileLinkClass}>
                                 Swaps
-                            </Link>
-                             <Link to="/calendar" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                            </NavLink>
+                             <NavLink to="/calendar" className={mobileLinkClass}>
                                 Calendar
-                            </Link>
-                            <Link to="/notifications" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                            </NavLink>
+                            <NavLink to="/notifications" className={mobileLinkClass}>
                                 Notifications
-                            </Link>
-                            <Link to="/rewards" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                            </NavLink>
+                            <NavLink to="/rewards" className={mobileLinkClass}>
                                 Rewards
-                            </Link>
+                            </NavLink>
+                            <NavLink to="/leaderboard" className={mobileLinkClass}>
+                                Leaderboard
+                            </NavLink>
                             {isAdmin && (
                                 <>
-                                    <Link to="/admin/reports" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                                    <NavLink to="/admin/reports" className={mobileLinkClass}>
                                         Admin Reports
-                                    </Link>
-                                    <Link to="/admin/badges" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                                    </NavLink>
+                                    <NavLink to="/admin/badges" className={mobileLinkClass}>
                                         Admin Badges
-                                    </Link>
-                                    <Link to="/admin/penalties" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                                    </NavLink>
+                                    <NavLink to="/admin/penalties" className={mobileLinkClass}>
                                         Admin Penalties
-                                    </Link>
+                                    </NavLink>
                                 </>
                             )}
-                            <Link to="/profile" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                            <NavLink to="/profile" className={mobileLinkClass}>
                                 Profile
-                            </Link>
+                            </NavLink>
                              <button
                                 onClick={handleLogout}
                                 className="w-full text-left border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"

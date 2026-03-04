@@ -100,3 +100,13 @@ export const createPenalty = async (data) => {
     const response = await api.post('/meta/penalties', data);
     return response.data;
 };
+
+export const getLeaderboard = async (page = 1, limit = 20) => {
+    const response = await api.get(`/meta/leaderboard?page=${page}&limit=${limit}`);
+    return response.data;
+};
+
+export const getSkillCategories = async () => {
+    const response = await api.get('/meta/skill-categories');
+    return response.data;
+};

@@ -1,18 +1,7 @@
 import { ForbiddenError, NotFound, ValidationError } from '../errors/generic.errors.js';
 import prisma from '../prisma/client.js';
-
-const assertUserInClass = async (userId, classId) => {
-    const swapClass = await prisma.swapClass.findUnique({
-        where: { id: classId },
-        include: { swapRequest: { select: { fromUserId: true, toUserId: true } } }
-    });
-
-    if (!swapClass) throw new NotFound('Class not found');
-    const isMember = swapClass.swapRequest.fromUserId === userId || swapClass.swapRequest.toUserId === userId;
-    if (!isMember) throw new ForbiddenError('Not authorized');
-
-    return swapClass;
-};
+import sanitizeHtml from 'sanitize-html';
+import { assertUserInClass } from '../utils/assertUserInClass.js';
 
 export const getMessagesService = async (userId, classId, { skip = 0, take = 20 }) => {
     await assertUserInClass(userId, classId);
@@ -55,6 +44,8 @@ export const sendMessageService = async (classId, userId, message) => {
     if (!message || !message.trim()) {
         throw new ValidationError('Message is required');
     }
+    // Sanitize message to prevent XSS — strip all HTML tags
+    message = sanitizeHtml(message, { allowedTags: [], allowedAttributes: {} });
     let chatRoom = await prisma.chatRoom.findUnique({
         where: { swapClassId: classId }
     });

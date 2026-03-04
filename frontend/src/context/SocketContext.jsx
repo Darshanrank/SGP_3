@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
 import io from 'socket.io-client';
 import { toast } from 'react-hot-toast';
+import api from '../services/api';
 
 const SocketContext = createContext(null);
 
@@ -12,6 +13,8 @@ export const SocketProvider = ({ children }) => {
     const { user } = useAuth();
     const socketRef = useRef(null);
     const [unreadCount, setUnreadCount] = useState(0);
+    const reconnectAttempts = useRef(0);
+    const MAX_RECONNECT_ATTEMPTS = 5;
 
     useEffect(() => {
         if (!user) {
@@ -20,22 +23,29 @@ export const SocketProvider = ({ children }) => {
                 socketRef.current.disconnect();
                 socketRef.current = null;
             }
+            reconnectAttempts.current = 0;
             return;
         }
 
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const getToken = () => localStorage.getItem('token') || sessionStorage.getItem('token');
+        const token = getToken();
         if (!token) return;
 
         const socket = io(socketUrl, {
             withCredentials: true,
             autoConnect: true,
             auth: { token },
+            reconnection: true,
+            reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 10000,
         });
 
         socketRef.current = socket;
 
         socket.on('connect', () => {
             console.log('[Socket] Connected for notifications', socket.id);
+            reconnectAttempts.current = 0;
         });
 
         // Listen for real-time notifications
@@ -55,13 +65,41 @@ export const SocketProvider = ({ children }) => {
             });
         });
 
-        socket.on('disconnect', () => {
-            console.log('[Socket] Disconnected');
+        socket.on('disconnect', (reason) => {
+            console.log('[Socket] Disconnected:', reason);
+        });
+
+        // Handle auth errors — refresh token and reconnect
+        socket.on('connect_error', async (err) => {
+            console.warn('[Socket] Connection error:', err.message);
+            if (err.message === 'AUTH_INVALID' || err.message === 'AUTH_MISSING') {
+                reconnectAttempts.current += 1;
+                if (reconnectAttempts.current > MAX_RECONNECT_ATTEMPTS) {
+                    console.warn('[Socket] Max reconnect attempts reached, giving up.');
+                    socket.disconnect();
+                    return;
+                }
+                try {
+                    // Attempt to refresh the access token
+                    const res = await api.post('/auth/refresh');
+                    const newToken = res.data?.accessToken;
+                    if (newToken) {
+                        const store = localStorage.getItem('token') ? localStorage : sessionStorage;
+                        store.setItem('token', newToken);
+                        // Update socket auth and reconnect
+                        socket.auth = { token: newToken };
+                        socket.connect();
+                    }
+                } catch (refreshErr) {
+                    console.warn('[Socket] Token refresh failed, cannot reconnect:', refreshErr.message);
+                }
+            }
         });
 
         return () => {
             socket.off('new_notification');
             socket.off('new_chat_message');
+            socket.off('connect_error');
             socket.disconnect();
             socketRef.current = null;
         };

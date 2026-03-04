@@ -1,8 +1,11 @@
 // src/services/skill.service.js
 import api from './api';
 
-export const getAllSkills = async (page = 1, limit = 20, search = '') => {
-    const response = await api.get(`/skills?page=${page}&limit=${limit}&search=${search}`);
+export const getAllSkills = async (page = 1, limit = 20, search = '', category = '') => {
+    const params = new URLSearchParams({ page, limit });
+    if (search) params.append('search', search);
+    if (category) params.append('category', category);
+    const response = await api.get(`/skills?${params.toString()}`);
     return response.data;
 };
 

@@ -8,6 +8,15 @@ export const registerService = async ({ username, email, password }) => {
     if(!username){
         throw new AuthError('Username is required','USERNAME_MISSING');
     }
+
+    // Check username uniqueness
+    const existingUsername = await prisma.users.findFirst({
+        where: { username }
+    });
+    if (existingUsername) {
+        throw new AuthError('Username is already taken', 'USERNAME_TAKEN');
+    }
+
     const user = await prisma.users.findUnique({
         where: { email }
     });
@@ -38,5 +47,5 @@ export const registerService = async ({ username, email, password }) => {
         );
 
     }
-    verifyEmailSend({ email, verificationCode }).catch(err => console.error('Email error:', err));
+    verifyEmailSend({ email, username, verificationCode }).catch(err => console.error('Email error:', err));
 }

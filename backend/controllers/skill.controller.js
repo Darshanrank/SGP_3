@@ -15,10 +15,11 @@ export const getAllSkills = async (req, res, next) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
         const search = req.query.search || '';
+        const category = req.query.category || '';
         
         const skip = (page - 1) * limit;
 
-        const result = await getAllSkillsService({ skip, take: limit, search });
+        const result = await getAllSkillsService({ skip, take: limit, search, category });
         res.json(result);
     } catch (error) {
         next(error);

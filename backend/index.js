@@ -89,19 +89,91 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         logger.info('User disconnected from socket', { socketId: socket.id });
     });
+
+    // Typing indicators — relay to the chat room
+    socket.on('typing_start', async (classId) => {
+        try {
+            const userId = socket.user?.userId;
+            const allowed = await isUserInClass(userId, Number(classId));
+            if (!allowed) return;
+            socket.to(`chat_${classId}`).emit('user_typing', { userId, classId });
+        } catch (_) {}
+    });
+
+    socket.on('typing_stop', async (classId) => {
+        try {
+            const userId = socket.user?.userId;
+            const allowed = await isUserInClass(userId, Number(classId));
+            if (!allowed) return;
+            socket.to(`chat_${classId}`).emit('user_stop_typing', { userId, classId });
+        } catch (_) {}
+    });
+
+    // Mark messages as read
+    socket.on('mark_read', async (classId) => {
+        try {
+            const userId = socket.user?.userId;
+            const allowed = await isUserInClass(userId, Number(classId));
+            if (!allowed) return;
+
+            const chatRoom = await prisma.chatRoom.findUnique({ where: { swapClassId: Number(classId) } });
+            if (!chatRoom) return;
+
+            await prisma.chatMessage.updateMany({
+                where: {
+                    chatRoomId: chatRoom.id,
+                    senderId: { not: userId },
+                    isRead: false,
+                },
+                data: { isRead: true },
+            });
+
+            // Notify sender that their messages were read
+            socket.to(`chat_${classId}`).emit('messages_read', { classId, readByUserId: userId });
+        } catch (err) {
+            logger.warn('mark_read failed', { socketId: socket.id, err: err.message });
+        }
+    });
 });
 
 app.use(helmet());
 
-const limiter = rateLimit({
+// General rate limiter — generous for regular API usage
+const generalLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
-	limit: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
-	standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-	legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+	limit: 500,               // 500 requests per 15 min (covers chat, polling, etc.)
+	standardHeaders: true,
+	legacyHeaders: false,
 });
 
-// Apply the rate limiting middleware to all requests
-app.use(limiter);
+// Strict limiter for auth-sensitive endpoints (login, register, password reset)
+const authLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	limit: 20,                // 20 attempts per 15 min
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { code: 'RATE_LIMITED', message: 'Too many attempts, please try again later.' }
+});
+
+// Apply the general rate limiter to all requests
+app.use(generalLimiter);
+
+// Request logging middleware
+app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        const level = res.statusCode >= 400 ? 'warn' : 'info';
+        logger[level](`${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`, {
+            method: req.method,
+            url: req.originalUrl,
+            status: res.statusCode,
+            duration,
+            ip: req.ip
+        });
+    });
+    next();
+});
 
 // Middleware
 app.use(cors({
@@ -117,7 +189,8 @@ app.get('/', (req, res) =>{
     res.send('Skill Swap Platform API is running');
 } )
 
-app.use('/api/auth',authRoute);
+// Apply strict rate limiting to auth routes
+app.use('/api/auth', authLimiter, authRoute);
 app.use('/api/profile', profileRoute);
 app.use('/api/skills', skillRoute);
 app.use('/api/swaps', swapRoute);
@@ -140,5 +213,42 @@ app.use((err, req, res, next) => {
 server.listen(conf.PORT, () => {
     logger.info(`Server is running on port ${conf.PORT}`);
 });
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        logger.error(`Port ${conf.PORT} is already in use. Kill the other process or use a different port.`);
+    } else {
+        logger.error('Server error:', err);
+    }
+    process.exit(1);
+});
+
+// Graceful shutdown
+const gracefulShutdown = async (signal) => {
+    logger.info(`${signal} received — shutting down gracefully...`);
+    
+    // 1. Stop accepting new connections
+    server.close(() => {
+        logger.info('HTTP server closed');
+    });
+
+    // 2. Close Socket.io connections
+    io.close(() => {
+        logger.info('Socket.io closed');
+    });
+
+    // 3. Disconnect Prisma
+    try {
+        await prisma.$disconnect();
+        logger.info('Prisma disconnected');
+    } catch (err) {
+        logger.warn('Error disconnecting Prisma', { error: err.message });
+    }
+
+    process.exit(0);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 

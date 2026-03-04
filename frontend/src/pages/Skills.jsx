@@ -1,12 +1,44 @@
 // src/pages/Skills.jsx
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAllSkills, getUserSkills, getUsersWithSkill, removeSkill } from '../services/skill.service';
+import { getSkillCategories } from '../services/meta.service';
 import { Button } from '../components/ui/Button';
 import { Link, useNavigate } from 'react-router-dom';
 import { createSwapRequest } from '../services/swap.service';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+
+// Debounced search input component
+const DebounceSearch = ({ value, onChange, delay = 400 }) => {
+    const [localValue, setLocalValue] = useState(value);
+    const timerRef = useRef(null);
+
+    useEffect(() => {
+        setLocalValue(value);
+    }, [value]);
+
+    const handleChange = (e) => {
+        const val = e.target.value;
+        setLocalValue(val);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => onChange(val), delay);
+    };
+
+    useEffect(() => () => clearTimeout(timerRef.current), []);
+
+    return (
+        <div className="flex gap-2 mb-4">
+            <input 
+                type="text" 
+                placeholder="Search skills..." 
+                className="border border-gray-300 rounded px-3 py-2 w-full max-w-sm"
+                value={localValue}
+                onChange={handleChange}
+            />
+        </div>
+    );
+};
 
 const Skills = () => {
     // State
@@ -14,6 +46,7 @@ const Skills = () => {
     const [selectedSkill, setSelectedSkill] = useState(null);
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('');
     
     // Auth
     const navigate = useNavigate();
@@ -26,10 +59,17 @@ const Skills = () => {
         isLoading: loadingAll, 
         error: errorAll 
     } = useQuery({
-        queryKey: ['skills', page, search],
-        queryFn: () => getAllSkills(page, 20, search),
+        queryKey: ['skills', page, search, selectedCategory],
+        queryFn: () => getAllSkills(page, 20, search, selectedCategory),
         keepPreviousData: true,
         staleTime: 60000, // 1 minute
+    });
+
+    // Fetch skill categories
+    const { data: categories = [] } = useQuery({
+        queryKey: ['skillCategories'],
+        queryFn: getSkillCategories,
+        staleTime: 300000, // 5 minutes
     });
 
     const { 
@@ -116,16 +156,20 @@ const Skills = () => {
                 )}
             </div>
 
-            {/* Search Bar for Explore */}
+            {/* Search Bar & Category Filter for Explore (debounced) */}
             {activeTab === 'explore' && !selectedSkill && (
-                <div className="flex gap-2 mb-4">
-                    <input 
-                        type="text" 
-                        placeholder="Search skills..." 
-                        className="border border-gray-300 rounded px-3 py-2 w-full max-w-sm"
-                        value={search}
-                        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                    />
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <DebounceSearch value={search} onChange={(val) => { setSearch(val); setPage(1); }} />
+                    <select
+                        value={selectedCategory}
+                        onChange={(e) => { setSelectedCategory(e.target.value); setPage(1); }}
+                        className="border border-gray-300 rounded px-3 py-2 text-sm h-10.5 min-w-45"
+                    >
+                        <option value="">All Categories</option>
+                        {categories.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                    </select>
                 </div>
             )}
             

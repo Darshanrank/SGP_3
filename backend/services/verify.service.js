@@ -3,6 +3,7 @@ import {verifyUrlToken} from '../utils/jwt.js'
 import prisma from '../prisma/client.js'
 import { AuthError } from '../errors/generic.errors.js';
 import {conf} from '../conf/conf.js'
+import { verificationEmailHtml } from '../utils/emailTemplates.js';
 
 
 // Ensure this points to the BACKEND URL for the API route, or strictly separate FRONTEND_URL and BACKEND_URL
@@ -10,12 +11,13 @@ import {conf} from '../conf/conf.js'
 // const verificationLink = `${conf.BACKEND_URL}/api/auth/verify/${verificationCode}`;
 // But current code uses FRONTEND_URL/api/auth... which is confusing if it hits backend. 
 // I will assume the intention is for the link to hit the backend.
-export const verifyEmailSend = async ({email,verificationCode}) =>{
+export const verifyEmailSend = async ({email, username, verificationCode}) =>{
     const subject = 'Verify your email address';
     const frontendUrl = conf.FRONTEND_URL || 'http://localhost:5173';
     const verificationLink = `${frontendUrl}/verify-email/${verificationCode}`;
     const text = `Please verify your email by clicking on the following link: ${verificationLink}`;
-    await sendEmailService(email, subject, text);
+    const html = verificationEmailHtml(username || 'there', verificationLink);
+    await sendEmailService(email, subject, text, html);
 }
 
 

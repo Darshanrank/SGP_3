@@ -97,21 +97,31 @@ export const getMatchedUsersService = async (userId, { page = 1, limit = 10 } = 
         });
     }
 
-    // 5. Attach mutual-match data & score
+    // 5. Batch-fetch ALL mutual skill names in one query (avoids N+1)
+    const allMutualSkillIds = new Set();
+    for (const [uid] of userMap) {
+        const ids = mutualLearnerMap.get(uid) || [];
+        ids.forEach(id => allMutualSkillIds.add(id));
+    }
+
+    const mutualSkillLookup = new Map();
+    if (allMutualSkillIds.size > 0) {
+        const skills = await prisma.skill.findMany({
+            where: { id: { in: [...allMutualSkillIds] } },
+            select: { id: true, name: true, category: true }
+        });
+        for (const s of skills) {
+            mutualSkillLookup.set(s.id, s);
+        }
+    }
+
+    // Attach mutual-match data & score
     for (const [uid, entry] of userMap) {
         const mutualSkillIds = mutualLearnerMap.get(uid) || [];
-        if (mutualSkillIds.length > 0) {
-            // Fetch skill names
-            const mutualSkills = await prisma.skill.findMany({
-                where: { id: { in: mutualSkillIds } },
-                select: { id: true, name: true, category: true }
-            });
-            entry.mutualLearnSkills = mutualSkills.map(s => ({
-                skillId: s.id,
-                skillName: s.name,
-                category: s.category
-            }));
-        }
+        entry.mutualLearnSkills = mutualSkillIds
+            .map(id => mutualSkillLookup.get(id))
+            .filter(Boolean)
+            .map(s => ({ skillId: s.id, skillName: s.name, category: s.category }));
 
         // Scoring: primary matches + mutual bonus + rating bonus
         entry.score =

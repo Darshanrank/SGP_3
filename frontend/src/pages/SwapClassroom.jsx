@@ -4,24 +4,25 @@ import { getClassDetails, addClassTodo, toggleTodo, completeClass } from '../ser
 import { getMessages, sendMessage } from '../services/chat.service';
 import { createReview, getClassReviews, hasReviewedClass } from '../services/review.service';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { Button } from '../components/ui/Button';
+import InputDialog from '../components/ui/InputDialog';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { toast } from 'react-hot-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import io from 'socket.io-client';
 import { Star } from 'lucide-react';
-
-const socketUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
 const SwapClassroom = () => {
     const { id } = useParams();
     const { user } = useAuth();
+    const { socket } = useSocket();
     const queryClient = useQueryClient();
     const [swapClass, setSwapClass] = useState(null);
     const [newMessage, setNewMessage] = useState("");
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const chatEndRef = useRef(null);
-    const socketRef = useRef(null);
+    const joinedRef = useRef(false);
 
     // Review state
     const [reviewRating, setReviewRating] = useState(0);
@@ -30,6 +31,15 @@ const SwapClassroom = () => {
     const [reviewSubmitting, setReviewSubmitting] = useState(false);
     const [myReviewStatus, setMyReviewStatus] = useState({ hasReviewed: false, review: null });
     const [classReviews, setClassReviews] = useState([]);
+
+    // Dialog state (replaces prompt / confirm)
+    const [todoDialogOpen, setTodoDialogOpen] = useState(false);
+    const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+
+    // Typing indicator state
+    const [partnerTyping, setPartnerTyping] = useState(false);
+    const typingTimeoutRef = useRef(null);
+    const emittedTypingRef = useRef(false);
 
     // Initial Load
     useEffect(() => {
@@ -50,19 +60,11 @@ const SwapClassroom = () => {
                         } catch (_) {}
                     }
 
-                    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-                    const s = io(socketUrl, {
-                        withCredentials: true,
-                        autoConnect: true,
-                        auth: token ? { token } : undefined,
-                    });
-                    socketRef.current = s;
-                    s.emit('join_chat', id);
-                    s.on('error', (msg) => {
-                        if (msg === 'Not authorized for this class') {
-                            toast.error('Not authorized for this class');
-                        }
-                    });
+                    // Join chat room via the shared socket from SocketContext
+                    if (socket && !joinedRef.current) {
+                        socket.emit('join_chat', id);
+                        joinedRef.current = true;
+                    }
                 }
             } catch (error) {
                 console.error(error);
@@ -72,15 +74,7 @@ const SwapClassroom = () => {
             }
         };
         fetchClassData();
-
-        return () => {
-            if (socketRef.current) {
-                socketRef.current.off('receive_message');
-                socketRef.current.off('error');
-                socketRef.current.disconnect();
-            }
-        };
-    }, [id]);
+    }, [id, socket]);
 
     // React Query for Messages (no polling)
     const { 
@@ -94,14 +88,13 @@ const SwapClassroom = () => {
     const messages = messagesData?.data || [];
     const meta = messagesData?.meta;
 
-    // Listen for new messages
+    // Listen for new messages via shared socket
     useEffect(() => {
+        if (!socket) return;
+
         const handleNewMessage = (newMessage) => {
-            // Optimistically update the cache
             queryClient.setQueryData(['chat', id, page], (oldData) => {
                 if (!oldData) return { data: [newMessage], meta: { total: 1 } };
-                // Check if message already exists to avoid dupes (e.g. from optimistic update)
-                // Though here we rely on socket for the update, so simplistic append is fine for now
                 return {
                     ...oldData,
                     data: [...oldData.data, newMessage], 
@@ -109,26 +102,81 @@ const SwapClassroom = () => {
             });
         };
 
-        const s = socketRef.current;
-        if (!s) return () => {};
+        const handleSocketError = (msg) => {
+            if (msg === 'Not authorized for this class') {
+                toast.error('Not authorized for this class');
+            }
+        };
 
-        s.on('receive_message', handleNewMessage);
+        socket.on('receive_message', handleNewMessage);
+        socket.on('error', handleSocketError);
+
+        // Typing indicator listeners
+        const handleUserTyping = ({ userId: typingUserId }) => {
+            if (typingUserId !== user.userId) {
+                setPartnerTyping(true);
+            }
+        };
+        const handleUserStopTyping = ({ userId: typingUserId }) => {
+            if (typingUserId !== user.userId) {
+                setPartnerTyping(false);
+            }
+        };
+        // Read receipts listener
+        const handleMessagesRead = () => {
+            queryClient.setQueryData(['chat', id, page], (oldData) => {
+                if (!oldData) return oldData;
+                return {
+                    ...oldData,
+                    data: oldData.data.map(msg => msg.senderId === user.userId ? { ...msg, isRead: true } : msg),
+                };
+            });
+        };
+
+        socket.on('user_typing', handleUserTyping);
+        socket.on('user_stop_typing', handleUserStopTyping);
+        socket.on('messages_read', handleMessagesRead);
 
         return () => {
-            s.off('receive_message', handleNewMessage);
+            socket.off('receive_message', handleNewMessage);
+            socket.off('error', handleSocketError);
+            socket.off('user_typing', handleUserTyping);
+            socket.off('user_stop_typing', handleUserStopTyping);
+            socket.off('messages_read', handleMessagesRead);
         };
-    }, [id, page, queryClient]);
+    }, [socket, id, page, queryClient]);
 
     useEffect(() => {
         // Auto-scroll on new messages
         if (messages.length > 0) {
              chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
         }
-    }, [messages.length]); 
+        // Mark messages as read when new messages arrive
+        if (socket && messages.length > 0) {
+            socket.emit('mark_read', id);
+        }
+    }, [messages.length, socket, id]); 
+
+    const handleInputChange = (e) => {
+        setNewMessage(e.target.value);
+        if (socket && !emittedTypingRef.current) {
+            socket.emit('typing_start', id);
+            emittedTypingRef.current = true;
+        }
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+            if (socket) socket.emit('typing_stop', id);
+            emittedTypingRef.current = false;
+        }, 1500);
+    };
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!newMessage.trim()) return;
+        // Stop typing indicator on send
+        if (socket) socket.emit('typing_stop', id);
+        emittedTypingRef.current = false;
+        clearTimeout(typingTimeoutRef.current);
 
         try {
             await sendMessage(id, newMessage);
@@ -139,10 +187,12 @@ const SwapClassroom = () => {
         }
     };
 
-    const handleAddTodo = async () => {
-        const title = prompt("Enter task title:");
-        if (!title) return;
+    const handleAddTodo = () => {
+        setTodoDialogOpen(true);
+    };
 
+    const handleTodoDialogSubmit = async (title) => {
+        setTodoDialogOpen(false);
         try {
             const todo = await addClassTodo(id, { title });
             setSwapClass(prev => ({
@@ -167,8 +217,12 @@ const SwapClassroom = () => {
         }
     };
 
-    const handleCompleteClass = async () => {
-        if (!window.confirm("Are you sure you want to mark this class as completed?")) return;
+    const handleCompleteClass = () => {
+        setCompleteDialogOpen(true);
+    };
+
+    const handleConfirmComplete = async () => {
+        setCompleteDialogOpen(false);
         try {
             await completeClass(id);
             toast.success("Class marked as complete!");
@@ -220,6 +274,24 @@ const SwapClassroom = () => {
 
     return (
         <div className="h-[calc(100vh-100px)] flex flex-col md:flex-row gap-6">
+            {/* Dialogs */}
+            <InputDialog
+                open={todoDialogOpen}
+                title="Add Task"
+                placeholder="Enter task title..."
+                submitLabel="Add"
+                onSubmit={handleTodoDialogSubmit}
+                onCancel={() => setTodoDialogOpen(false)}
+            />
+            <ConfirmDialog
+                open={completeDialogOpen}
+                title="Complete Class"
+                message="Are you sure you want to mark this class as completed? This action cannot be undone."
+                confirmLabel="Mark Complete"
+                onConfirm={handleConfirmComplete}
+                onCancel={() => setCompleteDialogOpen(false)}
+            />
+
             {/* Left: Class Details & Todos */}
             <div className="flex-1 space-y-6 overflow-y-auto pr-2">
                 <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
@@ -365,11 +437,21 @@ const SwapClassroom = () => {
                                     <p>{msg.message}</p>
                                     <span className={`text-[10px] block mt-1 ${isMe ? 'text-blue-100 text-right' : 'text-gray-400'}`}>
                                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}
+                                        {isMe && (
+                                            <span className="ml-1">{msg.isRead ? '✓✓' : '✓'}</span>
+                                        )}
                                     </span>
                                 </div>
                             </div>
                         );
                     })}
+                    {partnerTyping && (
+                        <div className="flex justify-start">
+                            <div className="bg-gray-200 rounded-lg px-4 py-2 text-sm text-gray-500 italic animate-pulse">
+                                typing…
+                            </div>
+                        </div>
+                    )}
                     <div ref={chatEndRef} />
                 </div>
 
@@ -377,7 +459,7 @@ const SwapClassroom = () => {
                     <input 
                         type="text" 
                         value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
+                        onChange={handleInputChange}
                         placeholder="Type a message..."
                         className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         disabled={isFinished}

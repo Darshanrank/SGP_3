@@ -10,7 +10,7 @@ const transponder  = nodemailer.createTransport({
     }
 });
 
-export const sendEmailService = async (to, subject, text) =>{
+export const sendEmailService = async (to, subject, text, html) =>{
     try{
         console.log(to,subject,text);
                 
@@ -18,7 +18,8 @@ export const sendEmailService = async (to, subject, text) =>{
             from: conf.EMAIL_USER,
             to, 
             subject,
-            text
+            text,
+            ...(html ? { html } : {})
         });
         return true;
     }catch(error){

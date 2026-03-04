@@ -8,6 +8,16 @@ import { AuthError, NotFound } from "../errors/generic.errors.js";
 import { sendEmailService } from "../services/sendEmail.service.js";
 import { conf } from "../conf/conf.js";
 import { rotateRefreshToken, revokeRefreshToken } from '../services/refreshToken.service.js'
+import { passwordResetEmailHtml } from '../utils/emailTemplates.js';
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+const cookieOptions = (maxAge, sameSite = 'strict') => ({
+    httpOnly: true,
+    secure: isProduction,
+    sameSite,
+    maxAge
+});
 
 export const login = async (req, res, next) => {
     try {
@@ -20,11 +30,7 @@ export const login = async (req, res, next) => {
         });
         const refreshMaxAge = rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
         
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            sameSite: 'strict',
-            maxAge: refreshMaxAge
-        })
+        res.cookie('refreshToken', refreshToken, cookieOptions(refreshMaxAge))
         res.status(200).json({ accessToken: accessToken });
     } catch (error) {
         next(error);
@@ -43,11 +49,7 @@ export const refresh = async (req, res, next) => {
             ip: req.ip
         });
 
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        });
+        res.cookie('refreshToken', refreshToken, cookieOptions(7 * 24 * 60 * 60 * 1000));
         res.status(200).json({ accessToken });
     } catch (error) {
         next(error);
@@ -78,11 +80,7 @@ export const verify = async (req, res, next) => {
             ip: req.ip
         }); 
 
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 Days
-        });
+        res.cookie('refreshToken', refreshToken, cookieOptions(7 * 24 * 60 * 60 * 1000, 'lax'));
 
         res.status(200).json({
             message: 'Email verified successfully',
@@ -103,12 +101,17 @@ export const verify = async (req, res, next) => {
 export const resetPassword = async (req, res, next) => {
     try {
         const { email } = req.body;
+        const genericMessage = 'If an account with that email exists, a password reset link has been sent.';
+
         const user = await prisma.users.findUnique({
             where: { email }
         });
+
         if (!user) {
-            throw new NotFound('User not found'); // Using NotFound instead of AuthError for clarity
+            // Return same response to prevent user enumeration
+            return res.status(200).json({ message: genericMessage });
         }
+
         const token = signUrlToken({ email }, '10m');
         const frontendUrl = conf.FRONTEND_URL || 'http://localhost:5173';
         const resetLink = `${frontendUrl}/reset-password/${token}`;
@@ -116,10 +119,11 @@ export const resetPassword = async (req, res, next) => {
         await sendEmailService(
             email,
             'Reset your Skill Swap password',
-            `Click this link to reset your password: ${resetLink}. This link expires in 10 minutes.`
+            `Click this link to reset your password: ${resetLink}. This link expires in 10 minutes.`,
+            passwordResetEmailHtml(resetLink)
         );
 
-        res.status(200).json({ message: 'Password reset link sent to your email' });
+        res.status(200).json({ message: genericMessage });
     } catch (error) {
         next(error);
     }
@@ -146,6 +150,7 @@ export const logout = async (req, res, next) => {
         }
         res.clearCookie('refreshToken', {
             httpOnly: true,
+            secure: isProduction,
             sameSite: 'strict'
         });
         res.status(200).json({ message: 'Logged out successfully' });

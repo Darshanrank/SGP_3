@@ -18,7 +18,7 @@
     userId        Int            @id @default(autoincrement())
     email         String         @unique
     passwordHash  String
-    username      String
+    username      String         @unique
     isVerified    Boolean        @default(false)
     salt          String
     createdAt     DateTime       @default(now())
@@ -90,6 +90,8 @@
     endTime   String   // "17:00"
     timezone  String   // "UTC", "Asia/Kolkata"
     createdAt DateTime @default(now())
+
+    @@index([userId])
   }
 
 
@@ -129,6 +131,8 @@
     swapsToLearn  SwapRequest[] @relation("LearnSkill")
 
     @@unique([userId, skillId, type])
+    @@index([userId])
+    @@index([skillId])
   }
 
   model SkillPreview {
@@ -165,6 +169,10 @@
     updatedAt     DateTime   @updatedAt
 
     swapClass     SwapClass?
+
+    @@index([fromUserId])
+    @@index([toUserId])
+    @@index([status])
   }
 
   enum ClassStatus {
@@ -215,7 +223,11 @@
     senderId    Int
     sender      Users    @relation(fields: [senderId], references: [userId])
     message     String   @db.Text
+    isRead      Boolean  @default(false)
     createdAt   DateTime @default(now())
+
+    @@index([chatRoomId])
+    @@index([senderId])
   }
 
   model SwapCompletion {
@@ -282,6 +294,9 @@
     message   String
     isRead    Boolean          @default(false)
     createdAt DateTime         @default(now())
+
+    @@index([userId])
+    @@index([userId, isRead])
   }
 
   model CalendarEvent {
@@ -293,6 +308,9 @@
     title       String
     eventDate   DateTime
     description String?
+
+    @@index([userId])
+    @@index([eventDate])
   }
 
   enum ReportStatus {
@@ -325,6 +343,8 @@
     reason      String
     penaltyType PenaltyType
     createdAt   DateTime    @default(now())
+
+    @@index([userId])
   }
 
   model RefreshToken {

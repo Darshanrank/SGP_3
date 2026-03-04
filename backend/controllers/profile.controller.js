@@ -1,4 +1,5 @@
 import { getMyProfileService, updateProfileService, getPublicProfileService, getPublicProfileByUsernameService, sendUpcomingReminderService } from '../services/profile.service.js';
+import { deleteAccountService } from '../services/deleteAccount.service.js';
 import { ValidationError } from '../errors/generic.errors.js';
 import { conf } from '../conf/conf.js';
 
@@ -55,6 +56,19 @@ export const getPublicProfile = async (req, res, next) => {
         }
         const profile = await getPublicProfileService(userId);
         res.json(profile);
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Delete account (GDPR)
+export const deleteAccount = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const result = await deleteAccountService(userId);
+        // Clear cookies
+        res.clearCookie('refreshToken', { httpOnly: true, sameSite: 'strict' });
+        res.json(result);
     } catch (error) {
         next(error);
     }

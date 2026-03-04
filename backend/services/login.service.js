@@ -12,6 +12,22 @@ export const loginService = async ({email,password, isAutoLogin = false, userAge
     if(!user){
         throw new AuthError('User not found','USER_NOT_FOUND');
     }
+
+    // Check if user is banned or suspended
+    const activePenalty = await prisma.adminPenalty.findFirst({
+        where: {
+            userId: user.userId,
+            penaltyType: { in: ['BAN', 'SUSPEND'] }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+    if (activePenalty) {
+        const label = activePenalty.penaltyType === 'BAN' ? 'banned' : 'suspended';
+        throw new ForbiddenError(
+            `Your account has been ${label}. Reason: ${activePenalty.reason}`,
+            'ACCOUNT_PENALIZED'
+        );
+    }
     
     // Auto-login skips password check (assumes email link proved identity)
     if (!isAutoLogin) {
