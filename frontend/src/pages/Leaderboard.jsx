@@ -62,7 +62,7 @@ const Leaderboard = () => {
                                     <div className="flex items-center gap-3">
                                         {entry.avatarUrl ? (
                                             <img
-                                                src={`${API_BASE}${entry.avatarUrl}`}
+                                                src={entry.avatarUrl.startsWith('http') ? entry.avatarUrl : `${API_BASE}${entry.avatarUrl}`}
                                                 alt=""
                                                 className="h-9 w-9 rounded-full object-cover border border-gray-200"
                                             />
@@ -72,7 +72,7 @@ const Leaderboard = () => {
                                             </div>
                                         )}
                                         <div>
-                                            <Link to={`/users/${entry.userId}`} className="font-semibold text-blue-600 hover:underline text-sm">
+                                            <Link to={`/u/${entry.username}`} className="font-semibold text-blue-600 hover:underline text-sm">
                                                 {entry.username}
                                             </Link>
                                             {entry.fullName && <p className="text-xs text-gray-500">{entry.fullName}</p>}

@@ -110,7 +110,9 @@ export const uploadSkillDemo = async (req, res, next) => {
             return res.status(400).json({ message: 'Video file is required' });
         }
 
-        const url = req.file.location || `${conf.BACKEND_URL || `http://localhost:${conf.PORT}`}/uploads/${req.file.filename}`;
+        // req.file.path includes the subfolder (e.g. uploads/skills/uuid-file.mp4)
+        const relativePath = req.file.path.replace(/\\/g, '/');
+        const url = req.file.location || `${conf.BACKEND_URL || `http://localhost:${conf.PORT}`}/${relativePath}`;
 
         return res.status(200).json({
             url,

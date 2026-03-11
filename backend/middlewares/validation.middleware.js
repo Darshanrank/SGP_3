@@ -66,8 +66,8 @@ const toggleTodoSchema = z.object({
 });
 
 const createSkillSchema = z.object({
-    name: z.string().min(2).max(50),
-    category: z.string().min(2).max(50)
+    name: z.string().min(1).max(50),
+    category: z.string().min(1).max(50)
 });
 
 const userSkillSchema = z.object({

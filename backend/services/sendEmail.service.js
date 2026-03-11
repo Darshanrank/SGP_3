@@ -1,8 +1,9 @@
 import nodemailer from "nodemailer";
 import {conf} from '../conf/conf.js';
 import { EmailError } from "../errors/generic.errors.js";
+import { logger } from '../utils/logger.js';
 
-const transponder  = nodemailer.createTransport({
+const transporter = nodemailer.createTransport({
     service: 'Gmail',
     auth: {
         user: conf.EMAIL_USER,
@@ -12,9 +13,9 @@ const transponder  = nodemailer.createTransport({
 
 export const sendEmailService = async (to, subject, text, html) =>{
     try{
-        console.log(to,subject,text);
+        logger.info('Sending email', { to, subject });
                 
-        await transponder.sendMail({
+        await transporter.sendMail({
             from: conf.EMAIL_USER,
             to, 
             subject,
@@ -23,7 +24,7 @@ export const sendEmailService = async (to, subject, text, html) =>{
         });
         return true;
     }catch(error){
-        console.log(error);
+        logger.error('Email sending failed', { to, subject, error: error.message });
         throw new EmailError('Error sending email', 'EMAIL_SENDING_FAILED');
     }
 }

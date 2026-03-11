@@ -37,7 +37,9 @@ export const updateProfile = async (req, res, next) => {
         }
         
         if (req.file) {
-            data.avatarUrl = req.file.location || `${conf.BACKEND_URL || `http://localhost:${conf.PORT}`}/uploads/${req.file.filename}`;
+            // req.file.path includes the subfolder (e.g. uploads/avatars/uuid-file.jpg)
+            const relativePath = req.file.path.replace(/\\/g, '/');
+            data.avatarUrl = req.file.location || `${conf.BACKEND_URL || `http://localhost:${conf.PORT}`}/${relativePath}`;
         }
 
         const profile = await updateProfileService(userId, data);

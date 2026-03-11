@@ -161,7 +161,8 @@ export const getPublicProfileService = async (userId) => {
             },
             badges: {
                 include: { badge: true }
-            }
+            },
+            rewards: true
         }
     });
 
@@ -195,7 +196,8 @@ export const getPublicProfileByUsernameService = async (username) => {
             },
             badges: {
                 include: { badge: true }
-            }
+            },
+            rewards: true
         }
     });
 

@@ -15,8 +15,11 @@ const AddSkill = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [isCreatingNew, setIsCreatingNew] = useState(false);
     const [videoFile, setVideoFile] = useState(null);
+    const [videoPreviewUrl, setVideoPreviewUrl] = useState('');
+    const [uploadedVideoUrl, setUploadedVideoUrl] = useState('');
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
+    const [uploadStatus, setUploadStatus] = useState(''); // '', 'success', 'error'
 
     useEffect(() => {
         // Prepare list for autocomplete (optional)
@@ -55,14 +58,25 @@ const AddSkill = () => {
                 skillId = created.id;
             }
 
-            let videoUrl = data.videoUrl;
+            let videoUrl = uploadedVideoUrl || '';
             if (data.type === 'TEACH' && videoFile) {
                 setIsUploading(true);
                 setUploadProgress(0);
-                const uploaded = await uploadSkillDemo(videoFile, (progress) => {
-                    setUploadProgress(progress);
-                });
-                videoUrl = uploaded.url;
+                setUploadStatus('');
+                try {
+                    const uploaded = await uploadSkillDemo(videoFile, (progress) => {
+                        setUploadProgress(progress);
+                    });
+                    videoUrl = uploaded.url;
+                    setUploadedVideoUrl(videoUrl);
+                    setUploadStatus('success');
+                } catch (uploadErr) {
+                    setUploadStatus('error');
+                    toast.error('Video upload failed. Please try again.');
+                    setIsLoading(false);
+                    setIsUploading(false);
+                    return;
+                }
                 setIsUploading(false);
             }
 
@@ -178,24 +192,62 @@ const AddSkill = () => {
                             <input
                                 type="file"
                                 accept="video/*"
-                                onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0] || null;
+                                    setVideoFile(file);
+                                    setUploadStatus('');
+                                    setUploadedVideoUrl('');
+                                    if (file) {
+                                        setVideoPreviewUrl(URL.createObjectURL(file));
+                                    } else {
+                                        setVideoPreviewUrl('');
+                                    }
+                                }}
                                 className="block w-full text-sm text-gray-700"
                             />
-                            <p className="text-xs text-gray-500 mt-1">Optional: upload a demo video (max 50MB)</p>
+                            <p className="text-xs text-gray-500 mt-1">Optional: upload a demo video (max 50MB, MP4/MOV)</p>
                             {isUploading && (
                                 <div className="mt-2">
                                     <div className="h-2 rounded bg-gray-200 overflow-hidden">
-                                        <div className="h-full bg-blue-600" style={{ width: `${Math.min(100, uploadProgress)}%` }} />
+                                        <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: `${Math.min(100, uploadProgress)}%` }} />
                                     </div>
                                     <p className="text-xs text-gray-600 mt-1">Uploading... {uploadProgress}%</p>
                                 </div>
                             )}
-                        </div>
-                        <div>
-                            <Input label="Video Preview URL (optional)" {...register('videoUrl')} placeholder="https://youtube.com/..." />
+                            {uploadStatus === 'success' && (
+                                <p className="text-xs text-green-600 mt-1 font-medium">Video uploaded successfully!</p>
+                            )}
+                            {uploadStatus === 'error' && (
+                                <p className="text-xs text-red-600 mt-1 font-medium">Upload failed. Please try again.</p>
+                            )}
+                            {/* Local video preview before upload */}
+                            {videoPreviewUrl && !uploadedVideoUrl && !isUploading && (
+                                <div className="mt-2">
+                                    <p className="text-xs text-gray-500 mb-1">Preview (will upload on submit):</p>
+                                    <video src={videoPreviewUrl} controls className="w-full max-h-48 rounded border" />
+                                </div>
+                            )}
+                            {/* Uploaded video preview */}
+                            {uploadedVideoUrl && !isUploading && (
+                                <div className="mt-2">
+                                    <p className="text-xs text-green-700 mb-1 font-medium">Uploaded video:</p>
+                                    <video src={uploadedVideoUrl} controls className="w-full max-h-48 rounded border" />
+                                </div>
+                            )}
                         </div>
                          <div>
-                            <Input label="Proof of Skill URL" {...register('proofUrl')} placeholder="Portfolio, GitHub, etc." />
+                            <Input
+                                label="Proof of Skill URL"
+                                {...register('proofUrl', {
+                                    validate: (value) => {
+                                        if (!value) return true; // optional
+                                        const urlPattern = /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}(\/\S*)?$/i;
+                                        return urlPattern.test(value) || 'Enter a valid URL (GitHub, Portfolio, YouTube, etc.)';
+                                    }
+                                })}
+                                placeholder="Portfolio, GitHub, YouTube, etc."
+                            />
+                            {errors.proofUrl && <p className="mt-1 text-sm text-red-600">{errors.proofUrl.message}</p>}
                         </div>
                     </div>
                 )}

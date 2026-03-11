@@ -93,7 +93,11 @@ const Navbar = () => {
                                     <LogOut className="h-6 w-6" aria-hidden="true" />
                                 </button>
                                 <Link to="/profile" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                   <User className="h-6 w-6" />
+                                   {user?.profile?.avatarUrl ? (
+                                       <img src={user.profile.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+                                   ) : (
+                                       <User className="h-6 w-6" />
+                                   )}
                                 </Link>
                             </div>
                         ) : (
@@ -182,7 +186,11 @@ const Navbar = () => {
                     {user ? (
                         <div className="flex items-center px-4">
                             <div className="flex-shrink-0">
-                                <User className="h-10 w-10 rounded-full bg-gray-100 p-2" />
+                                {user?.profile?.avatarUrl ? (
+                                    <img src={user.profile.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+                                ) : (
+                                    <User className="h-10 w-10 rounded-full bg-gray-100 p-2" />
+                                )}
                             </div>
                             <div className="ml-3">
                                 <div className="text-base font-medium text-gray-800">{user.username}</div>

@@ -103,44 +103,49 @@ export const addUserSkillService = async (userId, data) => {
         }
     });
 
-    let userSkill;
+    // Use a transaction to ensure UserSkill and SkillPreview are saved atomically
+    const userSkill = await prisma.$transaction(async (tx) => {
+        let record;
 
-    if (existing) {
-        userSkill = await prisma.userSkill.update({
-            where: { id: existing.id },
-            data: {
-                level,
-                proofUrl
-            }
-        });
-    } else {
-        userSkill = await prisma.userSkill.create({
-            data: {
-                userId,
-                skillId,
-                type,
-                level,
-                proofUrl
-            }
-        });
-    }
+        if (existing) {
+            record = await tx.userSkill.update({
+                where: { id: existing.id },
+                data: {
+                    level,
+                    proofUrl
+                }
+            });
+        } else {
+            record = await tx.userSkill.create({
+                data: {
+                    userId,
+                    skillId,
+                    type,
+                    level,
+                    proofUrl
+                }
+            });
+        }
 
-    if (type === 'TEACH' && preview) {
-        await prisma.skillPreview.upsert({
-            where: { userSkillId: userSkill.id },
-            create: {
-                userSkillId: userSkill.id,
-                videoUrl: preview.videoUrl,
-                description: preview.description,
-                syllabusOutline: preview.syllabusOutline
-            },
-            update: {
-                videoUrl: preview.videoUrl,
-                description: preview.description,
-                syllabusOutline: preview.syllabusOutline
-            }
-        });
-    }
+        if (type === 'TEACH' && preview) {
+            await tx.skillPreview.upsert({
+                where: { userSkillId: record.id },
+                create: {
+                    userSkillId: record.id,
+                    videoUrl: preview.videoUrl,
+                    description: preview.description,
+                    syllabusOutline: preview.syllabusOutline
+                },
+                update: {
+                    videoUrl: preview.videoUrl,
+                    description: preview.description,
+                    syllabusOutline: preview.syllabusOutline
+                }
+            });
+        }
+
+        return record;
+    });
 
     return userSkill;
 };

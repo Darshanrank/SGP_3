@@ -79,8 +79,9 @@ export const getMyRequestsService = async (userId, type, { page = 1, limit = 20 
             include: {
                 fromUser: { select: { username: true, userId: true } },
                 toUser: { select: { username: true, userId: true } },
-                teachSkill: { include: { skill: true } },
-                learnSkill: { include: { skill: true } }
+                teachSkill: { include: { skill: true, preview: true } },
+                learnSkill: { include: { skill: true, preview: true } },
+                swapClass: { select: { id: true } }
             },
             orderBy: { id: 'desc' },
             skip,
@@ -204,13 +205,13 @@ export const getMyClassesService = async (userId, { page = 1, limit = 20 } = {})
                     include: {
                         fromUser: { select: { username: true } },
                         toUser: { select: { username: true } },
-                        teachSkill: { include: { skill: true } },
-                        learnSkill: { include: { skill: true } }
+                        teachSkill: { include: { skill: true, preview: true } },
+                        learnSkill: { include: { skill: true, preview: true } }
                     }
                 },
                 completion: true
             },
-            orderBy: { createdAt: 'desc' },
+            orderBy: { id: 'desc' },
             skip,
             take: limit
         }),
@@ -311,52 +312,59 @@ export const completeClassService = async (userId, classId) => {
         });
     }
 
-    await prisma.swapCompletion.upsert({
-        where: { swapClassId: classId },
-        create: {
-            swapClassId: classId,
-            completedByUser1: isUser1,
-            completedByUser2: isUser2,
-            completedAt: (isUser1 && isUser2) ? new Date() : null
-        },
-        update: {
-            completedByUser1: isUser1 ? true : undefined,
-            completedByUser2: isUser2 ? true : undefined
+    return await prisma.$transaction(async (tx) => {
+        await tx.swapCompletion.upsert({
+            where: { swapClassId: classId },
+            create: {
+                swapClassId: classId,
+                completedByUser1: isUser1,
+                completedByUser2: isUser2,
+                completedAt: null
+            },
+            update: {
+                completedByUser1: isUser1 ? true : undefined,
+                completedByUser2: isUser2 ? true : undefined
+            }
+        });
+
+        const updatedCompletion = await tx.swapCompletion.findUnique({
+             where: { swapClassId: classId }
+        });
+
+        if (updatedCompletion.completedByUser1 && updatedCompletion.completedByUser2 && !updatedCompletion.completedAt) {
+             await tx.swapCompletion.update({
+                 where: { swapClassId: classId },
+                 data: { completedAt: new Date() }
+             });
+             
+             await tx.swapClass.update({
+                 where: { id: classId },
+                 data: { status: 'COMPLETED', endedAt: new Date() }
+             });
+
+             await tx.userReward.upsert({
+                 where: { userId: swapClass.swapRequest.fromUserId },
+                 create: { userId: swapClass.swapRequest.fromUserId, points: 10, totalSwaps: 1 },
+                 update: { points: { increment: 10 }, totalSwaps: { increment: 1 } }
+             });
+             await tx.userReward.upsert({
+                 where: { userId: swapClass.swapRequest.toUserId },
+                 create: { userId: swapClass.swapRequest.toUserId, points: 10, totalSwaps: 1 },
+                 update: { points: { increment: 10 }, totalSwaps: { increment: 1 } }
+             });
         }
+
+        return updatedCompletion;
     });
 
-    const updatedCompletion = await prisma.swapCompletion.findUnique({
-         where: { swapClassId: classId }
-    });
-
-    if (updatedCompletion.completedByUser1 && updatedCompletion.completedByUser2 && !updatedCompletion.completedAt) {
-         await prisma.swapCompletion.update({
-             where: { swapClassId: classId },
-             data: { completedAt: new Date() }
-         });
-         
-         await prisma.swapClass.update({
-             where: { id: classId },
-             data: { status: 'COMPLETED', endedAt: new Date() }
-         });
-
-         await prisma.userReward.upsert({
-             where: { userId: swapClass.swapRequest.fromUserId },
-             create: { userId: swapClass.swapRequest.fromUserId, points: 10, totalSwaps: 1 },
-             update: { points: { increment: 10 }, totalSwaps: { increment: 1 } }
-         });
-         await prisma.userReward.upsert({
-             where: { userId: swapClass.swapRequest.toUserId },
-             create: { userId: swapClass.swapRequest.toUserId, points: 10, totalSwaps: 1 },
-             update: { points: { increment: 10 }, totalSwaps: { increment: 1 } }
-         });
-
-         // Evaluate badges for both users after swap completion
-         await Promise.all([
-             evaluateBadges(swapClass.swapRequest.fromUserId),
-             evaluateBadges(swapClass.swapRequest.toUserId),
-         ]);
+    // Evaluate badges outside the transaction (non-critical, fire-and-forget)
+    const finalCompletion = await prisma.swapCompletion.findUnique({ where: { swapClassId: classId } });
+    if (finalCompletion?.completedByUser1 && finalCompletion?.completedByUser2) {
+        Promise.all([
+            evaluateBadges(swapClass.swapRequest.fromUserId),
+            evaluateBadges(swapClass.swapRequest.toUserId),
+        ]).catch(() => {}); // fire-and-forget
     }
 
-    return updatedCompletion;
+    return finalCompletion;
 };

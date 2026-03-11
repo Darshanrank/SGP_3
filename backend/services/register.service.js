@@ -3,6 +3,7 @@ import prisma from '../prisma/client.js'
 import { signUrlToken } from '../utils/jwt.js';
 import { AuthError } from '../errors/generic.errors.js'
 import { verifyEmailSend } from '../services/verify.service.js';
+import { logger } from '../utils/logger.js';
 
 export const registerService = async ({ username, email, password }) => {
     if(!username){
@@ -38,8 +39,7 @@ export const registerService = async ({ username, email, password }) => {
             }
         });
     } catch (error) {
-        console.log(error);
-
+        logger.error('User creation failed', { email, error: error.message });
 
         throw new AuthError(
             'Error creating user',

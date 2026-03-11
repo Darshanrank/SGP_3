@@ -19,7 +19,6 @@ export const conf = {
     FRONTEND_URL:process.env.FRONTEND_URL,
     BACKEND_URL:process.env.BACKEND_URL,
     ADMIN_USER_IDS: adminUserIds
-
 }
 
 if (!conf.JWT_ACCESS_SECRET) {

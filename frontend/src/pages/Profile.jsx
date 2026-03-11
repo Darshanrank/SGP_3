@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -50,6 +50,7 @@ const Profile = () => {
     const [touched, setTouched] = useState({});
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [editorLoading, setEditorLoading] = useState(true);
 
     const [formData, setFormData] = useState({
         fullName: '',
@@ -245,16 +246,32 @@ const Profile = () => {
         try {
             const created = await createSkill({ name: normalizedName, category: 'General' });
             return created.id;
-        } catch (_) {
+        } catch (err) {
+            // Skill may have been created by another user between our search and create attempt
             const retry = await getAllSkills(1, 50, normalizedName);
             const retryMatch = retry.data?.find((skill) => skill.name.toLowerCase() === normalizedName.toLowerCase());
-            return retryMatch?.id || null;
+            if (retryMatch?.id) return retryMatch.id;
+            // Re-throw so the caller can show a meaningful error
+            throw new Error(err?.response?.data?.message || `Failed to create skill "${normalizedName}"`);
         }
     };
 
     const submitAll = async () => {
         if (hasValidationErrors()) {
             toast.error('Please fix the highlighted errors before saving');
+            return;
+        }
+        // Validate teach skill proof URLs
+        let hasSkillUrlErrors = false;
+        formData.teachSkills.forEach((skill, index) => {
+            if (skill.proofUrl && !URL_REGEX.test(skill.proofUrl)) {
+                updateArrayItem('teachSkills', index, '_proofUrlError', 'Enter a valid URL');
+                hasSkillUrlErrors = true;
+            }
+        });
+        if (hasSkillUrlErrors) {
+            toast.error('Please fix invalid proof URLs in your teach skills');
+            setStep(2);
             return;
         }
         setSaving(true);
@@ -280,72 +297,134 @@ const Profile = () => {
 
             await updateProfile(profilePayload);
 
+            // Prepare and save teach skills (uploads + save per-skill, each in its own try-catch)
             const retainedSkillIds = new Set();
+            let skillSaveErrors = 0;
 
-            // Prepare teach skills (uploads must be sequential per-skill, but
-            // we can prepare all payloads first, then batch the addSkill calls)
-            const teachPayloads = [];
             for (let i = 0; i < formData.teachSkills.length; i += 1) {
                 const teachSkill = formData.teachSkills[i];
                 if (!teachSkill.skillName.trim()) continue;
 
-                const skillId = teachSkill.skillId || await resolveSkillId(teachSkill.skillName);
-                if (!skillId) continue;
+                try {
+                    const skillId = teachSkill.skillId || await resolveSkillId(teachSkill.skillName);
+                    if (!skillId) {
+                        console.warn('Could not resolve skill:', teachSkill.skillName);
+                        // Retain old id so cleanup doesn't delete an existing skill
+                        if (teachSkill.id) retainedSkillIds.add(teachSkill.id);
+                        skillSaveErrors += 1;
+                        continue;
+                    }
 
-                let videoUrl = teachSkill.videoUrl;
-                if (teachSkill.videoFile) {
-                    updateTeachSkillUpload(i, { isUploading: true, uploadProgress: 0 });
-                    const uploaded = await uploadSkillDemo(teachSkill.videoFile, (progress) => {
-                        updateTeachSkillUpload(i, { uploadProgress: progress });
-                    });
-                    videoUrl = uploaded.url;
-                    updateTeachSkillUpload(i, { isUploading: false, uploadProgress: 100, videoUrl });
+                    let videoUrl = teachSkill.videoUrl;
+                    if (teachSkill.videoFile) {
+                        updateTeachSkillUpload(i, { isUploading: true, uploadProgress: 0 });
+                        const uploaded = await uploadSkillDemo(teachSkill.videoFile, (progress) => {
+                            updateTeachSkillUpload(i, { uploadProgress: progress });
+                        });
+                        videoUrl = uploaded.url;
+                        updateTeachSkillUpload(i, { isUploading: false, uploadProgress: 100, videoUrl });
+                    }
+
+                    const payload = {
+                        skillId,
+                        type: 'TEACH',
+                        level: teachSkill.level,
+                        proofUrl: teachSkill.proofUrl,
+                        preview: {
+                            videoUrl: videoUrl || undefined,
+                            description: `Skill demo for ${teachSkill.skillName}`,
+                            syllabusOutline: ''
+                        }
+                    };
+
+                    const result = await addSkill(payload);
+                    if (result?.id) retainedSkillIds.add(result.id);
+                } catch (err) {
+                    console.error('Failed to save teach skill:', teachSkill.skillName, err);
+                    toast.error(`Failed to save skill "${teachSkill.skillName}": ${err?.response?.data?.message || err.message}`);
+                    skillSaveErrors += 1;
+                    // Retain old id so cleanup doesn't delete an existing skill
+                    if (teachSkill.id) retainedSkillIds.add(teachSkill.id);
                 }
-
-                teachPayloads.push({
-                    skillId,
-                    type: 'TEACH',
-                    level: teachSkill.level,
-                    proofUrl: teachSkill.proofUrl,
-                    preview: {
-                        videoUrl,
-                        description: `Skill demo for ${teachSkill.skillName}`,
-                        syllabusOutline: ''
-                    },
-                    _retainId: teachSkill.id
-                });
             }
 
-            // Prepare learn skills payloads
-            const learnPayloads = [];
+            // Save learn skills
             for (const learnSkill of formData.learnSkills) {
                 if (!learnSkill.skillName.trim()) continue;
-                const skillId = learnSkill.skillId || await resolveSkillId(learnSkill.skillName);
-                if (!skillId) continue;
-                learnPayloads.push({
-                    skillId,
-                    type: 'LEARN',
-                    level: learnSkill.level,
-                    _retainId: learnSkill.id
-                });
+
+                try {
+                    const skillId = learnSkill.skillId || await resolveSkillId(learnSkill.skillName);
+                    if (!skillId) {
+                        if (learnSkill.id) retainedSkillIds.add(learnSkill.id);
+                        skillSaveErrors += 1;
+                        continue;
+                    }
+
+                    const payload = {
+                        skillId,
+                        type: 'LEARN',
+                        level: learnSkill.level
+                    };
+
+                    const result = await addSkill(payload);
+                    if (result?.id) retainedSkillIds.add(result.id);
+                } catch (err) {
+                    console.error('Failed to save learn skill:', learnSkill.skillName, err);
+                    toast.error(`Failed to save skill "${learnSkill.skillName}": ${err?.response?.data?.message || err.message}`);
+                    skillSaveErrors += 1;
+                    if (learnSkill.id) retainedSkillIds.add(learnSkill.id);
+                }
             }
 
-            // Batch all addSkill calls in parallel
-            const allPayloads = [...teachPayloads, ...learnPayloads];
-            const results = await Promise.all(
-                allPayloads.map(({ _retainId, ...payload }) => addSkill(payload).then(() => _retainId))
-            );
-            results.forEach(retainId => { if (retainId) retainedSkillIds.add(retainId); });
-
-            // Batch all removeSkill calls in parallel
+            // Remove old skills that are no longer in the form
             const removed = existingUserSkills.filter((item) => !retainedSkillIds.has(item.id));
-            await Promise.all(removed.map(item => removeSkill(item.id)));
+            await Promise.all(removed.map(item => removeSkill(item.id).catch(() => {})));
 
-            await refreshUser();
-            toast.success('Profile setup saved successfully');
+            const updatedUser = await refreshUser();
+            if (skillSaveErrors > 0) {
+                toast.error(`${skillSaveErrors} skill(s) could not be saved. Please try again.`);
+            } else {
+                toast.success('Profile setup saved successfully');
+            }
 
             if (isSetupMode) {
                 navigate('/dashboard', { replace: true });
+            } else {
+                // Refresh skills and profile data to keep the form in sync
+                const [freshProfile, freshSkills] = await Promise.all([getMyProfile(), getUserSkills()]);
+                const profile = freshProfile.profile || {};
+                setAvatarPreview(profile.avatarUrl || '');
+
+                const freshTeach = freshSkills
+                    .filter((s) => s.type === 'TEACH')
+                    .map((s) => ({
+                        id: s.id,
+                        skillId: s.skillId,
+                        skillName: s.skill?.name || '',
+                        level: s.level || 'MEDIUM',
+                        proofUrl: s.proofUrl || '',
+                        videoUrl: s.preview?.videoUrl || '',
+                        videoFile: null,
+                        uploadProgress: 0,
+                        isUploading: false
+                    }));
+                const freshLearn = freshSkills
+                    .filter((s) => s.type === 'LEARN')
+                    .map((s) => ({
+                        id: s.id,
+                        skillId: s.skillId,
+                        skillName: s.skill?.name || '',
+                        level: s.level || 'MEDIUM'
+                    }));
+
+                setExistingUserSkills(freshSkills.map((s) => ({ id: s.id, type: s.type })));
+                setFormData((prev) => ({
+                    ...prev,
+                    avatarUrl: profile.avatarUrl || prev.avatarUrl,
+                    avatarFile: null,
+                    teachSkills: freshTeach.length ? freshTeach : [emptyTeachSkill()],
+                    learnSkills: freshLearn.length ? freshLearn : [emptyLearnSkill()]
+                }));
             }
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save profile setup');
@@ -411,19 +490,32 @@ const Profile = () => {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
-                            <Editor
-                                apiKey={import.meta.env.VITE_TYNE_MCE_API_KEY}
-                                value={formData.bio}
-                                onEditorChange={(value) => updateField('bio', value)}
-                                init={{
-                                    height: 220,
-                                    menubar: false,
-                                    plugins: 'lists link emoticons',
-                                    toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | link media table mergetags | addcomment showcomments | spellcheckdialog a11ycheck typography uploadcare | align lineheight | checklist numlist bullist indent outdent | emoticons charmap | removeformat',
-        tinycomments_mode: 'embedded',
-                                    content_style: 'body { font-family: ui-sans-serif, system-ui; font-size: 14px; }'
-                                }}
-                            />
+                            {editorLoading && (
+                                <div className="animate-pulse space-y-2 border rounded p-4" style={{ height: 220 }}>
+                                    <div className="h-8 bg-gray-200 rounded w-full" />
+                                    <div className="h-3 bg-gray-200 rounded w-3/4" />
+                                    <div className="h-3 bg-gray-200 rounded w-5/6" />
+                                    <div className="h-3 bg-gray-200 rounded w-2/3" />
+                                    <div className="h-3 bg-gray-200 rounded w-4/5" />
+                                    <div className="h-3 bg-gray-200 rounded w-1/2" />
+                                </div>
+                            )}
+                            <div style={editorLoading ? { position: 'absolute', left: -9999, opacity: 0 } : {}}>
+                                <Editor
+                                    apiKey={import.meta.env.VITE_TYNE_MCE_API_KEY}
+                                    value={formData.bio}
+                                    onEditorChange={(value) => updateField('bio', value)}
+                                    onInit={() => setEditorLoading(false)}
+                                    init={{
+                                        height: 220,
+                                        menubar: false,
+                                        plugins: 'lists link emoticons',
+                                        toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | link media table mergetags | addcomment showcomments | spellcheckdialog a11ycheck typography uploadcare | align lineheight | checklist numlist bullist indent outdent | emoticons charmap | removeformat',
+                                        tinycomments_mode: 'embedded',
+                                        content_style: 'body { font-family: ui-sans-serif, system-ui; font-size: 14px; }'
+                                    }}
+                                />
+                            </div>
                             {touched.bio && fieldErrors.bio && <p className="text-xs text-red-600 mt-1">{fieldErrors.bio}</p>}
                             <p className="text-xs text-gray-400 mt-1">{(formData.bio || '').replace(/<[^>]*>/g, '').length} / {BIO_MAX_LENGTH} characters</p>
                         </div>
@@ -481,26 +573,73 @@ const Profile = () => {
                                                 <option value="HIGH">Advanced</option>
                                             </select>
                                         </div>
-                                        <input className="w-full border rounded px-3 py-2" placeholder="Skill Proof Link" value={skill.proofUrl} onChange={(e) => updateArrayItem('teachSkills', index, 'proofUrl', e.target.value)} />
-                                        <div className="grid md:grid-cols-2 gap-3 items-center">
-                                            <input type="file" accept="video/*" onChange={(e) => updateArrayItem('teachSkills', index, 'videoFile', e.target.files?.[0] || null)} className="text-sm" />
-                                            <input className="border rounded px-3 py-2" placeholder="Or existing demo video URL" value={skill.videoUrl} onChange={(e) => updateArrayItem('teachSkills', index, 'videoUrl', e.target.value)} />
+                                        <div>
+                                            <input
+                                                className={`w-full border rounded px-3 py-2 ${skill._proofUrlError ? 'border-red-500' : ''}`}
+                                                placeholder="Proof Link (GitHub, Portfolio, YouTube, etc.)"
+                                                value={skill.proofUrl}
+                                                onChange={(e) => {
+                                                    updateArrayItem('teachSkills', index, 'proofUrl', e.target.value);
+                                                    // Live validate proof URL
+                                                    const val = e.target.value;
+                                                    const err = val && !URL_REGEX.test(val) ? 'Enter a valid URL' : null;
+                                                    updateArrayItem('teachSkills', index, '_proofUrlError', err);
+                                                }}
+                                                onBlur={() => {
+                                                    const val = skill.proofUrl;
+                                                    const err = val && !URL_REGEX.test(val) ? 'Enter a valid URL' : null;
+                                                    updateArrayItem('teachSkills', index, '_proofUrlError', err);
+                                                }}
+                                            />
+                                            {skill._proofUrlError && <p className="text-xs text-red-600 mt-1">{skill._proofUrlError}</p>}
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Video Demo (optional)</label>
+                                            <input
+                                                type="file"
+                                                accept="video/*"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0] || null;
+                                                    updateArrayItem('teachSkills', index, 'videoFile', file);
+                                                    // Create local preview immediately
+                                                    if (file) {
+                                                        updateArrayItem('teachSkills', index, '_localPreviewUrl', URL.createObjectURL(file));
+                                                    } else {
+                                                        updateArrayItem('teachSkills', index, '_localPreviewUrl', '');
+                                                    }
+                                                }}
+                                                className="text-sm"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">Max 50MB. Supported: MP4, MOV</p>
                                         </div>
                                         {(skill.isUploading || skill.uploadProgress > 0) && (
                                             <div className="space-y-1">
                                                 <div className="h-2 rounded bg-gray-200 overflow-hidden">
                                                     <div
-                                                        className="h-full bg-blue-600"
+                                                        className="h-full bg-blue-600 transition-all duration-300"
                                                         style={{ width: `${Math.min(100, skill.uploadProgress)}%` }}
                                                     />
                                                 </div>
                                                 <p className="text-xs text-gray-600">
-                                                    {skill.isUploading ? `Uploading... ${Math.round(skill.uploadProgress)}%` : 'Upload complete'}
+                                                    {skill.isUploading ? `Uploading... ${Math.round(skill.uploadProgress)}%` : (
+                                                        <span className="text-green-600 font-medium">Upload complete</span>
+                                                    )}
                                                 </p>
                                             </div>
                                         )}
+                                        {/* Local video preview (before upload) */}
+                                        {skill._localPreviewUrl && !skill.isUploading && !skill.videoUrl && (
+                                            <div>
+                                                <p className="text-xs text-gray-500 mb-1">Preview (will upload on save):</p>
+                                                <video src={skill._localPreviewUrl} controls className="w-full max-h-48 rounded border" />
+                                            </div>
+                                        )}
+                                        {/* Uploaded video preview */}
                                         {skill.videoUrl && !skill.isUploading && (
-                                            <p className="text-xs text-green-700">Video demo ready</p>
+                                            <div>
+                                                <p className="text-xs text-green-700 mb-1 font-medium">Video demo ready</p>
+                                                <video src={skill.videoUrl} controls className="w-full max-h-48 rounded border" />
+                                            </div>
                                         )}
                                         <button type="button" onClick={() => removeArrayItem('teachSkills', index)} className="text-sm text-red-600">Remove</button>
                                     </div>

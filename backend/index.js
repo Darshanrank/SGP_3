@@ -136,7 +136,12 @@ io.on('connection', (socket) => {
     });
 });
 
-app.use(helmet());
+// Serve uploaded files BEFORE Helmet so Cross-Origin-Resource-Policy doesn't block them
+app.use('/uploads', express.static(path.resolve('uploads')));
+
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
 
 // General rate limiter — generous for regular API usage
 const generalLimiter = rateLimit({
@@ -183,7 +188,6 @@ app.use(cors({
 app.use(cookieParser())
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.resolve('uploads')));
 
 app.get('/', (req, res) =>{
     res.send('Skill Swap Platform API is running');
@@ -200,11 +204,15 @@ app.use('/api/matching', matchingRoute);
 app.use('/api/reviews', reviewRoute);
 
 app.use((err, req, res, next) => {
-    logger[err.severity === "CRITICAL" ? "critical" : "warn"](err.message, {
+    const statusCode = err.statusCode || 500;
+    const logLevel = err.severity === "CRITICAL" ? "critical" : statusCode >= 500 ? "error" : "warn";
+    logger[logLevel](err.message, {
         ip: req.ip,
-        userAgent: req.headers["user-agent"]
+        userAgent: req.headers["user-agent"],
+        statusCode,
+        code: err.code
     });
-    res.status(err.statusCode || 500).json({
+    res.status(statusCode).json({
         code: err.code || "INTERNAL_ERROR",
         message: err.message || "Something went wrong"
     });

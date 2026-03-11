@@ -43,11 +43,12 @@ export const verifyEmailService = async ({token}) =>{
         
         // Update user
         if(!user.isVerified){
-            await prisma.users.update({
+            const updatedUser = await prisma.users.update({
                 where:{email:data.email},
                 data:{isVerified:true}
             });
+            return updatedUser; // Return the updated user so controller can login
         }
         
-        return user; // Return user so controller can login
+        return user; // Already verified, return as-is
 }

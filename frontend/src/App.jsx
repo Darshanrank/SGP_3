@@ -26,6 +26,7 @@ import Dashboard from './pages/Dashboard';
 import Skills from './pages/Skills';
 import Swaps from './pages/Swaps';
 import SwapClassroom from './pages/SwapClassroom';
+import NewSwapRequest from './pages/NewSwapRequest';
 import Profile from './pages/Profile';
 import PublicProfile from './pages/PublicProfile';
 import AddSkill from './pages/AddSkill';
@@ -115,9 +116,9 @@ function App() {
           <Route path="/skills" element={<ProtectedRoute><Skills /></ProtectedRoute>} />
           <Route path="/skills/new" element={<ProtectedRoute><AddSkill /></ProtectedRoute>} />
           <Route path="/swaps" element={<ProtectedRoute><Swaps /></ProtectedRoute>} />
+          <Route path="/swaps/new" element={<ProtectedRoute><NewSwapRequest /></ProtectedRoute>} />
           <Route path="/swaps/:id" element={<ProtectedRoute><SwapClassroom /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/users/:userId" element={<PublicProfile />} />
           <Route path="/u/:username" element={<PublicProfile />} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/rewards" element={<ProtectedRoute><Rewards /></ProtectedRoute>} />

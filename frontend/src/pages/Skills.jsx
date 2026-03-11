@@ -5,9 +5,10 @@ import { getAllSkills, getUserSkills, getUsersWithSkill, removeSkill } from '../
 import { getSkillCategories } from '../services/meta.service';
 import { Button } from '../components/ui/Button';
 import { Link, useNavigate } from 'react-router-dom';
-import { createSwapRequest } from '../services/swap.service';
+import { createSwapRequest, getMyRequests } from '../services/swap.service';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import { X, ExternalLink, Play, Clock } from 'lucide-react';
 
 // Debounced search input component
 const DebounceSearch = ({ value, onChange, delay = 400 }) => {
@@ -44,6 +45,7 @@ const Skills = () => {
     // State
     const [activeTab, setActiveTab] = useState('explore');
     const [selectedSkill, setSelectedSkill] = useState(null);
+    const [previewUser, setPreviewUser] = useState(null);
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('');
@@ -90,6 +92,22 @@ const Skills = () => {
         queryFn: () => getUsersWithSkill(selectedSkill.id),
         enabled: !!selectedSkill,
     });
+
+    // Fetch sent requests to check if already requested
+    const { data: sentRequestsData } = useQuery({
+        queryKey: ['swaps', 'sent'],
+        queryFn: async () => {
+            const res = await getMyRequests('sent', 1, 100);
+            return Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+        },
+        staleTime: 30000,
+    });
+
+    const pendingSentRequests = (Array.isArray(sentRequestsData) ? sentRequestsData : []).filter(r => r.status === 'PENDING');
+
+    const isAlreadyRequested = (userId, userSkillId) => {
+        return pendingSentRequests.some(r => r.toUserId === userId && r.learnSkillId === userSkillId);
+    };
 
     // Handlers
     const handleViewSkill = (skill) => {
@@ -221,17 +239,114 @@ const Skills = () => {
                             ) : (
                                 skillUsers.filter(u => u.type === 'TEACH' && u.user?.userId !== user?.userId).map(us => (
                                     <div key={us.id} className="bg-white p-4 rounded-lg flex justify-between items-center shadow-sm border border-gray-100">
-                                        <div>
-                                            <Link to={`/users/${us.user.userId}`} className="font-semibold text-blue-600 hover:underline">{us.user.username}</Link>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPreviewUser(us)}
+                                                    className="font-semibold text-blue-600 hover:underline cursor-pointer text-left"
+                                                >
+                                                    {us.user.username}
+                                                </button>
+                                                {(us.preview?.videoUrl || us.proofUrl) && (
+                                                    <span className="inline-flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                                                        <Play className="h-3 w-3" /> Demo
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="text-sm text-gray-500">Level: {us.level}</div>
-                                            {us.preview && <div className="text-sm text-gray-600 truncate mt-1">{us.preview.description}</div>}
+                                            {us.preview?.description && <div className="text-sm text-gray-600 truncate mt-1">{us.preview.description}</div>}
                                         </div>
-                                        <Button size="sm" onClick={() => requestSwap(us.user.userId, us.id)}>Request Swap</Button>
+                                        <div className="flex items-center gap-2 ml-4">
+                                            <Link to={`/u/${us.user.username}`} className="text-xs text-gray-500 hover:text-blue-600 hover:underline whitespace-nowrap">
+                                                View Profile
+                                            </Link>
+                                            {isAlreadyRequested(us.user.userId, us.id) ? (
+                                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200">
+                                                    <Clock className="h-3.5 w-3.5" />
+                                                    Requested
+                                                </span>
+                                            ) : (
+                                                <Button size="sm" onClick={() => navigate(`/swaps/new?to=${us.user.username}&skillId=${us.id}`)}>Request Swap</Button>
+                                            )}
+                                        </div>
                                     </div>
                                 ))
                             )}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Skill Demo Preview Modal */}
+            {previewUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setPreviewUser(null)}>
+                    <div className="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">
+                                    {previewUser.user.username}&apos;s {selectedSkill?.name} Demo
+                                </h3>
+                                <p className="text-sm text-gray-500 mt-0.5">Level: {previewUser.level}</p>
+                            </div>
+                            <button type="button" onClick={() => setPreviewUser(null)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-5 space-y-5">
+                            {previewUser.preview?.videoUrl ? (
+                                <div>
+                                    <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Video Demo</p>
+                                    <video
+                                        src={previewUser.preview.videoUrl}
+                                        controls
+                                        className="w-full rounded-lg border border-gray-200"
+                                    />
+                                </div>
+                            ) : (
+                                <div className="text-center py-6 text-gray-400">
+                                    <Play className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                                    <p className="text-sm">No video demo uploaded</p>
+                                </div>
+                            )}
+
+                            {previewUser.proofUrl && (
+                                <div>
+                                    <p className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Proof Link</p>
+                                    <a
+                                        href={previewUser.proofUrl.startsWith('http') ? previewUser.proofUrl : `https://${previewUser.proofUrl}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                    >
+                                        <ExternalLink className="h-3.5 w-3.5" />
+                                        {previewUser.proofUrl}
+                                    </a>
+                                </div>
+                            )}
+
+                            {!previewUser.preview?.videoUrl && !previewUser.proofUrl && (
+                                <p className="text-sm text-gray-400 text-center py-4">This user hasn&apos;t uploaded any demo or proof link for this skill yet.</p>
+                            )}
+                        </div>
+
+                        <div className="flex items-center justify-between p-5 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+                            <Link to={`/u/${previewUser.user.username}`} className="text-sm text-blue-600 hover:underline font-medium">
+                                View Full Profile
+                            </Link>
+                            {isAlreadyRequested(previewUser.user.userId, previewUser.id) ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200">
+                                    <Clock className="h-3.5 w-3.5" />
+                                    Already Requested
+                                </span>
+                            ) : (
+                                <Button size="sm" onClick={() => { setPreviewUser(null); navigate(`/swaps/new?to=${previewUser.user.username}&skillId=${previewUser.id}`); }}>
+                                    Request Swap
+                                </Button>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
 

@@ -121,11 +121,15 @@ const Dashboard = () => {
                         {matches.map((m) => (
                             <div key={m.userId} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
-                                        {(m.username || 'U')[0].toUpperCase()}
-                                    </div>
+                                    {m.avatarUrl ? (
+                                        <img src={m.avatarUrl} alt={m.username || 'User'} className="w-10 h-10 rounded-full object-cover border border-gray-200" />
+                                    ) : (
+                                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
+                                            {(m.username || 'U')[0].toUpperCase()}
+                                        </div>
+                                    )}
                                     <div className="min-w-0">
-                                        <Link to={`/users/${m.userId}`} className="font-semibold text-sm text-blue-600 hover:underline truncate block">
+                                        <Link to={`/u/${m.username}`} className="font-semibold text-sm text-blue-600 hover:underline truncate block">
                                             {m.username}
                                         </Link>
                                         {m.avgRating > 0 && (
