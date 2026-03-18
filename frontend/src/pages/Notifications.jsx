@@ -61,12 +61,12 @@ const Notifications = () => {
         }
     };
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <div className="section-card text-center">Loading...</div>;
 
     return (
-        <div className="max-w-3xl mx-auto space-y-6">
+        <div className="page-shell">
             <header className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+                <h1 className="page-title">Notifications</h1>
                 <div className="flex items-center gap-3">
                     <span className="text-sm text-gray-600">Unread: {unreadCount}</span>
                     {notifications.length > 0 && (
@@ -75,7 +75,7 @@ const Notifications = () => {
                 </div>
             </header>
 
-            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+            <div className="section-card p-0! overflow-hidden">
                 <ul role="list" className="divide-y divide-gray-200">
                     {notifications.length === 0 && (
                         <li className="px-4 py-8 text-center text-gray-500">
@@ -86,7 +86,7 @@ const Notifications = () => {
                         <li key={notification.id} className={`px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors ${notification.isRead ? 'opacity-60' : 'bg-blue-50'}`}>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center">
-                                    <div className="flex-shrink-0">
+                                    <div className="shrink-0">
                                         <Bell className={`h-6 w-6 ${notification.isRead ? 'text-gray-400' : 'text-blue-500'}`} />
                                     </div>
                                     <div className="ml-4">

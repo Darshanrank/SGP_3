@@ -5,14 +5,28 @@ import { AuthError } from '../errors/generic.errors.js'
 import { verifyEmailSend } from '../services/verify.service.js';
 import { logger } from '../utils/logger.js';
 
+const USERNAME_MIN = 3;
+const USERNAME_MAX = 30;
+const USERNAME_REGEX = /^[a-z0-9_]+$/;
+
 export const registerService = async ({ username, email, password }) => {
-    if(!username){
+    const normalizedUsername = String(username || '').trim().toLowerCase();
+
+    if(!normalizedUsername){
         throw new AuthError('Username is required','USERNAME_MISSING');
+    }
+
+    if (normalizedUsername.length < USERNAME_MIN || normalizedUsername.length > USERNAME_MAX) {
+        throw new AuthError(`Username must be ${USERNAME_MIN}-${USERNAME_MAX} characters`, 'USERNAME_INVALID_LENGTH');
+    }
+
+    if (!USERNAME_REGEX.test(normalizedUsername)) {
+        throw new AuthError('Username must contain only lowercase letters, numbers, and underscore (_)', 'USERNAME_INVALID_FORMAT');
     }
 
     // Check username uniqueness
     const existingUsername = await prisma.users.findFirst({
-        where: { username }
+        where: { username: normalizedUsername }
     });
     if (existingUsername) {
         throw new AuthError('Username is already taken', 'USERNAME_TAKEN');
@@ -31,7 +45,7 @@ export const registerService = async ({ username, email, password }) => {
     try {
         await prisma.users.create({
             data: {
-                username,
+                username: normalizedUsername,
                 email,
                 passwordHash: hashedPassword,
                 salt,
@@ -47,5 +61,5 @@ export const registerService = async ({ username, email, password }) => {
         );
 
     }
-    verifyEmailSend({ email, username, verificationCode }).catch(err => console.error('Email error:', err));
+    verifyEmailSend({ email, username: normalizedUsername, verificationCode }).catch(err => console.error('Email error:', err));
 }

@@ -5,3 +5,71 @@
     @apply bg-gray-50 text-gray-900;
   }
 }
+
+@layer components {
+  .app-container {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .app-main {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
+  .page-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .page-title {
+    font-size: clamp(1.75rem, 2.5vw, 2rem);
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: rgb(17 24 39);
+  }
+
+  .section-title {
+    font-size: clamp(1.25rem, 1.8vw, 1.375rem);
+    line-height: 1.2;
+    font-weight: 600;
+    color: rgb(17 24 39);
+  }
+
+  .section-card {
+    background: white;
+    border: 1px solid rgb(229 231 235);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    padding: 20px;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  @media (min-width: 768px) {
+    .section-card {
+      padding: 24px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .app-container {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+
+    .app-main {
+      padding-top: 24px;
+      padding-bottom: 24px;
+    }
+  }
+}

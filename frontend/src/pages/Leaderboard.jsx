@@ -29,20 +29,20 @@ const Leaderboard = () => {
 
     if (isLoading && page === 1) {
         return (
-            <div className="p-8 space-y-4">
+            <div className="section-card space-y-4">
                 {[...Array(5)].map((_, i) => (
                     <div key={i} className="h-16 bg-gray-100 rounded-lg animate-pulse" />
                 ))}
             </div>
         );
     }
-    if (error) return <div className="p-8 text-center text-red-500">Failed to load leaderboard</div>;
+    if (error) return <div className="section-card text-center text-red-500">Failed to load leaderboard</div>;
 
     return (
-        <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-gray-900">Leaderboard</h1>
+        <div className="page-shell">
+            <h1 className="page-title">Leaderboard</h1>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="section-card p-0! overflow-hidden">
                 <table className="w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>

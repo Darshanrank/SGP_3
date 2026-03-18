@@ -43,15 +43,15 @@ const Calendar = () => {
         }
     };
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <div className="section-card text-center">Loading...</div>;
 
     return (
-        <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-gray-900">My Schedule</h1>
+        <div className="page-shell">
+            <h1 className="page-title">My Schedule</h1>
 
-            <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 space-y-3">
-                <h2 className="text-lg font-semibold">Add Event</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <form onSubmit={handleSubmit} className="section-card space-y-4">
+                <h2 className="section-title">Add Event</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Input label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
                     <Input label="Location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
                     <Input label="Start" type="datetime-local" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} required />
@@ -61,7 +61,7 @@ const Calendar = () => {
                 <Button type="submit" disabled={saving}>Create Event</Button>
             </form>
             
-            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+            <div className="section-card p-0! overflow-hidden">
                 {events.length === 0 ? (
                     <div className="p-6 text-center text-gray-500">
                         No active classes scheduled.
@@ -69,10 +69,10 @@ const Calendar = () => {
                 ) : (
                     <ul className="divide-y divide-gray-200">
                         {events.map(cls => (
-                            <li key={cls.id} className="p-6 hover:bg-gray-50">
+                            <li key={cls.id} className="p-5 md:p-6 hover:bg-gray-50">
                                 <div className="flex justify-between items-center">
                                     <div>
-                                        <h3 className="text-lg font-medium text-gray-900">
+                                        <h3 className="text-[17px] font-semibold text-gray-900">
                                             {cls.title || `Event #${cls.id}`}
                                         </h3>
                                         <p className="text-sm text-gray-500">

@@ -6,6 +6,7 @@ import { getMyProfile, sendUpcomingReminder, updateProfile, deleteAccount } from
 import { addSkill, createSkill, getAllSkills, getUserSkills, removeSkill, uploadSkillDemo } from '../services/skill.service';
 import { Editor } from '@tinymce/tinymce-react';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { Check, Camera, Trash2, Github, Linkedin, Globe, Youtube } from 'lucide-react';
 
 const emptyTeachSkill = () => ({
     id: null,
@@ -19,14 +20,120 @@ const emptyTeachSkill = () => ({
     isUploading: false
 });
 const emptyLearnSkill = () => ({ id: null, skillId: null, skillName: '', level: 'MEDIUM' });
-const emptyAvailability = (timezone = 'UTC') => ({ dayOfWeek: 'MONDAY', startTime: '09:00', endTime: '10:00', timezone });
+const WEEK_DAYS = [
+    { value: 'MONDAY', label: 'Mon', fullLabel: 'Monday' },
+    { value: 'TUESDAY', label: 'Tue', fullLabel: 'Tuesday' },
+    { value: 'WEDNESDAY', label: 'Wed', fullLabel: 'Wednesday' },
+    { value: 'THURSDAY', label: 'Thu', fullLabel: 'Thursday' },
+    { value: 'FRIDAY', label: 'Fri', fullLabel: 'Friday' },
+    { value: 'SATURDAY', label: 'Sat', fullLabel: 'Saturday' },
+    { value: 'SUNDAY', label: 'Sun', fullLabel: 'Sunday' }
+];
+
+const DAY_ORDER = WEEK_DAYS.reduce((acc, day, index) => {
+    acc[day.value] = index;
+    return acc;
+}, {});
+
+const sortDays = (days = []) => {
+    const normalized = [...new Set(days.map((day) => String(day).toUpperCase()))].filter((day) => day in DAY_ORDER);
+    normalized.sort((a, b) => DAY_ORDER[a] - DAY_ORDER[b]);
+    return normalized;
+};
+
+const formatSelectedDays = (days = []) => {
+    const sorted = sortDays(days);
+    if (!sorted.length) return 'No days selected';
+    if (sorted.length === WEEK_DAYS.length) return 'All Days';
+
+    return sorted
+        .map((dayValue) => WEEK_DAYS.find((day) => day.value === dayValue)?.label || dayValue.slice(0, 3))
+        .join(', ');
+};
+
+const emptyAvailability = (timezone = 'UTC') => ({
+    days: ['MONDAY'],
+    startTime: '09:00',
+    endTime: '10:00',
+    timezone
+});
+
+const groupAvailabilitySlots = (availability = [], fallbackTimezone = 'UTC') => {
+    if (!Array.isArray(availability) || !availability.length) return [];
+
+    const grouped = new Map();
+
+    availability.forEach((slot) => {
+        const startTime = slot?.startTime;
+        const endTime = slot?.endTime;
+        const timezone = slot?.timezone || fallbackTimezone;
+        const days = Array.isArray(slot?.days) ? slot.days : slot?.dayOfWeek ? [slot.dayOfWeek] : [];
+
+        if (!startTime || !endTime || !timezone) return;
+
+        const key = `${startTime}|${endTime}|${timezone}`;
+        if (!grouped.has(key)) {
+            grouped.set(key, {
+                days: [],
+                startTime,
+                endTime,
+                timezone
+            });
+        }
+
+        const existing = grouped.get(key);
+        existing.days = sortDays([...existing.days, ...days]);
+    });
+
+    return Array.from(grouped.values()).map((slot) => ({ ...slot, days: sortDays(slot.days) }));
+};
+
+const flattenAvailabilitySlots = (slots = [], fallbackTimezone = 'UTC') => {
+    if (!Array.isArray(slots)) return [];
+
+    const flattened = [];
+    slots.forEach((slot) => {
+        const timezone = slot?.timezone || fallbackTimezone;
+        const startTime = slot?.startTime;
+        const endTime = slot?.endTime;
+        const days = Array.isArray(slot?.days) ? slot.days : slot?.dayOfWeek ? [slot.dayOfWeek] : [];
+
+        if (!timezone || !startTime || !endTime) return;
+
+        sortDays(days).forEach((dayOfWeek) => {
+            flattened.push({ dayOfWeek, startTime, endTime, timezone });
+        });
+    });
+
+    const deduplicated = new Map();
+    flattened.forEach((slot) => {
+        deduplicated.set(`${slot.dayOfWeek}|${slot.startTime}|${slot.endTime}|${slot.timezone}`, slot);
+    });
+    return Array.from(deduplicated.values());
+};
 
 const languageOptions = ['English', 'Hindi', 'Spanish', 'French', 'German', 'Arabic', 'Chinese', 'Japanese'];
+const PROFILE_STEPS = [
+    { id: 1, label: 'Basic Info' },
+    { id: 2, label: 'Skills' },
+    { id: 3, label: 'Time Slots' }
+];
 
 const BIO_MAX_LENGTH = 2000;
 const USERNAME_MIN = 3;
 const USERNAME_MAX = 30;
+const USERNAME_REGEX = /^[a-z0-9_]+$/;
 const URL_REGEX = /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}(\/\S*)?$/i;
+
+const splitFullName = (fullName = '') => {
+    const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
+    return {
+        firstName: parts[0] || '',
+        lastName: parts.slice(1).join(' ')
+    };
+};
+
+const composeFullName = (firstName = '', lastName = '') => `${String(firstName).trim()} ${String(lastName).trim()}`.trim();
 
 const validateUrl = (url) => {
     if (!url) return null; // optional
@@ -49,11 +156,14 @@ const Profile = () => {
     const [fieldErrors, setFieldErrors] = useState({});
     const [touched, setTouched] = useState({});
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
     const [deleting, setDeleting] = useState(false);
     const [editorLoading, setEditorLoading] = useState(true);
+    const avatarInputRef = useRef(null);
 
     const [formData, setFormData] = useState({
-        fullName: '',
+        firstName: '',
+        lastName: '',
         username: '',
         bio: '',
         learningLanguage: '',
@@ -105,10 +215,12 @@ const Profile = () => {
                 setAvatarPreview(profile.avatarUrl || '');
 
                 const timezone = profile.timezone || 'UTC';
+                const { firstName, lastName } = splitFullName(profile.fullName || '');
 
                 setFormData({
-                    fullName: profile.fullName || '',
-                    username: profileData.username || '',
+                    firstName,
+                    lastName,
+                    username: String(profileData.username || '').toLowerCase(),
                     bio: profile.bio || '',
                     learningLanguage: profile.learningLanguage || 'English',
                     githubLink: profile.githubLink || '',
@@ -123,12 +235,7 @@ const Profile = () => {
                     teachSkills: teachSkills.length ? teachSkills : [emptyTeachSkill()],
                     learnSkills: learnSkills.length ? learnSkills : [emptyLearnSkill()],
                     availability: profileData.availability?.length
-                        ? profileData.availability.map((slot) => ({
-                            dayOfWeek: slot.dayOfWeek,
-                            startTime: slot.startTime,
-                            endTime: slot.endTime,
-                            timezone: slot.timezone || timezone
-                        }))
+                        ? groupAvailabilitySlots(profileData.availability, timezone)
                         : [emptyAvailability(timezone)]
                 });
                 if (!isSetupMode && profile.profileCompleted) setStep(1);
@@ -143,9 +250,10 @@ const Profile = () => {
     }, [isSetupMode]);
 
     const updateField = (key, value) => {
-        setFormData((prev) => ({ ...prev, [key]: value }));
+        const normalizedValue = key === 'username' ? String(value).trim().toLowerCase() : value;
+        setFormData((prev) => ({ ...prev, [key]: normalizedValue }));
         // Live validation
-        validateField(key, value);
+        validateField(key, normalizedValue);
     };
 
     const markTouched = (key) => {
@@ -156,13 +264,17 @@ const Profile = () => {
     const validateField = (key, value) => {
         let error = null;
         switch (key) {
-            case 'fullName':
-                if (!value?.trim()) error = 'Full name is required';
+            case 'firstName':
+                if (!value?.trim()) error = 'First name is required';
+                break;
+            case 'lastName':
+                if (!value?.trim()) error = 'Last name is required';
                 break;
             case 'username':
                 if (!value?.trim()) error = 'Username is required';
                 else if (value.trim().length < USERNAME_MIN) error = `At least ${USERNAME_MIN} characters`;
                 else if (value.trim().length > USERNAME_MAX) error = `Max ${USERNAME_MAX} characters`;
+                else if (!USERNAME_REGEX.test(value.trim())) error = 'Use only lowercase letters, numbers, and underscore (_)';
                 break;
             case 'bio':
                 if (value && value.replace(/<[^>]*>/g, '').length > BIO_MAX_LENGTH) error = `Bio exceeds ${BIO_MAX_LENGTH} characters`;
@@ -182,7 +294,8 @@ const Profile = () => {
 
     const hasValidationErrors = () => {
         const errs = {};
-        errs.fullName = validateField('fullName', formData.fullName);
+        errs.firstName = validateField('firstName', formData.firstName);
+        errs.lastName = validateField('lastName', formData.lastName);
         errs.username = validateField('username', formData.username);
         errs.bio = validateField('bio', formData.bio);
         errs.githubLink = validateField('githubLink', formData.githubLink);
@@ -190,7 +303,7 @@ const Profile = () => {
         errs.portfolioLink = validateField('portfolioLink', formData.portfolioLink);
         errs.youtubeLink = validateField('youtubeLink', formData.youtubeLink);
         // Mark all as touched to show errors
-        setTouched({ fullName: true, username: true, bio: true, githubLink: true, linkedinLink: true, portfolioLink: true, youtubeLink: true });
+        setTouched({ firstName: true, lastName: true, username: true, bio: true, githubLink: true, linkedinLink: true, portfolioLink: true, youtubeLink: true });
         return Object.values(errs).some(Boolean);
     };
 
@@ -220,11 +333,58 @@ const Profile = () => {
         });
     };
 
+    const toggleAvailabilityDay = (slotIndex, dayValue) => {
+        setFormData((prev) => {
+            const next = [...prev.availability];
+            const slot = next[slotIndex];
+            if (!slot) return prev;
+
+            const currentDays = sortDays(slot.days || (slot.dayOfWeek ? [slot.dayOfWeek] : []));
+            const hasDay = currentDays.includes(dayValue);
+            const days = hasDay
+                ? currentDays.filter((day) => day !== dayValue)
+                : sortDays([...currentDays, dayValue]);
+
+            next[slotIndex] = { ...slot, days };
+            return { ...prev, availability: next };
+        });
+    };
+
+    const setAvailabilityDays = (slotIndex, days) => {
+        setFormData((prev) => {
+            const next = [...prev.availability];
+            const slot = next[slotIndex];
+            if (!slot) return prev;
+
+            next[slotIndex] = { ...slot, days: sortDays(days) };
+            return { ...prev, availability: next };
+        });
+    };
+
     const handleAvatarChange = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        const allowedTypes = ['image/png', 'image/jpeg'];
+        if (!allowedTypes.includes(file.type)) {
+            toast.error('Please upload a PNG or JPG image.');
+            return;
+        }
+
+        const maxSize = 5 * 1024 * 1024;
+        if (file.size > maxSize) {
+            toast.error('Image must be 5MB or smaller.');
+            return;
+        }
+
         updateField('avatarFile', file);
         setAvatarPreview(URL.createObjectURL(file));
+    };
+
+    const removeAvatar = () => {
+        setAvatarPreview('');
+        setFormData((prev) => ({ ...prev, avatarFile: null, avatarUrl: '' }));
+        if (avatarInputRef.current) avatarInputRef.current.value = '';
     };
 
     const updateTeachSkillUpload = (index, patch) => {
@@ -276,8 +436,10 @@ const Profile = () => {
         }
         setSaving(true);
         try {
+            const flattenedAvailability = flattenAvailabilitySlots(formData.availability, formData.timezone || 'UTC');
+            const fullName = composeFullName(formData.firstName, formData.lastName);
             const profilePayload = new FormData();
-            profilePayload.append('fullName', formData.fullName);
+            profilePayload.append('fullName', fullName);
             profilePayload.append('username', formData.username);
             profilePayload.append('bio', formData.bio);
             profilePayload.append('learningLanguage', formData.learningLanguage);
@@ -289,7 +451,8 @@ const Profile = () => {
             profilePayload.append('upcomingSessions', formData.upcomingSessions);
             profilePayload.append('emailRemindersEnabled', String(formData.emailRemindersEnabled));
             profilePayload.append('profileCompleted', 'true');
-            profilePayload.append('availability', JSON.stringify(formData.availability));
+            profilePayload.append('availability', JSON.stringify(flattenedAvailability));
+            profilePayload.append('avatarUrl', formData.avatarUrl || '');
 
             if (formData.avatarFile) {
                 profilePayload.append('avatar', formData.avatarFile);
@@ -454,117 +617,232 @@ const Profile = () => {
     }
 
     return (
-        <div className="max-w-5xl mx-auto py-8 px-4">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <h1 className="text-2xl font-bold text-gray-900">Complete Your Profile</h1>
-                <p className="text-sm text-gray-600 mt-1">Step {step} of 3</p>
+        <div className="mx-auto w-full px-4 sm:px-8" style={{ maxWidth: '900px' }}>
+            <div className="page-shell">
+                <section className="section-card space-y-4">
+                    <div>
+                        <h1 className="page-title">Complete Your Profile</h1>
+                        <p className="mt-1 text-sm text-gray-600">Step {step} of {PROFILE_STEPS.length}</p>
+                    </div>
 
-                <div className="mt-6 grid grid-cols-3 gap-2 text-sm">
-                    <button type="button" onClick={() => setStep(1)} className={`py-2 rounded ${step === 1 ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>1. Basic Info</button>
-                    <button type="button" onClick={() => setStep(2)} className={`py-2 rounded ${step === 2 ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>2. Skills</button>
-                    <button type="button" onClick={() => setStep(3)} className={`py-2 rounded ${step === 3 ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>3. Time Slots</button>
-                </div>
+                    <div className="flex items-center">
+                        {PROFILE_STEPS.map((item, index) => {
+                            const isCompleted = step > item.id;
+                            const isCurrent = step === item.id;
+                            const isPending = step < item.id;
+
+                            return (
+                                <div key={item.id} className="flex flex-1 items-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => setStep(item.id)}
+                                        className="group inline-flex items-center gap-3 text-left"
+                                    >
+                                        <span
+                                            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-colors ${
+                                                isCompleted
+                                                    ? 'border-green-600 bg-green-600 text-white'
+                                                    : isCurrent
+                                                        ? 'border-blue-600 bg-blue-600 text-white'
+                                                        : 'border-gray-300 bg-white text-gray-500'
+                                            }`}
+                                        >
+                                            {isCompleted ? <Check className="h-4 w-4" /> : item.id}
+                                        </span>
+                                        <span
+                                            className={`text-sm font-medium ${
+                                                isCompleted
+                                                    ? 'text-green-700'
+                                                    : isCurrent
+                                                        ? 'text-blue-700'
+                                                        : isPending
+                                                            ? 'text-gray-400'
+                                                            : 'text-gray-700'
+                                            }`}
+                                        >
+                                            {item.label}
+                                        </span>
+                                    </button>
+
+                                    {index < PROFILE_STEPS.length - 1 ? (
+                                        <div className={`mx-3 h-0.5 flex-1 rounded-full ${step > item.id ? 'bg-green-500' : 'bg-gray-200'}`} />
+                                    ) : null}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
 
                 {step === 1 && (
-                    <div className="mt-6 space-y-5">
-                        <div className="flex items-center gap-4">
-                            {avatarPreview ? (
-                                <img src={avatarPreview} alt="Avatar Preview" className="h-16 w-16 rounded-full object-cover" />
-                            ) : (
-                                <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">U</div>
-                            )}
-                            <input type="file" accept="image/*" onChange={handleAvatarChange} className="text-sm" />
-                        </div>
-
-                        <div className="grid md:grid-cols-2 gap-4">
-                            <div>
-                                <input className={`w-full border rounded px-3 py-2 ${touched.fullName && fieldErrors.fullName ? 'border-red-500' : ''}`} placeholder="Full Name *" value={formData.fullName} onChange={(e) => updateField('fullName', e.target.value)} onBlur={() => markTouched('fullName')} />
-                                {touched.fullName && fieldErrors.fullName && <p className="text-xs text-red-600 mt-1">{fieldErrors.fullName}</p>}
+                    <>
+                        <section className="section-card space-y-6">
+                            <div className="space-y-1">
+                                <h2 className="text-[21px] font-semibold text-gray-900">Profile Information</h2>
+                                <p className="text-sm text-gray-500">Set up your public identity and tell people what you want to learn.</p>
                             </div>
-                            <div>
-                                <input className={`w-full border rounded px-3 py-2 ${touched.username && fieldErrors.username ? 'border-red-500' : ''}`} placeholder="Username *" value={formData.username} onChange={(e) => updateField('username', e.target.value)} onBlur={() => markTouched('username')} />
-                                {touched.username && fieldErrors.username && <p className="text-xs text-red-600 mt-1">{fieldErrors.username}</p>}
-                                {!fieldErrors.username && formData.username && <p className="text-xs text-gray-400 mt-1">{formData.username.length}/{USERNAME_MAX}</p>}
-                            </div>
-                        </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
-                            {editorLoading && (
-                                <div className="animate-pulse space-y-2 border rounded p-4" style={{ height: 220 }}>
-                                    <div className="h-8 bg-gray-200 rounded w-full" />
-                                    <div className="h-3 bg-gray-200 rounded w-3/4" />
-                                    <div className="h-3 bg-gray-200 rounded w-5/6" />
-                                    <div className="h-3 bg-gray-200 rounded w-2/3" />
-                                    <div className="h-3 bg-gray-200 rounded w-4/5" />
-                                    <div className="h-3 bg-gray-200 rounded w-1/2" />
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                                <button
+                                    type="button"
+                                    onClick={() => avatarInputRef.current?.click()}
+                                    className="group relative h-20 w-20 overflow-hidden rounded-full border-2 border-gray-200 bg-gray-100"
+                                >
+                                    {avatarPreview ? (
+                                        <img src={avatarPreview} alt="Avatar Preview" className="h-full w-full object-cover" />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-xl font-semibold text-blue-700">
+                                            {(formData.firstName || formData.username || 'U').charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
+                                    <span className="absolute inset-0 flex items-center justify-center bg-black/35 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                                        <Camera className="h-4 w-4" />
+                                    </span>
+                                </button>
+
+                                <div className="space-y-2">
+                                    <input
+                                        ref={avatarInputRef}
+                                        type="file"
+                                        accept="image/png,image/jpeg"
+                                        onChange={handleAvatarChange}
+                                        className="hidden"
+                                    />
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => avatarInputRef.current?.click()}
+                                            className="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                        >
+                                            <Camera className="h-4 w-4" />
+                                            {avatarPreview ? 'Change Photo' : 'Upload Photo'}
+                                        </button>
+                                        {avatarPreview && (
+                                            <button
+                                                type="button"
+                                                onClick={removeAvatar}
+                                                className="inline-flex items-center gap-1.5 rounded border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                                Remove
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-gray-500">Upload profile photo (PNG or JPG, max 5MB).</p>
                                 </div>
-                            )}
-                            <div style={editorLoading ? { position: 'absolute', left: -9999, opacity: 0 } : {}}>
-                                <Editor
-                                    apiKey={import.meta.env.VITE_TYNE_MCE_API_KEY}
-                                    value={formData.bio}
-                                    onEditorChange={(value) => updateField('bio', value)}
-                                    onInit={() => setEditorLoading(false)}
-                                    init={{
-                                        height: 220,
-                                        menubar: false,
-                                        plugins: 'lists link emoticons',
-                                        toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | link media table mergetags | addcomment showcomments | spellcheckdialog a11ycheck typography uploadcare | align lineheight | checklist numlist bullist indent outdent | emoticons charmap | removeformat',
-                                        tinycomments_mode: 'embedded',
-                                        content_style: 'body { font-family: ui-sans-serif, system-ui; font-size: 14px; }'
-                                    }}
-                                />
                             </div>
-                            {touched.bio && fieldErrors.bio && <p className="text-xs text-red-600 mt-1">{fieldErrors.bio}</p>}
-                            <p className="text-xs text-gray-400 mt-1">{(formData.bio || '').replace(/<[^>]*>/g, '').length} / {BIO_MAX_LENGTH} characters</p>
-                        </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Preferred learning language</label>
-                            <select
-                                className="w-full border rounded px-3 py-2"
-                                value={formData.learningLanguage}
-                                onChange={(e) => updateField('learningLanguage', e.target.value)}
-                            >
-                                {languageOptions.map((lang) => (
-                                    <option key={lang} value={lang}>{lang}</option>
-                                ))}
-                            </select>
-                        </div>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <input className={`w-full border rounded px-3 py-2 ${touched.firstName && fieldErrors.firstName ? 'border-red-500' : ''}`} placeholder="First Name *" value={formData.firstName} onChange={(e) => updateField('firstName', e.target.value)} onBlur={() => markTouched('firstName')} />
+                                    {touched.firstName && fieldErrors.firstName && <p className="text-xs text-red-600 mt-1">{fieldErrors.firstName}</p>}
+                                </div>
+                                <div>
+                                    <input className={`w-full border rounded px-3 py-2 ${touched.lastName && fieldErrors.lastName ? 'border-red-500' : ''}`} placeholder="Last Name *" value={formData.lastName} onChange={(e) => updateField('lastName', e.target.value)} onBlur={() => markTouched('lastName')} />
+                                    {touched.lastName && fieldErrors.lastName && <p className="text-xs text-red-600 mt-1">{fieldErrors.lastName}</p>}
+                                </div>
+                            </div>
 
-                        <div className="grid md:grid-cols-2 gap-4">
                             <div>
-                                <input className={`w-full border rounded px-3 py-2 ${touched.githubLink && fieldErrors.githubLink ? 'border-red-500' : ''}`} placeholder="GitHub (optional)" value={formData.githubLink} onChange={(e) => updateField('githubLink', e.target.value)} onBlur={() => markTouched('githubLink')} />
-                                {touched.githubLink && fieldErrors.githubLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.githubLink}</p>}
+                                <input className={`w-full border rounded px-3 py-2 ${fieldErrors.username ? 'border-red-500' : ''}`} placeholder="Username *" value={formData.username} onChange={(e) => updateField('username', e.target.value)} onBlur={() => markTouched('username')} />
+                                {fieldErrors.username && <p className="text-xs text-red-600 mt-1">{fieldErrors.username}</p>}
                             </div>
+
                             <div>
-                                <input className={`w-full border rounded px-3 py-2 ${touched.linkedinLink && fieldErrors.linkedinLink ? 'border-red-500' : ''}`} placeholder="LinkedIn (optional)" value={formData.linkedinLink} onChange={(e) => updateField('linkedinLink', e.target.value)} onBlur={() => markTouched('linkedinLink')} />
-                                {touched.linkedinLink && fieldErrors.linkedinLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.linkedinLink}</p>}
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
+                                <p className="text-xs text-gray-500 mb-3">Tell others about your experience, skills, or learning interests.</p>
+                                {editorLoading && (
+                                    <div className="animate-pulse space-y-2 border rounded p-4" style={{ height: 180 }}>
+                                        <div className="h-8 bg-gray-200 rounded w-full" />
+                                        <div className="h-3 bg-gray-200 rounded w-3/4" />
+                                        <div className="h-3 bg-gray-200 rounded w-5/6" />
+                                        <div className="h-3 bg-gray-200 rounded w-2/3" />
+                                    </div>
+                                )}
+                                <div style={editorLoading ? { position: 'absolute', left: -9999, opacity: 0 } : {}}>
+                                    <Editor
+                                        apiKey={import.meta.env.VITE_TYNE_MCE_API_KEY}
+                                        value={formData.bio}
+                                        onEditorChange={(value) => updateField('bio', value)}
+                                        onInit={() => setEditorLoading(false)}
+                                        init={{
+                                            height: 180,
+                                            menubar: false,
+                                            plugins: 'lists link',
+                                            toolbar: 'undo redo | bold italic | bullist | link',
+                                            tinycomments_mode: 'embedded',
+                                            content_style: 'body { font-family: ui-sans-serif, system-ui; font-size: 14px; }'
+                                        }}
+                                    />
+                                </div>
+                                {touched.bio && fieldErrors.bio && <p className="text-xs text-red-600 mt-1">{fieldErrors.bio}</p>}
+                                <p className="text-xs text-gray-400 mt-1">{(formData.bio || '').replace(/<[^>]*>/g, '').length} / {BIO_MAX_LENGTH} characters</p>
                             </div>
+
                             <div>
-                                <input className={`w-full border rounded px-3 py-2 ${touched.portfolioLink && fieldErrors.portfolioLink ? 'border-red-500' : ''}`} placeholder="Portfolio (optional)" value={formData.portfolioLink} onChange={(e) => updateField('portfolioLink', e.target.value)} onBlur={() => markTouched('portfolioLink')} />
-                                {touched.portfolioLink && fieldErrors.portfolioLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.portfolioLink}</p>}
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Preferred learning language</label>
+                                <select
+                                    className="w-full border rounded px-3 py-2"
+                                    value={formData.learningLanguage}
+                                    onChange={(e) => updateField('learningLanguage', e.target.value)}
+                                >
+                                    {languageOptions.map((lang) => (
+                                        <option key={lang} value={lang}>{lang}</option>
+                                    ))}
+                                </select>
                             </div>
-                            <div>
-                                <input className={`w-full border rounded px-3 py-2 ${touched.youtubeLink && fieldErrors.youtubeLink ? 'border-red-500' : ''}`} placeholder="YouTube (optional)" value={formData.youtubeLink} onChange={(e) => updateField('youtubeLink', e.target.value)} onBlur={() => markTouched('youtubeLink')} />
-                                {touched.youtubeLink && fieldErrors.youtubeLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.youtubeLink}</p>}
+                        </section>
+
+                        <section className="section-card space-y-5">
+                            <h2 className="text-[21px] font-semibold text-gray-900">Social Links</h2>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">GitHub</label>
+                                    <div className="relative">
+                                        <Github className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                                        <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.githubLink && fieldErrors.githubLink ? 'border-red-500' : ''}`} placeholder="https://github.com/username" value={formData.githubLink} onChange={(e) => updateField('githubLink', e.target.value)} onBlur={() => markTouched('githubLink')} />
+                                    </div>
+                                    {touched.githubLink && fieldErrors.githubLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.githubLink}</p>}
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">LinkedIn</label>
+                                    <div className="relative">
+                                        <Linkedin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                                        <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.linkedinLink && fieldErrors.linkedinLink ? 'border-red-500' : ''}`} placeholder="https://linkedin.com/in/username" value={formData.linkedinLink} onChange={(e) => updateField('linkedinLink', e.target.value)} onBlur={() => markTouched('linkedinLink')} />
+                                    </div>
+                                    {touched.linkedinLink && fieldErrors.linkedinLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.linkedinLink}</p>}
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">Portfolio</label>
+                                    <div className="relative">
+                                        <Globe className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                                        <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.portfolioLink && fieldErrors.portfolioLink ? 'border-red-500' : ''}`} placeholder="https://your-portfolio.com" value={formData.portfolioLink} onChange={(e) => updateField('portfolioLink', e.target.value)} onBlur={() => markTouched('portfolioLink')} />
+                                    </div>
+                                    {touched.portfolioLink && fieldErrors.portfolioLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.portfolioLink}</p>}
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">YouTube</label>
+                                    <div className="relative">
+                                        <Youtube className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                                        <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.youtubeLink && fieldErrors.youtubeLink ? 'border-red-500' : ''}`} placeholder="https://youtube.com/@channel" value={formData.youtubeLink} onChange={(e) => updateField('youtubeLink', e.target.value)} onBlur={() => markTouched('youtubeLink')} />
+                                    </div>
+                                    {touched.youtubeLink && fieldErrors.youtubeLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.youtubeLink}</p>}
+                                </div>
                             </div>
-                        </div>
-                    </div>
+                        </section>
+                    </>
                 )}
 
                 {step === 2 && (
-                    <div className="mt-6 space-y-8">
-                        <div>
+                    <div className="space-y-6">
+                        <section className="section-card">
                             <div className="flex items-center justify-between mb-3">
-                                <h2 className="text-lg font-semibold">What I Can Teach</h2>
+                                <h2 className="text-[21px] font-semibold">What I Can Teach</h2>
                                 <button type="button" onClick={() => addArrayItem('teachSkills', emptyTeachSkill)} className="px-3 py-1 text-sm bg-blue-600 text-white rounded">Add Teach Skill</button>
                             </div>
 
                             <div className="space-y-4">
                                 {formData.teachSkills.map((skill, index) => (
-                                    <div key={`teach-${index}`} className="border rounded p-4 space-y-3">
+                                    <div key={`teach-${index}`} className="rounded-xl border p-5 space-y-3">
                                         <div className="grid md:grid-cols-2 gap-3">
                                             <input className="border rounded px-3 py-2" placeholder="Skill Name" value={skill.skillName} onChange={(e) => updateArrayItem('teachSkills', index, 'skillName', e.target.value)} />
                                             <select className="border rounded px-3 py-2" value={skill.level} onChange={(e) => updateArrayItem('teachSkills', index, 'level', e.target.value)}>
@@ -645,17 +923,17 @@ const Profile = () => {
                                     </div>
                                 ))}
                             </div>
-                        </div>
+                        </section>
 
-                        <div>
+                        <section className="section-card">
                             <div className="flex items-center justify-between mb-3">
-                                <h2 className="text-lg font-semibold">What I Want To Learn</h2>
+                                <h2 className="text-[21px] font-semibold">What I Want To Learn</h2>
                                 <button type="button" onClick={() => addArrayItem('learnSkills', emptyLearnSkill)} className="px-3 py-1 text-sm bg-blue-600 text-white rounded">Add Learn Skill</button>
                             </div>
 
                             <div className="space-y-4">
                                 {formData.learnSkills.map((skill, index) => (
-                                    <div key={`learn-${index}`} className="border rounded p-4 space-y-3">
+                                    <div key={`learn-${index}`} className="rounded-xl border p-5 space-y-3">
                                         <div className="grid md:grid-cols-2 gap-3">
                                             <input className="border rounded px-3 py-2" placeholder="Skill Name" value={skill.skillName} onChange={(e) => updateArrayItem('learnSkills', index, 'skillName', e.target.value)} />
                                             <select className="border rounded px-3 py-2" value={skill.level} onChange={(e) => updateArrayItem('learnSkills', index, 'level', e.target.value)}>
@@ -668,14 +946,14 @@ const Profile = () => {
                                     </div>
                                 ))}
                             </div>
-                        </div>
+                        </section>
                     </div>
                 )}
 
                 {step === 3 && (
-                    <div className="mt-6 space-y-5">
+                    <section className="section-card space-y-6">
                         <div>
-                            <h2 className="text-lg font-semibold">Availability & Reminders</h2>
+                            <h2 className="text-[21px] font-semibold">Availability & Reminders</h2>
                             <p className="text-sm text-gray-600">Let others know when you are open to swap sessions.</p>
                         </div>
                         <div className="grid md:grid-cols-2 gap-4">
@@ -695,26 +973,62 @@ const Profile = () => {
 
                         <div>
                             <div className="flex items-center justify-between mb-3">
-                                <h2 className="text-lg font-semibold">Weekly Availability</h2>
+                                <h2 className="text-[21px] font-semibold">Weekly Availability</h2>
                                 <button type="button" onClick={() => addArrayItem('availability', () => emptyAvailability(formData.timezone || 'UTC'))} className="px-3 py-1 text-sm bg-blue-600 text-white rounded">Add Slot</button>
                             </div>
 
                             <div className="space-y-3">
                                 {formData.availability.map((slot, index) => (
-                                    <div key={`slot-${index}`} className="grid md:grid-cols-5 gap-2 items-center border rounded p-3">
-                                        <select className="border rounded px-2 py-2" value={slot.dayOfWeek} onChange={(e) => updateArrayItem('availability', index, 'dayOfWeek', e.target.value)}>
-                                            <option value="MONDAY">Monday</option>
-                                            <option value="TUESDAY">Tuesday</option>
-                                            <option value="WEDNESDAY">Wednesday</option>
-                                            <option value="THURSDAY">Thursday</option>
-                                            <option value="FRIDAY">Friday</option>
-                                            <option value="SATURDAY">Saturday</option>
-                                            <option value="SUNDAY">Sunday</option>
-                                        </select>
-                                        <input type="time" className="border rounded px-2 py-2" value={slot.startTime} onChange={(e) => updateArrayItem('availability', index, 'startTime', e.target.value)} />
-                                        <input type="time" className="border rounded px-2 py-2" value={slot.endTime} onChange={(e) => updateArrayItem('availability', index, 'endTime', e.target.value)} />
-                                        <input className="border rounded px-2 py-2" value={slot.timezone} onChange={(e) => updateArrayItem('availability', index, 'timezone', e.target.value)} />
-                                        <button type="button" onClick={() => removeArrayItem('availability', index)} className="text-sm text-red-600">Remove</button>
+                                    <div key={`slot-${index}`} className="border rounded p-3 space-y-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <p className="text-sm text-gray-700">
+                                                Selected days: <span className="font-medium text-gray-900">{formatSelectedDays(slot.days || (slot.dayOfWeek ? [slot.dayOfWeek] : []))}</span>
+                                            </p>
+                                            <button type="button" onClick={() => removeArrayItem('availability', index)} className="text-sm text-red-600">Remove</button>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setAvailabilityDays(index, WEEK_DAYS.map((day) => day.value))}
+                                                className="px-2 py-1 text-xs rounded border bg-gray-50 hover:bg-gray-100"
+                                            >
+                                                Select All Days
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setAvailabilityDays(index, [])}
+                                                className="px-2 py-1 text-xs rounded border bg-gray-50 hover:bg-gray-100"
+                                            >
+                                                Clear Days
+                                            </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                                            {WEEK_DAYS.map((day) => {
+                                                const selectedDays = sortDays(slot.days || (slot.dayOfWeek ? [slot.dayOfWeek] : []));
+                                                const isSelected = selectedDays.includes(day.value);
+                                                return (
+                                                    <label
+                                                        key={`${slot.startTime}-${slot.endTime}-${day.value}-${index}`}
+                                                        className={`flex items-center gap-2 border rounded px-2 py-1 text-sm cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-200 text-gray-700'}`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={() => toggleAvailabilityDay(index, day.value)}
+                                                        />
+                                                        {day.label}
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <div className="grid md:grid-cols-3 gap-2">
+                                            <input type="time" className="border rounded px-2 py-2" value={slot.startTime} onChange={(e) => updateArrayItem('availability', index, 'startTime', e.target.value)} />
+                                            <input type="time" className="border rounded px-2 py-2" value={slot.endTime} onChange={(e) => updateArrayItem('availability', index, 'endTime', e.target.value)} />
+                                            <input className="border rounded px-2 py-2" value={slot.timezone} onChange={(e) => updateArrayItem('availability', index, 'timezone', e.target.value)} />
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -728,10 +1042,11 @@ const Profile = () => {
                         >
                             {sendingReminder ? 'Sending...' : 'Send Reminder Email Now'}
                         </button>
-                    </div>
+                    </section>
                 )}
 
-                <div className="mt-8 flex justify-between">
+                <section className="section-card py-4">
+                    <div className="flex items-center justify-between gap-3">
                     <button
                         type="button"
                         onClick={() => setStep((prev) => Math.max(1, prev - 1))}
@@ -755,32 +1070,50 @@ const Profile = () => {
                             disabled={saving}
                             className="px-4 py-2 rounded bg-green-600 text-white disabled:opacity-60"
                         >
-                            {saving ? 'Saving...' : 'Save Profile Setup'}
+                            {saving ? 'Saving...' : 'Complete Profile'}
                         </button>
                     )}
-                </div>
-            </div>
+                    </div>
+                </section>
 
-            {/* Danger Zone — Delete Account */}
+            {/* Account Management */}
             {!isSetupMode && (
-                <div className="mt-8 bg-white rounded-xl shadow-sm border border-red-200 p-6">
-                    <h2 className="text-lg font-semibold text-red-700">Danger Zone</h2>
-                    <p className="text-sm text-gray-600 mt-1">Permanently delete your account and all associated data. This action cannot be undone.</p>
-                    <button
-                        type="button"
-                        onClick={() => setDeleteDialogOpen(true)}
-                        disabled={deleting}
-                        className="mt-4 px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
-                    >
-                        {deleting ? 'Deleting...' : 'Delete My Account'}
-                    </button>
+                <section className="section-card border-red-200">
+                    <div className="flex items-start gap-3">
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-red-700" aria-hidden="true">⚠</span>
+                        <div className="space-y-2">
+                            <h2 className="text-xl font-semibold text-gray-900">Account Management</h2>
+                            <p className="text-sm leading-6 text-gray-600">
+                                Manage account-level actions for your profile.
+                            </p>
+                            <p className="text-sm font-semibold text-red-700">Deleting your account will permanently remove your data.</p>
+                        </div>
+                    </div>
+
+                    <div className="mt-5 flex justify-end">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setDeleteConfirmText('');
+                                setDeleteDialogOpen(true);
+                            }}
+                            disabled={deleting}
+                            className="inline-flex items-center gap-1.5 rounded border border-red-300 bg-white px-4 py-2 font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                            {deleting ? 'Deleting...' : 'Delete My Account'}
+                        </button>
+                    </div>
+
                     <ConfirmDialog
                         open={deleteDialogOpen}
-                        title="Delete Account"
-                        message="This will permanently delete your account, all your skills, swap history, messages, and reviews. This cannot be undone. Are you absolutely sure?"
-                        confirmLabel="Delete Everything"
+                        title="Confirm Account Deletion"
+                        message="Please confirm that you want to permanently delete your account and all associated platform data."
+                        confirmLabel={deleting ? 'Deleting...' : 'Delete Permanently'}
                         variant="danger"
+                        confirmDisabled={deleteConfirmText !== 'DELETE' || deleting}
                         onConfirm={async () => {
+                            if (deleteConfirmText !== 'DELETE') return;
                             setDeleteDialogOpen(false);
                             setDeleting(true);
                             try {
@@ -795,10 +1128,29 @@ const Profile = () => {
                                 setDeleting(false);
                             }
                         }}
-                        onCancel={() => setDeleteDialogOpen(false)}
-                    />
-                </div>
+                        onCancel={() => {
+                            setDeleteDialogOpen(false);
+                            setDeleteConfirmText('');
+                        }}
+                    >
+                        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                            ⚠ This action cannot be undone.
+                        </div>
+                        <label className="mt-3 block text-sm text-gray-700">
+                            Type <span className="font-semibold">DELETE</span> to confirm:
+                        </label>
+                        <input
+                            type="text"
+                            value={deleteConfirmText}
+                            onChange={(e) => setDeleteConfirmText(e.target.value)}
+                            className="mt-2 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                            placeholder="DELETE"
+                            autoComplete="off"
+                        />
+                    </ConfirmDialog>
+                </section>
             )}
+        </div>
         </div>
     );
 };

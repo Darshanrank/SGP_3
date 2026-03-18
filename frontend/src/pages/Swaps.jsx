@@ -387,7 +387,7 @@ const Swaps = () => {
     };
 
     return (
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="page-shell">
             {/* Video Preview Modal */}
             {videoPreview && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setVideoPreview(null)}>
@@ -444,9 +444,9 @@ const Swaps = () => {
             />
 
             {/* Page header */}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap justify-between items-start gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">My Swaps</h1>
+                    <h1 className="page-title">My Swaps</h1>
                     <p className="text-sm text-gray-500 mt-0.5">Manage your skill swap requests and classrooms</p>
                 </div>
                 <Button onClick={() => navigate('/swaps/new')} className="gap-2">
@@ -455,58 +455,60 @@ const Swaps = () => {
                 </Button>
             </div>
 
-            {/* Tabs */}
-            <div className="flex border-b border-gray-200">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.key}
-                        className={clsx(
-                            'flex items-center gap-2 px-4 py-3 font-medium text-sm focus:outline-none transition-colors relative',
-                            activeTab === tab.key
-                                ? 'border-b-2 border-blue-500 text-blue-600'
-                                : 'text-gray-500 hover:text-gray-700'
-                        )}
-                        onClick={() => { setActiveTab(tab.key); setStatusFilter('ALL'); }}
-                    >
-                        <tab.icon className="h-4 w-4" />
-                        {tab.label}
-                        {tab.badge > 0 && (
-                            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-xs font-bold bg-blue-600 text-white">
-                                {tab.badge}
-                            </span>
-                        )}
-                    </button>
-                ))}
-            </div>
-
-            {/* Status filter (for request tabs only) */}
-            {(activeTab === 'received' || activeTab === 'sent') && (
-                <div className="flex gap-2 flex-wrap">
-                    {['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED'].map(status => {
-                        const currentRequests = activeTab === 'received' ? receivedRequests : sentRequests;
-                        const count = status === 'ALL' ? currentRequests.length : currentRequests.filter(r => r.status === status).length;
-                        return (
-                            <button
-                                key={status}
-                                onClick={() => setStatusFilter(status)}
-                                className={clsx(
-                                    'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
-                                    statusFilter === status
-                                        ? 'bg-blue-600 text-white border-blue-600'
-                                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                                )}
-                            >
-                                {status === 'ALL' ? 'All' : statusConfig[status]?.label || status} ({count})
-                            </button>
-                        );
-                    })}
+            <div className="section-card p-0! overflow-hidden">
+                {/* Tabs */}
+                <div className="flex border-b border-gray-200 px-2 sm:px-4">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.key}
+                            className={clsx(
+                                'flex items-center gap-2 px-4 py-3 font-medium text-sm focus:outline-none transition-colors relative',
+                                activeTab === tab.key
+                                    ? 'border-b-2 border-blue-500 text-blue-600'
+                                    : 'text-gray-500 hover:text-gray-700'
+                            )}
+                            onClick={() => { setActiveTab(tab.key); setStatusFilter('ALL'); }}
+                        >
+                            <tab.icon className="h-4 w-4" />
+                            {tab.label}
+                            {tab.badge > 0 && (
+                                <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-xs font-bold bg-blue-600 text-white">
+                                    {tab.badge}
+                                </span>
+                            )}
+                        </button>
+                    ))}
                 </div>
-            )}
+
+                {/* Status filter (for request tabs only) */}
+                {(activeTab === 'received' || activeTab === 'sent') && (
+                    <div className="p-4 flex gap-2 flex-wrap">
+                        {['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED'].map(status => {
+                            const currentRequests = activeTab === 'received' ? receivedRequests : sentRequests;
+                            const count = status === 'ALL' ? currentRequests.length : currentRequests.filter(r => r.status === status).length;
+                            return (
+                                <button
+                                    key={status}
+                                    onClick={() => setStatusFilter(status)}
+                                    className={clsx(
+                                        'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                                        statusFilter === status
+                                            ? 'bg-blue-600 text-white border-blue-600'
+                                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                                    )}
+                                >
+                                    {status === 'ALL' ? 'All' : statusConfig[status]?.label || status} ({count})
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
 
             {/* Content */}
             <div>
                 {activeTab === 'received' && (
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                         {loadingReceived ? <ListItemSkeleton count={3} /> : (
                             filterRequests(receivedRequests).length === 0 ? (
                                 <EmptyState
@@ -522,7 +524,7 @@ const Swaps = () => {
                 )}
 
                 {activeTab === 'sent' && (
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                         {loadingSent ? <ListItemSkeleton count={3} /> : (
                             filterRequests(sentRequests).length === 0 ? (
                                 <EmptyState
@@ -544,7 +546,7 @@ const Swaps = () => {
                 )}
 
                 {activeTab === 'classes' && (
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                         {loadingClasses ? <ListItemSkeleton count={3} /> : (
                             activeClasses.length === 0 ? (
                                 <EmptyState

@@ -11,6 +11,8 @@ import { Button } from './Button';
  *  - confirmLabel (string, default "Confirm")
  *  - cancelLabel (string, default "Cancel")
  *  - variant ("primary" | "danger", default "primary")
+ *  - confirmDisabled (bool, default false)
+ *  - children (ReactNode, optional custom content)
  *  - onConfirm ()
  *  - onCancel ()
  */
@@ -21,6 +23,8 @@ const ConfirmDialog = ({
     confirmLabel = 'Confirm',
     cancelLabel = 'Cancel',
     variant = 'primary',
+    confirmDisabled = false,
+    children,
     onConfirm,
     onCancel,
 }) => {
@@ -48,11 +52,12 @@ const ConfirmDialog = ({
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 animate-in fade-in zoom-in">
                 <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
                 {message && <p className="mt-2 text-sm text-gray-600">{message}</p>}
+                {children ? <div className="mt-4">{children}</div> : null}
                 <div className="mt-5 flex justify-end gap-3">
                     <Button variant="secondary" size="sm" onClick={onCancel}>
                         {cancelLabel}
                     </Button>
-                    <Button ref={confirmRef} variant={variant} size="sm" onClick={onConfirm}>
+                    <Button ref={confirmRef} variant={variant} size="sm" onClick={onConfirm} disabled={confirmDisabled}>
                         {confirmLabel}
                     </Button>
                 </div>

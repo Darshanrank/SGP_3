@@ -28,25 +28,25 @@ const Rewards = () => {
         load();
     }, []);
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <div className="section-card text-center">Loading...</div>;
 
     return (
-        <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-gray-900">Rewards & Reputation</h1>
+        <div className="page-shell">
+            <h1 className="page-title">Rewards & Reputation</h1>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="stats-grid">
                 {[{ label: 'Points', value: rewards?.points ?? 0 }, { label: 'Total Swaps', value: rewards?.totalSwaps ?? rewards?.swaps ?? 0 }, { label: 'Badges', value: badges.length }].map((item) => (
-                    <div key={item.label} className="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
+                    <div key={item.label} className="rounded-[10px] bg-white border border-gray-200 shadow-sm p-5">
                         <p className="text-sm text-gray-500">{item.label}</p>
                         <p className="text-2xl font-semibold">{item.value}</p>
                     </div>
                 ))}
             </div>
 
-            <section className="bg-white rounded-lg shadow border border-gray-100 p-4">
-                <h2 className="font-semibold text-lg mb-3 flex items-center gap-2"><BadgeIcon size={18}/> Badges</h2>
+            <section className="section-card">
+                <h2 className="section-title mb-4 flex items-center gap-2"><BadgeIcon size={18}/> Badges</h2>
                 {badges.length === 0 ? <p className="text-gray-500">No badges yet.</p> : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
                         {badges.map((b) => (
                             <div key={b.id || b.badgeId} className="p-3 rounded border border-gray-200 bg-gray-50">
                                 <p className="font-semibold">{b.badge?.name || b.name}</p>
@@ -58,10 +58,10 @@ const Rewards = () => {
                 )}
             </section>
 
-            <section className="bg-white rounded-lg shadow border border-gray-100 p-4">
-                <h2 className="font-semibold text-lg mb-3 flex items-center gap-2"><ShieldAlert size={18}/> Penalties</h2>
+            <section className="section-card">
+                <h2 className="section-title mb-4 flex items-center gap-2"><ShieldAlert size={18}/> Penalties</h2>
                 {penalties.length === 0 ? <p className="text-gray-500">No penalties.</p> : (
-                    <ul className="space-y-3">
+                    <ul className="space-y-4">
                         {penalties.map((p) => (
                             <li key={p.id} className="border border-gray-200 rounded p-3">
                                 <div className="flex justify-between items-center">

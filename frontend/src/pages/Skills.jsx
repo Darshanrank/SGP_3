@@ -29,11 +29,11 @@ const DebounceSearch = ({ value, onChange, delay = 400 }) => {
     useEffect(() => () => clearTimeout(timerRef.current), []);
 
     return (
-        <div className="flex gap-2 mb-4">
+        <div className="flex w-full">
             <input 
                 type="text" 
                 placeholder="Search skills..." 
-                className="border border-gray-300 rounded px-3 py-2 w-full max-w-sm"
+                className="border border-gray-300 rounded px-3 py-2 w-full"
                 value={localValue}
                 onChange={handleChange}
             />
@@ -146,14 +146,14 @@ const Skills = () => {
     const skillUsers = skillUsersData?.data || [];
 
 
-    if (activeTab === 'explore' && loadingAll && page === 1) return <div className="p-8 text-center">Loading skills...</div>;
-    if (activeTab === 'my' && loadingMy) return <div className="p-8 text-center">Loading your skills...</div>;
-    if (errorAll) return <div className="p-8 text-center text-red-500">Error loading skills</div>;
+    if (activeTab === 'explore' && loadingAll && page === 1) return <div className="section-card text-center">Loading skills...</div>;
+    if (activeTab === 'my' && loadingMy) return <div className="section-card text-center">Loading your skills...</div>;
+    if (errorAll) return <div className="section-card text-center text-red-500">Error loading skills</div>;
 
     return (
-        <div className="space-y-6">
+        <div className="page-shell">
             <div className="flex justify-between items-center flex-wrap gap-4">
-                <h1 className="text-2xl font-bold text-gray-900">Skills</h1>
+                <h1 className="page-title">Skills</h1>
                 
                 <div className="flex space-x-2">
                     <Button
@@ -176,12 +176,12 @@ const Skills = () => {
 
             {/* Search Bar & Category Filter for Explore (debounced) */}
             {activeTab === 'explore' && !selectedSkill && (
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="section-card flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
                     <DebounceSearch value={search} onChange={(val) => { setSearch(val); setPage(1); }} />
                     <select
                         value={selectedCategory}
                         onChange={(e) => { setSelectedCategory(e.target.value); setPage(1); }}
-                        className="border border-gray-300 rounded px-3 py-2 text-sm h-10.5 min-w-45"
+                        className="border border-gray-300 rounded px-3 py-2 text-sm h-10.5 min-w-45 sm:max-w-60"
                     >
                         <option value="">All Categories</option>
                         {categories.map(cat => (
@@ -193,10 +193,10 @@ const Skills = () => {
             
             {activeTab === 'explore' && !selectedSkill && (
                 <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
                         {allSkills.map((skill) => (
-                            <div key={skill.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleViewSkill(skill)}>
-                                <h3 className="font-semibold text-lg text-blue-600">{skill.name}</h3>
+                            <div key={skill.id} className="section-card hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleViewSkill(skill)}>
+                                <h3 className="font-semibold text-[17px] text-blue-600">{skill.name}</h3>
                                 <p className="text-gray-500 text-sm mt-1">{skill.category}</p>
                                 <div className="mt-4 text-xs font-medium text-gray-400">Click to find teachers</div>
                             </div>
@@ -226,10 +226,10 @@ const Skills = () => {
             )}
 
             {selectedSkill && (
-                <div className="space-y-6">
+                <div className="section-card space-y-6">
                     <div className="flex items-center space-x-4">
                         <Button variant="ghost" onClick={() => setSelectedSkill(null)}>&larr; Back</Button>
-                        <h2 className="text-xl font-bold">Users for {selectedSkill.name}</h2>
+                        <h2 className="section-title">Users for {selectedSkill.name}</h2>
                     </div>
 
                     {loadingUsers ? <p>Loading users...</p> : (
@@ -238,7 +238,7 @@ const Skills = () => {
                                 <p className="text-gray-500">No teachers found for this skill yet.</p>
                             ) : (
                                 skillUsers.filter(u => u.type === 'TEACH' && u.user?.userId !== user?.userId).map(us => (
-                                    <div key={us.id} className="bg-white p-4 rounded-lg flex justify-between items-center shadow-sm border border-gray-100">
+                                    <div key={us.id} className="bg-white p-5 rounded-xl flex justify-between items-center shadow-sm border border-gray-100">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
                                                 <button
@@ -351,10 +351,10 @@ const Skills = () => {
             )}
 
             {activeTab === 'my' && (
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
                     {/* mySkills is likely just an array from backend, not paginated object, adjust if needed */}
                     {(!mySkills || mySkills.length === 0) ? <p>You haven't added any skills yet.</p> : mySkills.map(us => (
-                        <div key={us.id} className="bg-white p-4 rounded-lg border border-gray-100 flex justify-between items-center">
+                        <div key={us.id} className="section-card flex justify-between items-center">
                             <div>
                                 <h3 className="font-bold">{us.skill.name}</h3>
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${us.type === 'TEACH' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>

@@ -17,6 +17,45 @@ const sanitizeBio = (html) => sanitizeHtml(html, {
     disallowedTagsMode: 'discard'
 });
 
+const VALID_WEEK_DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+const USERNAME_MIN = 3;
+const USERNAME_MAX = 30;
+const USERNAME_REGEX = /^[a-z0-9_]+$/;
+
+const normalizeAvailabilitySlots = (availability = []) => {
+    if (!Array.isArray(availability)) return [];
+
+    const normalized = [];
+    availability.forEach((slot) => {
+        const startTime = slot?.startTime;
+        const endTime = slot?.endTime;
+        const timezone = slot?.timezone;
+        const rawDays = Array.isArray(slot?.days)
+            ? slot.days
+            : Array.isArray(slot?.dayOfWeek)
+                ? slot.dayOfWeek
+                : slot?.dayOfWeek
+                    ? [slot.dayOfWeek]
+                    : [];
+
+        if (!startTime || !endTime || !timezone) return;
+
+        rawDays
+            .map((day) => String(day).trim().toUpperCase())
+            .filter((day) => VALID_WEEK_DAYS.includes(day))
+            .forEach((dayOfWeek) => {
+                normalized.push({ dayOfWeek, startTime, endTime, timezone });
+            });
+    });
+
+    const deduplicated = new Map();
+    normalized.forEach((slot) => {
+        deduplicated.set(`${slot.dayOfWeek}|${slot.startTime}|${slot.endTime}|${slot.timezone}`, slot);
+    });
+
+    return Array.from(deduplicated.values());
+};
+
 export const getMyProfileService = async (userId) => {
     const user = await prisma.users.findUnique({
         where: { userId },
@@ -58,18 +97,26 @@ export const updateProfileService = async (userId, data) => {
         availability
     } = data;
 
-    const normalizedAvailability = Array.isArray(availability)
-        ? availability.filter((slot) => slot?.dayOfWeek && slot?.startTime && slot?.endTime && slot?.timezone)
-        : [];
+    const normalizedAvailability = normalizeAvailabilitySlots(availability);
 
     // Sanitize bio if provided
     const safeBio = bio ? sanitizeBio(bio) : bio;
 
     return await prisma.$transaction(async (tx) => {
         if (username) {
+            const normalizedUsername = String(username).trim().toLowerCase();
+
+            if (normalizedUsername.length < USERNAME_MIN || normalizedUsername.length > USERNAME_MAX) {
+                throw new ValidationError(`Username must be ${USERNAME_MIN}-${USERNAME_MAX} characters`, 'USERNAME_INVALID_LENGTH');
+            }
+
+            if (!USERNAME_REGEX.test(normalizedUsername)) {
+                throw new ValidationError('Username must contain only lowercase letters, numbers, and underscore (_)', 'USERNAME_INVALID_FORMAT');
+            }
+
             const existing = await tx.users.findFirst({
                 where: {
-                    username,
+                    username: normalizedUsername,
                     NOT: { userId }
                 }
             });
@@ -80,7 +127,7 @@ export const updateProfileService = async (userId, data) => {
 
             await tx.users.update({
                 where: { userId },
-                data: { username }
+                data: { username: normalizedUsername }
             });
         }
 
@@ -124,7 +171,7 @@ export const updateProfileService = async (userId, data) => {
                 await tx.userAvailability.createMany({
                     data: normalizedAvailability.map((slot) => ({
                         userId,
-                        dayOfWeek: String(slot.dayOfWeek).toUpperCase(),
+                        dayOfWeek: slot.dayOfWeek,
                         startTime: slot.startTime,
                         endTime: slot.endTime,
                         timezone: slot.timezone
@@ -173,8 +220,10 @@ export const getPublicProfileService = async (userId) => {
 };
 
 export const getPublicProfileByUsernameService = async (username) => {
+    const normalizedUsername = String(username || '').trim().toLowerCase();
+
     const user = await prisma.users.findFirst({
-        where: { username },
+        where: { username: normalizedUsername },
         select: {
             userId: true,
             username: true,

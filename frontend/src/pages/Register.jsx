@@ -6,6 +6,8 @@ import { toast } from 'react-hot-toast';
 import { useState } from 'react';
 import clsx from 'clsx';
 
+const USERNAME_REGEX = /^[a-z0-9_]+$/;
+
 const Register = () => {
     const { register: registerField, handleSubmit, formState: { errors }, watch } = useForm();
     const { register: registerUser } = useAuth();
@@ -21,7 +23,7 @@ const Register = () => {
         setIsLoading(true);
         try {
             await registerUser({
-                username: data.username,
+                username: data.username.trim().toLowerCase(),
                 email: data.email,
                 password: data.password
             });
@@ -62,11 +64,20 @@ const Register = () => {
                                     type="text"
                                     {...registerField('username', { 
                                         required: 'Username is required',
-                                        minLength: { value: 3, message: 'Username must be at least 3 characters' }
+                                        minLength: { value: 3, message: 'Username must be at least 3 characters' },
+                                        maxLength: { value: 30, message: 'Username can be at most 30 characters' },
+                                        pattern: {
+                                            value: USERNAME_REGEX,
+                                            message: 'Use only lowercase letters, numbers, and underscore (_)'
+                                        }
                                     })}
+                                    onInput={(e) => {
+                                        e.target.value = e.target.value.toLowerCase();
+                                    }}
                                     className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                 />
                                 {errors.username && <p className="mt-1 text-sm text-red-600">{errors.username.message}</p>}
+                                {!errors.username && <p className="mt-1 text-xs text-gray-500">Allowed: a-z, 0-9, underscore (_)</p>}
                             </div>
                         </div>
 
