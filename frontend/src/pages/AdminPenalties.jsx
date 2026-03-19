@@ -43,34 +43,37 @@ const AdminPenalties = () => {
     if (user && user.role !== 'ADMIN') return <div>Admin access required.</div>;
 
     return (
-        <div className="space-y-5">
-            <h1 className="text-2xl font-bold">Admin Penalties</h1>
+        <div className="page-shell">
+            <header className="flex items-center justify-between gap-3">
+                <h1 className="page-title">Admin Penalties</h1>
+                <Button onClick={load} disabled={loading}>Refresh</Button>
+            </header>
 
-            <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3">
+            <form onSubmit={handleSubmit} className="section-card space-y-4">
+                <h2 className="section-title">Create Penalty</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <Input label="User ID" value={form.userId} onChange={(e) => setForm({ ...form, userId: e.target.value })} required />
                     <Input label="Penalty Type" value={form.penaltyType} onChange={(e) => setForm({ ...form, penaltyType: e.target.value })} required />
                     <Input label="Reason" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} required />
                 </div>
-                <Button type="submit" disabled={saving}>Add Penalty</Button>
+                <div className="flex justify-end">
+                    <Button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Add Penalty'}</Button>
+                </div>
             </form>
 
-            <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Recent Penalties</h2>
-                <Button onClick={load} disabled={loading}>Refresh</Button>
-            </div>
+            <h2 className="section-title">Recent Penalties</h2>
 
             {loading ? <div>Loading penalties...</div> : (
                 <div className="space-y-3">
-                    {penalties.length === 0 ? <p className="text-gray-500">No penalties found.</p> : penalties.map((p) => (
-                        <div key={p.id || `${p.userId}-${p.penaltyType}`} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                    {penalties.length === 0 ? <p className="text-[#8DA0BF]">No penalties found.</p> : penalties.map((p) => (
+                        <div key={p.id || `${p.userId}-${p.penaltyType}`} className="section-card border-[#EF4444]/30 bg-[#EF4444]/10">
                             <div className="flex justify-between">
                                 <div>
-                                    <p className="font-semibold">{p.penaltyType}</p>
-                                    <p className="text-sm text-gray-600">{p.reason}</p>
-                                    <p className="text-xs text-gray-400">User: {p.userId || p.user?.id}</p>
+                                    <p className="font-semibold text-[#DCE7F5]">{p.penaltyType}</p>
+                                    <p className="text-sm text-[#8DA0BF]">{p.reason}</p>
+                                    <p className="text-xs text-[#8DA0BF]">User: {p.userId || p.user?.id}</p>
                                 </div>
-                                <span className="text-xs text-gray-400">{p.createdAt ? new Date(p.createdAt).toLocaleString() : 'Just now'}</span>
+                                <span className="text-xs text-[#8DA0BF]">{p.createdAt ? new Date(p.createdAt).toLocaleString() : 'Just now'}</span>
                             </div>
                         </div>
                     ))}

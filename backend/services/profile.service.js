@@ -294,3 +294,131 @@ export const sendUpcomingReminderService = async (userId) => {
 
     return { message: 'Reminder email sent successfully' };
 };
+
+export const getFeaturedProfilesService = async ({ limit = 8, category = '', search = '' } = {}) => {
+    const safeLimit = Number.isFinite(Number(limit)) ? Math.min(Math.max(Number(limit), 1), 20) : 8;
+    const normalizedCategory = String(category || '').trim();
+    const normalizedSearch = String(search || '').trim();
+
+    const users = await prisma.users.findMany({
+        where: {
+            isVerified: true,
+            profile: {
+                is: {
+                    profileCompleted: true
+                }
+            },
+            userSkills: {
+                some: {
+                    type: 'TEACH',
+                    ...(normalizedCategory ? { skill: { category: normalizedCategory } } : {}),
+                    ...(normalizedSearch
+                        ? {
+                            OR: [
+                                { skill: { name: { contains: normalizedSearch } } },
+                                { skill: { category: { contains: normalizedSearch } } }
+                            ]
+                        }
+                        : {})
+                }
+            },
+            ...(normalizedSearch
+                ? {
+                    OR: [
+                        { username: { contains: normalizedSearch } },
+                        { profile: { is: { fullName: { contains: normalizedSearch } } } }
+                    ]
+                }
+                : {})
+        },
+        select: {
+            userId: true,
+            username: true,
+            profile: {
+                select: {
+                    fullName: true,
+                    avatarUrl: true
+                }
+            },
+            userSkills: {
+                where: {
+                    type: {
+                        in: ['TEACH', 'LEARN']
+                    }
+                },
+                select: {
+                    type: true,
+                    skill: {
+                        select: {
+                            name: true,
+                            category: true
+                        }
+                    }
+                }
+            },
+            rewards: {
+                select: {
+                    points: true,
+                    totalSwaps: true
+                }
+            }
+        },
+        orderBy: [
+            { createdAt: 'desc' }
+        ],
+        take: safeLimit
+    });
+
+    const userIds = users.map((u) => u.userId);
+    const ratingRows = userIds.length
+        ? await prisma.swapReview.groupBy({
+            by: ['revieweeId'],
+            where: { revieweeId: { in: userIds } },
+            _avg: { rating: true },
+            _count: { rating: true }
+        })
+        : [];
+
+    const ratingMap = new Map(ratingRows.map((row) => [
+        row.revieweeId,
+        {
+            avgRating: row._avg.rating ? Number(row._avg.rating.toFixed(1)) : 0,
+            reviewCount: row._count.rating || 0
+        }
+    ]));
+
+    return users.map((u) => {
+        const teachSkills = u.userSkills
+            .filter((s) => s.type === 'TEACH')
+            .map((s) => s.skill?.name)
+            .filter(Boolean);
+
+        const learnSkills = u.userSkills
+            .filter((s) => s.type === 'LEARN')
+            .map((s) => s.skill?.name)
+            .filter(Boolean);
+
+        const categories = [...new Set(
+            u.userSkills
+                .filter((s) => s.type === 'TEACH')
+                .map((s) => s.skill?.category)
+                .filter(Boolean)
+        )];
+
+        const rating = ratingMap.get(u.userId) || { avgRating: 0, reviewCount: 0 };
+
+        return {
+            userId: u.userId,
+            username: u.username,
+            fullName: u.profile?.fullName || '',
+            avatarUrl: u.profile?.avatarUrl || '',
+            teachSkills,
+            learnSkills,
+            categories,
+            avgRating: rating.avgRating,
+            reviewCount: rating.reviewCount,
+            points: u.rewards?.points || 0,
+            totalSwaps: u.rewards?.totalSwaps || 0
+        };
+    });
+};

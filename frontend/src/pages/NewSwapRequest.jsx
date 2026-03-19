@@ -315,8 +315,8 @@ const NewSwapRequest = () => {
                                         key={skill.id}
                                         className={`relative border rounded-xl p-4 cursor-pointer transition-all ${
                                             selectedLearnSkillId === skill.id
-                                                ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                                                : 'border-gray-200 hover:border-green-300 hover:bg-green-50/50'
+                                                ? 'border-[#22C55E] bg-[#22C55E]/12 ring-2 ring-[#22C55E]/30'
+                                                : 'border-white/10 bg-[#111721] hover:border-[#22C55E]/45 hover:bg-[#151D27]'
                                         }`}
                                         onClick={() => setSelectedLearnSkillId(skill.id)}
                                     >
@@ -380,8 +380,8 @@ const NewSwapRequest = () => {
                                 <div
                                     className={`border rounded-xl p-4 cursor-pointer transition-all ${
                                         selectedTeachSkillId === null
-                                            ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                                            : 'border-gray-200 hover:border-blue-300'
+                                            ? 'border-[#0A4D9F] bg-[#0A4D9F]/15 ring-2 ring-[#0A4D9F]/35'
+                                            : 'border-white/10 bg-[#111721] hover:border-[#0A4D9F]/45 hover:bg-[#151D27]'
                                     }`}
                                     onClick={() => setSelectedTeachSkillId(null)}
                                 >
@@ -405,8 +405,8 @@ const NewSwapRequest = () => {
                                             key={skill.id}
                                             className={`border rounded-xl p-4 cursor-pointer transition-all ${
                                                 selectedTeachSkillId === skill.id
-                                                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                                                    : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
+                                                    ? 'border-[#0A4D9F] bg-[#0A4D9F]/15 ring-2 ring-[#0A4D9F]/35'
+                                                    : 'border-white/10 bg-[#111721] hover:border-[#0A4D9F]/45 hover:bg-[#151D27]'
                                             }`}
                                             onClick={() => setSelectedTeachSkillId(skill.id)}
                                         >

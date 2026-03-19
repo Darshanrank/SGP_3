@@ -15,6 +15,10 @@ export const markNotificationRead = async (id) => {
     await api.put(`/meta/notifications/${id}/read`);
 };
 
+export const markNotificationUnread = async (id) => {
+    await api.put(`/meta/notifications/${id}/unread`);
+};
+
 export const markAllNotificationsRead = async () => {
     const response = await api.put('/meta/notifications/read-all');
     return response.data;

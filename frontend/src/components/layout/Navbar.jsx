@@ -7,18 +7,18 @@ import clsx from 'clsx';
 
 const navLinkClass = ({ isActive }) =>
     clsx(
-        'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
+        'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200',
         isActive
-            ? 'border-blue-500 text-blue-600'
-            : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+            ? 'border-[#0A4D9F] text-[#DCE7F5]'
+            : 'border-transparent text-[#8DA0BF] hover:border-white/20 hover:text-[#0A4D9F]'
     );
 
 const mobileLinkClass = ({ isActive }) =>
     clsx(
-        'block pl-3 pr-4 py-2 border-l-4 text-base font-medium',
+        'block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors duration-200',
         isActive
-            ? 'bg-blue-50 border-blue-500 text-blue-700'
-            : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
+            ? 'bg-[#151D27] border-[#0A4D9F] text-[#DCE7F5]'
+            : 'border-transparent text-[#8DA0BF] hover:bg-[#151D27] hover:border-white/10 hover:text-[#0A4D9F]'
     );
 
 const Navbar = () => {
@@ -26,6 +26,8 @@ const Navbar = () => {
     const navigate = useNavigate();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const isAdmin = user?.role === 'ADMIN' || user?.isAdmin;
+    const displayName = user?.profile?.fullName?.trim() || user?.fullName?.trim() || user?.username || user?.email || 'User';
+    const secondaryIdentity = user?.username ? `@${user.username}` : user?.email || '';
 
     const handleLogout = async () => {
         try {
@@ -37,12 +39,12 @@ const Navbar = () => {
     };
 
     return (
-        <nav className="bg-white border-b border-gray-200">
+        <nav className="border-b border-white/5 bg-[#0B111A]/85 backdrop-blur-md">
             <div className="app-container">
                 <div className="flex justify-between h-16">
                     <div className="flex">
                         <Link to="/" className="shrink-0 flex items-center">
-                            <span className="text-xl font-bold text-blue-600">SkillSwap</span>
+                            <span className="text-xl font-bold tracking-tight text-[#DCE7F5]">SkillSwap</span>
                         </Link>
                         <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
                             {!user && (
@@ -85,14 +87,14 @@ const Navbar = () => {
                     <div className="hidden sm:ml-6 sm:flex sm:items-center">
                         {user ? (
                             <div className="ml-3 relative flex items-center space-x-4">
-                                <span className="text-gray-700 text-sm font-medium">{user.username || user.email}</span>
+                                <span className="text-[#DCE7F5] text-sm font-medium">{displayName}</span>
                                 <button
                                     onClick={handleLogout}
-                                    className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                    className="rounded-full p-1 text-[#8DA0BF] hover:text-[#DCE7F5] focus:outline-none focus:ring-2 focus:ring-[#0A4D9F]/70"
                                 >
                                     <LogOut className="h-6 w-6" aria-hidden="true" />
                                 </button>
-                                <Link to="/profile" className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <Link to="/profile" className="rounded-full p-1 text-[#8DA0BF] hover:text-[#DCE7F5] focus:outline-none focus:ring-2 focus:ring-[#0A4D9F]/70">
                                    {user?.profile?.avatarUrl ? (
                                        <img src={user.profile.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
                                    ) : (
@@ -102,10 +104,10 @@ const Navbar = () => {
                             </div>
                         ) : (
                             <div className="flex space-x-4">
-                                <Link to="/login" className="text-gray-500 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
+                                <Link to="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-[#8DA0BF] hover:bg-[#151D27] hover:text-[#DCE7F5]">
                                     Sign in
                                 </Link>
-                                <Link to="/register" className="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium">
+                                <Link to="/register" className="rounded-lg bg-[#0A4D9F] px-4 py-2 text-sm font-medium text-white hover:bg-[#083A78]">
                                     Sign up
                                 </Link>
                             </div>
@@ -116,7 +118,7 @@ const Navbar = () => {
                     <div className="-mr-2 flex items-center sm:hidden">
                         <button
                             onClick={() => setIsMenuOpen(!isMenuOpen)}
-                            className="bg-white inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            className="inline-flex items-center justify-center rounded-md p-2 text-[#8DA0BF] hover:bg-[#151D27] hover:text-[#DCE7F5] focus:outline-none focus:ring-2 focus:ring-[#0A4D9F]/70"
                         >
                             <span className="sr-only">Open main menu</span>
                             {isMenuOpen ? (
@@ -176,7 +178,7 @@ const Navbar = () => {
                                 </NavLink>
                                  <button
                                     onClick={handleLogout}
-                                    className="w-full text-left border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+                                    className="block w-full border-l-4 border-transparent py-2 pl-3 pr-4 text-left text-base font-medium text-[#8DA0BF] hover:border-white/10 hover:bg-[#151D27] hover:text-[#DCE7F5]"
                                 >
                                     Log out
                                 </button>
@@ -184,7 +186,7 @@ const Navbar = () => {
                         )}
                     </div>
                 </div>
-                <div className="pt-4 pb-4 border-t border-gray-200">
+                <div className="border-t border-white/5 pt-4 pb-4">
                     <div className="app-container">
                         {user ? (
                             <div className="flex items-center px-0">
@@ -192,26 +194,26 @@ const Navbar = () => {
                                     {user?.profile?.avatarUrl ? (
                                         <img src={user.profile.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
                                     ) : (
-                                        <User className="h-10 w-10 rounded-full bg-gray-100 p-2" />
+                                        <User className="h-10 w-10 rounded-full bg-[#151D27] p-2 text-[#8DA0BF]" />
                                     )}
                                 </div>
                                 <div className="ml-3">
-                                    <div className="text-base font-medium text-gray-800">{user.username}</div>
-                                    <div className="text-sm font-medium text-gray-500">{user.email}</div>
+                                    <div className="text-base font-medium text-[#DCE7F5]">{displayName}</div>
+                                    <div className="text-sm font-medium text-[#8DA0BF]">{secondaryIdentity || user.email}</div>
                                 </div>
                                 <button
                                     onClick={handleLogout}
-                                    className="ml-auto shrink-0 bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                    className="ml-auto shrink-0 rounded-full p-1 text-[#8DA0BF] hover:bg-[#151D27] hover:text-[#DCE7F5] focus:outline-none focus:ring-2 focus:ring-[#0A4D9F]/70"
                                 >
                                     <LogOut className="h-6 w-6" aria-hidden="true" />
                                 </button>
                             </div>
                         ) : (
                             <div className="mt-3 space-y-1 px-0">
-                                 <Link to="/login" className="block text-center w-full border border-gray-300 rounded-md py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                 <Link to="/login" className="block w-full rounded-lg border border-white/10 py-2 text-center text-sm font-medium text-[#DCE7F5] hover:bg-[#151D27]">
                                     Sign in
                                 </Link>
-                                <Link to="/register" className="block text-center w-full mt-2 bg-blue-600 border border-transparent rounded-md py-2 text-sm font-medium text-white hover:bg-blue-700">
+                                <Link to="/register" className="mt-2 block w-full rounded-lg border border-transparent bg-[#0A4D9F] py-2 text-center text-sm font-medium text-white hover:bg-[#083A78]">
                                     Sign up
                                 </Link>
                             </div>

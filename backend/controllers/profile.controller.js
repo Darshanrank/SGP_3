@@ -1,4 +1,4 @@
-import { getMyProfileService, updateProfileService, getPublicProfileService, getPublicProfileByUsernameService, sendUpcomingReminderService } from '../services/profile.service.js';
+import { getMyProfileService, updateProfileService, getPublicProfileService, getPublicProfileByUsernameService, sendUpcomingReminderService, getFeaturedProfilesService } from '../services/profile.service.js';
 import { deleteAccountService } from '../services/deleteAccount.service.js';
 import { ValidationError } from '../errors/generic.errors.js';
 import { conf } from '../conf/conf.js';
@@ -91,6 +91,16 @@ export const sendUpcomingReminder = async (req, res, next) => {
         const userId = req.user.userId;
         const result = await sendUpcomingReminderService(userId);
         res.status(200).json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getFeaturedProfiles = async (req, res, next) => {
+    try {
+        const { limit, category, search } = req.query;
+        const data = await getFeaturedProfilesService({ limit, category, search });
+        res.json({ data });
     } catch (error) {
         next(error);
     }

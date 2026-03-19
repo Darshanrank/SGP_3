@@ -223,30 +223,30 @@ const PublicProfile = () => {
             </div>
 
             {/* ───── Ranking & Stats ───── */}
-            <div className="bg-linear-to-r from-amber-50 via-yellow-50 to-orange-50 rounded-xl border border-amber-200 p-6">
-                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
-                    <Trophy className="h-5 w-5 text-amber-500" /> Rankings & Stats
+            <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
+                <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#DCE7F5]">
+                    <Trophy className="h-5 w-5 text-[#F59E0B]" /> Rankings & Stats
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-amber-100">
-                        <Zap className="h-6 w-6 text-amber-500 mx-auto mb-1" />
-                        <p className="text-2xl font-bold text-gray-900">{reward.points}</p>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Points</p>
+                    <div className="rounded-lg border border-white/10 bg-[#0E1620] p-4 text-center shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
+                        <Zap className="mx-auto mb-1 h-6 w-6 text-[#F59E0B]" />
+                        <p className="text-2xl font-bold text-[#F7FBFF]">{reward.points}</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Points</p>
                     </div>
-                    <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-amber-100">
-                        <ArrowRightLeft className="h-6 w-6 text-blue-500 mx-auto mb-1" />
-                        <p className="text-2xl font-bold text-gray-900">{reward.totalSwaps}</p>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Swaps</p>
+                    <div className="rounded-lg border border-white/10 bg-[#0E1620] p-4 text-center shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
+                        <ArrowRightLeft className="mx-auto mb-1 h-6 w-6 text-[#3B82F6]" />
+                        <p className="text-2xl font-bold text-[#F7FBFF]">{reward.totalSwaps}</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Total Swaps</p>
                     </div>
-                    <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-amber-100">
-                        <Star className="h-6 w-6 text-yellow-400 mx-auto mb-1 fill-yellow-400" />
-                        <p className="text-2xl font-bold text-gray-900">{rating.reviewCount > 0 ? Number(rating.avgRating).toFixed(1) : '—'}</p>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Avg Rating</p>
+                    <div className="rounded-lg border border-white/10 bg-[#0E1620] p-4 text-center shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
+                        <Star className="mx-auto mb-1 h-6 w-6 fill-[#FACC15] text-[#FACC15]" />
+                        <p className="text-2xl font-bold text-[#F7FBFF]">{rating.reviewCount > 0 ? Number(rating.avgRating).toFixed(1) : '-'}</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Avg Rating</p>
                     </div>
-                    <div className="bg-white rounded-lg p-4 text-center shadow-sm border border-amber-100">
-                        <Award className="h-6 w-6 text-purple-500 mx-auto mb-1" />
-                        <p className="text-2xl font-bold text-gray-900">{badges.length}</p>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Badges</p>
+                    <div className="rounded-lg border border-white/10 bg-[#0E1620] p-4 text-center shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
+                        <Award className="mx-auto mb-1 h-6 w-6 text-[#A855F7]" />
+                        <p className="text-2xl font-bold text-[#F7FBFF]">{badges.length}</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Badges</p>
                     </div>
                 </div>
 
@@ -256,10 +256,10 @@ const PublicProfile = () => {
                         {badges.map((b) => (
                             <span
                                 key={b.id}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-white rounded-full text-sm font-medium text-amber-800 border border-amber-200 shadow-sm"
+                                className="inline-flex items-center gap-1 rounded-full border border-[#F59E0B]/35 bg-[#F59E0B]/15 px-3 py-1.5 text-sm font-medium text-[#FCD34D]"
                                 title={b.badge.condition}
                             >
-                                <Award className="h-3.5 w-3.5 text-amber-500" />
+                                <Award className="h-3.5 w-3.5 text-[#F59E0B]" />
                                 {b.badge.name}
                             </span>
                         ))}

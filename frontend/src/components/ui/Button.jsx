@@ -3,13 +3,13 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 export const Button = forwardRef(({ children, className, variant = 'primary', size = 'md', ...props }, ref) => {
-    const baseStyles = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none';
+    const baseStyles = 'inline-flex items-center justify-center rounded-xl font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#0A4D9F]/70 focus:ring-offset-0 disabled:opacity-50 disabled:pointer-events-none';
     
     const variants = {
-        primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
-        secondary: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-blue-500',
-        danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
-        ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500',
+        primary: 'bg-[#0A4D9F] text-white hover:bg-[#083A78] shadow-[0_10px_24px_rgba(10,77,159,0.35)]',
+        secondary: 'bg-[#111721] text-[#DCE7F5] border border-white/10 hover:bg-[#151D27]',
+        danger: 'bg-[#EF4444] text-white hover:bg-[#dc2626] shadow-[0_10px_24px_rgba(239,68,68,0.35)]',
+        ghost: 'bg-transparent text-[#8DA0BF] hover:bg-[#151D27] hover:text-[#DCE7F5] border border-transparent',
     };
 
     const sizes = {

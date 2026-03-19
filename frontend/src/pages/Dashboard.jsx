@@ -79,7 +79,7 @@ const Dashboard = () => {
 
             <header className="space-y-2">
                 <h1 className="page-title">Dashboard</h1>
-                <p className="mt-1 text-sm text-gray-500">Welcome back, {user?.username}!</p>
+                <p className="mt-1 text-sm text-[#8DA0BF]">Welcome back, {user?.username}!</p>
             </header>
 
             {/* Stats Grid */}
@@ -93,15 +93,15 @@ const Dashboard = () => {
                     </>
                 ) : (
                     stats.map((item) => (
-                        <div key={item.name} className="relative overflow-hidden rounded-[10px] border border-gray-200 bg-white p-5 shadow-sm">
+                        <div key={item.name} className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#111721] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.55)] transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
                             <dt>
                                 <div className={`absolute top-5 left-5 rounded-md p-3 ${item.color}`}>
                                     <item.icon className="h-6 w-6 text-white" aria-hidden="true" />
                                 </div>
-                                <p className="ml-16 text-sm font-medium text-gray-500 truncate">{item.name}</p>
+                                <p className="ml-16 truncate text-sm font-medium text-[#8DA0BF]">{item.name}</p>
                             </dt>
                             <dd className="ml-16 mt-2 flex items-baseline">
-                                <p className="text-2xl font-semibold text-gray-900">{item.stat}</p>
+                                <p className="text-2xl font-semibold text-[#DCE7F5]">{item.stat}</p>
                             </dd>
                         </div>
                     ))
@@ -115,36 +115,36 @@ const Dashboard = () => {
                         <h2 className="section-title flex items-center gap-2">
                             <Sparkles className="h-5 w-5 text-yellow-500" /> Suggested Swaps
                         </h2>
-                        <Link to="/skills" className="text-sm text-blue-600 hover:text-blue-500">Browse all</Link>
+                        <Link to="/skills" className="text-sm text-[#8DA0BF] hover:text-[#0A4D9F]">Browse all</Link>
                     </div>
-                    <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {matches.map((m) => (
-                            <div key={m.userId} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div key={m.userId} className="h-full rounded-2xl border border-white/10 bg-[#0E1620] p-4 transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
                                 <div className="flex items-center gap-3 mb-2">
                                     {m.avatarUrl ? (
-                                        <img src={m.avatarUrl} alt={m.username || 'User'} className="w-10 h-10 rounded-full object-cover border border-gray-200" />
+                                        <img src={m.avatarUrl} alt={m.username || 'User'} className="w-10 h-10 rounded-full object-cover border border-white/10" />
                                     ) : (
-                                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
+                                        <div className="w-10 h-10 rounded-full bg-[#0A4D9F]/25 flex items-center justify-center text-[#DCE7F5] font-bold text-sm">
                                             {(m.username || 'U')[0].toUpperCase()}
                                         </div>
                                     )}
                                     <div className="min-w-0">
-                                        <Link to={`/u/${m.username}`} className="font-semibold text-sm text-blue-600 hover:underline truncate block">
+                                        <Link to={`/u/${m.username}`} className="font-semibold text-sm text-[#DCE7F5] hover:text-[#0A4D9F] truncate block">
                                             {m.username}
                                         </Link>
                                         {m.avgRating > 0 && (
-                                            <span className="text-xs text-yellow-600">{m.avgRating} ★ ({m.reviewCount})</span>
+                                            <span className="text-xs text-[#F59E0B]">{m.avgRating} ★ ({m.reviewCount})</span>
                                         )}
                                     </div>
                                 </div>
                                 <div className="space-y-1 mb-3">
-                                    {m.matchingTeachSkills.slice(0, 2).map(s => (
-                                        <span key={s.skillId} className="inline-block text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5 mr-1">
+                                    {m.matchingTeachSkills.slice(0, 2).map((s) => (
+                                        <span key={s.skillId} className="mr-1 inline-block rounded-full bg-[#22C55E]/20 px-2 py-0.5 text-xs text-[#22C55E]">
                                             Can teach: {s.skillName}
                                         </span>
                                     ))}
-                                    {m.mutualLearnSkills.slice(0, 1).map(s => (
-                                        <span key={s.skillId} className="inline-block text-xs bg-purple-100 text-purple-700 rounded-full px-2 py-0.5 mr-1">
+                                    {m.mutualLearnSkills.slice(0, 1).map((s) => (
+                                        <span key={s.skillId} className="mr-1 inline-block rounded-full bg-[#0A4D9F]/20 px-2 py-0.5 text-xs text-[#7BB2FF]">
                                             Wants: {s.skillName}
                                         </span>
                                     ))}
@@ -168,10 +168,10 @@ const Dashboard = () => {
                 <div className="section-card">
                     <h2 className="section-title mb-4">Quick Actions</h2>
                     <div className="grid grid-cols-2 gap-4">
-                        <Link to="/skills/new" className="flex items-center justify-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:text-blue-500 text-gray-500 transition-colors">
+                        <Link to="/skills/new" className="flex items-center justify-center p-4 border border-dashed border-white/15 rounded-xl hover:border-[#0A4D9F] hover:text-[#DCE7F5] text-[#8DA0BF] transition-colors">
                             <span className="font-medium">+ Add Skill</span>
                         </Link>
-                        <Link to="/skills" className="flex items-center justify-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:text-green-500 text-gray-500 transition-colors">
+                        <Link to="/skills" className="flex items-center justify-center p-4 border border-dashed border-white/15 rounded-xl hover:border-[#22C55E] hover:text-[#DCE7F5] text-[#8DA0BF] transition-colors">
                             <span className="font-medium">Find Swap</span>
                         </Link>
                     </div>
@@ -180,16 +180,16 @@ const Dashboard = () => {
                 <div className="section-card">
                      <div className="flex justify-between items-center mb-4">
                     <h2 className="section-title">Recent Notifications</h2>
-                        <Link to="/notifications" className="text-sm text-blue-600 hover:text-blue-500">View all</Link>
+                        <Link to="/notifications" className="text-sm text-[#8DA0BF] hover:text-[#0A4D9F]">View all</Link>
                      </div>
                      {recentNotifs.length === 0 ? (
-                         <div className="text-center text-gray-500 py-8">No new notifications</div>
+                         <div className="py-8 text-center text-[#8DA0BF]">No new notifications</div>
                      ) : (
-                         <ul className="divide-y divide-gray-100">
+                         <ul className="divide-y divide-white/5">
                              {recentNotifs.map((n) => (
-                                 <li key={n.id} className={`py-2 text-sm ${n.isRead ? 'text-gray-500' : 'text-gray-900 font-medium'}`}>
+                                 <li key={n.id} className={`py-2 text-sm ${n.isRead ? 'text-[#8DA0BF]' : 'font-medium text-[#DCE7F5]'}`}>
                                      {n.message}
-                                     <span className="block text-xs text-gray-400">{new Date(n.createdAt).toLocaleDateString()}</span>
+                                     <span className="block text-xs text-[#6F83A3]">{new Date(n.createdAt).toLocaleDateString()}</span>
                                  </li>
                              ))}
                          </ul>

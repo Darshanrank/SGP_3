@@ -103,12 +103,20 @@ export const getMyRequestsService = async (userId, type, { page = 1, limit = 20 
 
 export const updateRequestStatusService = async (userId, requestId, data) => {
     const { status, cancelReason } = data;
+    const normalizedCancelReason = typeof cancelReason === 'string' ? cancelReason.trim() : '';
     const allowedStatuses = ['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED'];
     if (!allowedStatuses.includes(status)) {
         throw new ValidationError('Invalid status');
     }
 
-    const request = await prisma.swapRequest.findUnique({ where: { id: requestId } });
+    const request = await prisma.swapRequest.findUnique({
+        where: { id: requestId },
+        include: {
+            swapClass: {
+                select: { status: true }
+            }
+        }
+    });
     if (!request) throw new NotFound('Request not found');
 
     if (request.toUserId !== userId && request.fromUserId !== userId) {
@@ -119,8 +127,16 @@ export const updateRequestStatusService = async (userId, requestId, data) => {
         if (request.toUserId !== userId) throw new ForbiddenError('Only receiver can accept/reject');
     }
 
-    if (status === 'CANCELLED' && request.fromUserId !== userId && request.toUserId !== userId) {
-        throw new ForbiddenError('Not authorized');
+    if (status === 'CANCELLED') {
+        if (request.fromUserId !== userId) {
+            throw new ForbiddenError('Only sender can cancel this request');
+        }
+        if (!normalizedCancelReason || normalizedCancelReason.length < 5) {
+            throw new ValidationError('Cancel reason must be at least 5 characters');
+        }
+        if (request.swapClass?.status === 'COMPLETED') {
+            throw new ValidationError('Cannot cancel a completed swap class');
+        }
     }
 
     if (request.status === 'REJECTED' || request.status === 'CANCELLED') {
@@ -136,7 +152,10 @@ export const updateRequestStatusService = async (userId, requestId, data) => {
     return await prisma.$transaction(async (tx) => {
         const updated = await tx.swapRequest.update({
             where: { id: requestId },
-            data: { status, cancelReason: cancelReason || null }
+            data: {
+                status,
+                cancelReason: status === 'CANCELLED' ? normalizedCancelReason : null
+            }
         });
 
         if (status === 'ACCEPTED') {

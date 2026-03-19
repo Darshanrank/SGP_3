@@ -52,7 +52,15 @@ const swapRequestSchema = z.object({
 
 const swapStatusSchema = z.object({
     status: z.enum(['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED']),
-    cancelReason: z.string().max(500).optional().nullable()
+    cancelReason: z.string().trim().min(5, 'Cancel reason must be at least 5 characters').max(500).optional().nullable()
+}).superRefine((data, ctx) => {
+    if (data.status === 'CANCELLED' && !data.cancelReason) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['cancelReason'],
+            message: 'Cancel reason is required when cancelling a request'
+        });
+    }
 });
 
 const todoSchema = z.object({

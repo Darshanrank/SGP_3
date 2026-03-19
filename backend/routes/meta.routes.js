@@ -2,6 +2,7 @@ import express from 'express';
 import { 
     getNotifications, 
     markNotificationRead, 
+    markNotificationUnread,
     getDashboardStats, 
     reportUser, 
     getCalendarEvents, 
@@ -34,6 +35,7 @@ router.use(validateTokenMiddleware);
 router.get('/notifications', getNotifications);
 router.get('/notifications/unread-count', getUnreadCount);
 router.put('/notifications/:id/read', markNotificationRead);
+router.put('/notifications/:id/unread', markNotificationUnread);
 router.put('/notifications/read-all', markAllNotificationsRead);
 
 // Dashboard / Gamification

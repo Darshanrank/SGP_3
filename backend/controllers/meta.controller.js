@@ -1,6 +1,7 @@
 import { 
     getNotificationsService, 
     markNotificationReadService, 
+    markNotificationUnreadService,
     getDashboardStatsService, 
     reportUserService, 
     getCalendarEventsService, 
@@ -57,6 +58,20 @@ export const markNotificationRead = async (req, res, next) => {
         }
         await markNotificationReadService(userId, id);
         res.json({ message: 'Notification marked as read' });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const markNotificationUnread = async (req, res, next) => {
+    try {
+        const id = Number.parseInt(req.params.id, 10);
+        const userId = req.user.userId;
+        if (!Number.isInteger(id)) {
+            throw new ValidationError('Invalid notification id', 'INVALID_NOTIFICATION_ID');
+        }
+        await markNotificationUnreadService(userId, id);
+        res.json({ message: 'Notification marked as unread' });
     } catch (error) {
         next(error);
     }

@@ -44,6 +44,21 @@ export const markNotificationReadService = async (userId, id) => {
     });
 };
 
+export const markNotificationUnreadService = async (userId, id) => {
+    const notification = await prisma.notification.findFirst({
+        where: { id, userId }
+    });
+
+    if (!notification) {
+        throw new NotFound('Notification not found');
+    }
+
+    return await prisma.notification.update({
+        where: { id },
+        data: { isRead: false }
+    });
+};
+
 export const markAllNotificationsReadService = async (userId) => {
     await prisma.notification.updateMany({
         where: { userId, isRead: false },

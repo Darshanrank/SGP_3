@@ -416,7 +416,7 @@ const Profile = () => {
         }
     };
 
-    const submitAll = async () => {
+    const submitAll = async ({ finalize = false } = {}) => {
         if (hasValidationErrors()) {
             toast.error('Please fix the highlighted errors before saving');
             return;
@@ -450,7 +450,8 @@ const Profile = () => {
             profilePayload.append('timezone', formData.timezone);
             profilePayload.append('upcomingSessions', formData.upcomingSessions);
             profilePayload.append('emailRemindersEnabled', String(formData.emailRemindersEnabled));
-            profilePayload.append('profileCompleted', 'true');
+            // In setup mode, only mark the profile complete on the explicit final action.
+            profilePayload.append('profileCompleted', String(!isSetupMode || finalize));
             profilePayload.append('availability', JSON.stringify(flattenedAvailability));
             profilePayload.append('avatarUrl', formData.avatarUrl || '');
 
@@ -547,10 +548,10 @@ const Profile = () => {
             if (skillSaveErrors > 0) {
                 toast.error(`${skillSaveErrors} skill(s) could not be saved. Please try again.`);
             } else {
-                toast.success('Profile setup saved successfully');
+                toast.success(finalize ? 'Profile setup saved successfully' : 'Changes saved');
             }
 
-            if (isSetupMode) {
+            if (isSetupMode && finalize) {
                 navigate('/dashboard', { replace: true });
             } else {
                 // Refresh skills and profile data to keep the form in sync
@@ -620,9 +621,31 @@ const Profile = () => {
         <div className="mx-auto w-full px-4 sm:px-8" style={{ maxWidth: '900px' }}>
             <div className="page-shell">
                 <section className="section-card space-y-4">
+                    <h3 className="text-lg font-semibold text-[#DCE7F5]">Profile Preview</h3>
+                    <div className="rounded-2xl border border-white/10 bg-[#0E1620] p-4 text-center">
+                        {avatarPreview ? (
+                            <img src={avatarPreview} alt="Profile" className="mx-auto h-16 w-16 rounded-full object-cover" />
+                        ) : (
+                            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#0A4D9F]/25 text-lg font-bold text-[#DCE7F5]">
+                                {(formData.firstName || formData.username || 'U').charAt(0).toUpperCase()}
+                            </div>
+                        )}
+                        <p className="mt-3 text-base font-semibold text-[#DCE7F5]">
+                            {composeFullName(formData.firstName, formData.lastName) || 'Your Name'}
+                        </p>
+                        <p className="text-sm text-[#8DA0BF]">@{formData.username || 'username'}</p>
+                    </div>
+                    <div className="space-y-2 text-sm text-[#8DA0BF]">
+                        <p>Teaching skills: <span className="text-[#DCE7F5]">{formData.teachSkills.filter((s) => s.skillName.trim()).length}</span></p>
+                        <p>Learning skills: <span className="text-[#DCE7F5]">{formData.learnSkills.filter((s) => s.skillName.trim()).length}</span></p>
+                        <p>Availability slots: <span className="text-[#DCE7F5]">{formData.availability.length}</span></p>
+                    </div>
+                </section>
+
+                <section className="section-card space-y-4">
                     <div>
                         <h1 className="page-title">Complete Your Profile</h1>
-                        <p className="mt-1 text-sm text-gray-600">Step {step} of {PROFILE_STEPS.length}</p>
+                        <p className="mt-1 text-sm text-[#8DA0BF]">Step {step} of {PROFILE_STEPS.length}</p>
                     </div>
 
                     <div className="flex items-center">
@@ -674,11 +697,11 @@ const Profile = () => {
                 </section>
 
                 {step === 1 && (
-                    <>
+                    <div className="space-y-6">
                         <section className="section-card space-y-6">
                             <div className="space-y-1">
-                                <h2 className="text-[21px] font-semibold text-gray-900">Profile Information</h2>
-                                <p className="text-sm text-gray-500">Set up your public identity and tell people what you want to learn.</p>
+                                <h2 className="text-[21px] font-semibold text-[#DCE7F5]">Profile Information</h2>
+                                <p className="text-sm text-[#8DA0BF]">Set up your public identity and tell people what you want to learn.</p>
                             </div>
 
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -690,7 +713,7 @@ const Profile = () => {
                                     {avatarPreview ? (
                                         <img src={avatarPreview} alt="Avatar Preview" className="h-full w-full object-cover" />
                                     ) : (
-                                        <div className="flex h-full w-full items-center justify-center text-xl font-semibold text-blue-700">
+                                        <div className="flex h-full w-full items-center justify-center text-xl font-semibold text-[#DCE7F5]">
                                             {(formData.firstName || formData.username || 'U').charAt(0).toUpperCase()}
                                         </div>
                                     )}
@@ -711,7 +734,7 @@ const Profile = () => {
                                         <button
                                             type="button"
                                             onClick={() => avatarInputRef.current?.click()}
-                                            className="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                            className="inline-flex items-center gap-1.5 rounded border border-white/10 bg-[#111721] px-3 py-1.5 text-sm font-medium text-[#DCE7F5] hover:bg-[#151D27]"
                                         >
                                             <Camera className="h-4 w-4" />
                                             {avatarPreview ? 'Change Photo' : 'Upload Photo'}
@@ -720,14 +743,14 @@ const Profile = () => {
                                             <button
                                                 type="button"
                                                 onClick={removeAvatar}
-                                                className="inline-flex items-center gap-1.5 rounded border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                                                className="inline-flex items-center gap-1.5 rounded border border-[#EF4444]/35 bg-[#EF4444]/10 px-3 py-1.5 text-sm font-medium text-[#EF4444] hover:bg-[#EF4444]/20"
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                                 Remove
                                             </button>
                                         )}
                                     </div>
-                                    <p className="text-xs text-gray-500">Upload profile photo (PNG or JPG, max 5MB).</p>
+                                    <p className="text-xs text-[#8DA0BF]">Upload profile photo (PNG or JPG, max 5MB).</p>
                                 </div>
                             </div>
 
@@ -748,8 +771,8 @@ const Profile = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
-                                <p className="text-xs text-gray-500 mb-3">Tell others about your experience, skills, or learning interests.</p>
+                                <label className="block text-sm font-medium text-[#DCE7F5] mb-2">Bio</label>
+                                <p className="text-xs text-[#8DA0BF] mb-3">Tell others about your experience, skills, or learning interests.</p>
                                 {editorLoading && (
                                     <div className="animate-pulse space-y-2 border rounded p-4" style={{ height: 180 }}>
                                         <div className="h-8 bg-gray-200 rounded w-full" />
@@ -775,11 +798,11 @@ const Profile = () => {
                                     />
                                 </div>
                                 {touched.bio && fieldErrors.bio && <p className="text-xs text-red-600 mt-1">{fieldErrors.bio}</p>}
-                                <p className="text-xs text-gray-400 mt-1">{(formData.bio || '').replace(/<[^>]*>/g, '').length} / {BIO_MAX_LENGTH} characters</p>
+                                <p className="text-xs text-[#6F83A3] mt-1">{(formData.bio || '').replace(/<[^>]*>/g, '').length} / {BIO_MAX_LENGTH} characters</p>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Preferred learning language</label>
+                                <label className="block text-sm font-medium text-[#DCE7F5] mb-2">Preferred learning language</label>
                                 <select
                                     className="w-full border rounded px-3 py-2"
                                     value={formData.learningLanguage}
@@ -793,10 +816,10 @@ const Profile = () => {
                         </section>
 
                         <section className="section-card space-y-5">
-                            <h2 className="text-[21px] font-semibold text-gray-900">Social Links</h2>
+                            <h2 className="text-[21px] font-semibold text-[#DCE7F5]">Social Links</h2>
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div>
-                                    <label className="mb-1 block text-sm font-medium text-gray-700">GitHub</label>
+                                    <label className="mb-1 block text-sm font-medium text-[#DCE7F5]">GitHub</label>
                                     <div className="relative">
                                         <Github className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                                         <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.githubLink && fieldErrors.githubLink ? 'border-red-500' : ''}`} placeholder="https://github.com/username" value={formData.githubLink} onChange={(e) => updateField('githubLink', e.target.value)} onBlur={() => markTouched('githubLink')} />
@@ -804,7 +827,7 @@ const Profile = () => {
                                     {touched.githubLink && fieldErrors.githubLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.githubLink}</p>}
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-sm font-medium text-gray-700">LinkedIn</label>
+                                    <label className="mb-1 block text-sm font-medium text-[#DCE7F5]">LinkedIn</label>
                                     <div className="relative">
                                         <Linkedin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                                         <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.linkedinLink && fieldErrors.linkedinLink ? 'border-red-500' : ''}`} placeholder="https://linkedin.com/in/username" value={formData.linkedinLink} onChange={(e) => updateField('linkedinLink', e.target.value)} onBlur={() => markTouched('linkedinLink')} />
@@ -812,7 +835,7 @@ const Profile = () => {
                                     {touched.linkedinLink && fieldErrors.linkedinLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.linkedinLink}</p>}
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-sm font-medium text-gray-700">Portfolio</label>
+                                    <label className="mb-1 block text-sm font-medium text-[#DCE7F5]">Portfolio</label>
                                     <div className="relative">
                                         <Globe className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                                         <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.portfolioLink && fieldErrors.portfolioLink ? 'border-red-500' : ''}`} placeholder="https://your-portfolio.com" value={formData.portfolioLink} onChange={(e) => updateField('portfolioLink', e.target.value)} onBlur={() => markTouched('portfolioLink')} />
@@ -820,7 +843,7 @@ const Profile = () => {
                                     {touched.portfolioLink && fieldErrors.portfolioLink && <p className="text-xs text-red-600 mt-1">{fieldErrors.portfolioLink}</p>}
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-sm font-medium text-gray-700">YouTube</label>
+                                    <label className="mb-1 block text-sm font-medium text-[#DCE7F5]">YouTube</label>
                                     <div className="relative">
                                         <Youtube className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                                         <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.youtubeLink && fieldErrors.youtubeLink ? 'border-red-500' : ''}`} placeholder="https://youtube.com/@channel" value={formData.youtubeLink} onChange={(e) => updateField('youtubeLink', e.target.value)} onBlur={() => markTouched('youtubeLink')} />
@@ -829,7 +852,7 @@ const Profile = () => {
                                 </div>
                             </div>
                         </section>
-                    </>
+                    </div>
                 )}
 
                 {step === 2 && (
@@ -1055,24 +1078,35 @@ const Profile = () => {
                         Previous
                     </button>
 
-                    {step < 3 ? (
+                    <div className="flex items-center gap-2">
                         <button
                             type="button"
-                            onClick={() => setStep((prev) => Math.min(3, prev + 1))}
-                            className="px-4 py-2 rounded bg-blue-600 text-white"
-                        >
-                            Next
-                        </button>
-                    ) : (
-                        <button
-                            type="button"
-                            onClick={submitAll}
+                            onClick={() => submitAll({ finalize: false })}
                             disabled={saving}
-                            className="px-4 py-2 rounded bg-green-600 text-white disabled:opacity-60"
+                            className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-60"
                         >
-                            {saving ? 'Saving...' : 'Complete Profile'}
+                            {saving ? 'Saving...' : `Save ${PROFILE_STEPS.find((item) => item.id === step)?.label || 'Step'}`}
                         </button>
-                    )}
+
+                        {step < 3 ? (
+                            <button
+                                type="button"
+                                onClick={() => setStep((prev) => Math.min(3, prev + 1))}
+                                className="px-4 py-2 rounded bg-[#0A4D9F] text-white"
+                            >
+                                Next
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => submitAll({ finalize: true })}
+                                disabled={saving}
+                                className="px-4 py-2 rounded bg-green-600 text-white disabled:opacity-60"
+                            >
+                                {saving ? 'Saving...' : 'Complete Profile'}
+                            </button>
+                        )}
+                    </div>
                     </div>
                 </section>
 

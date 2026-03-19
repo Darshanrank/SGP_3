@@ -43,26 +43,26 @@ const AdminReports = () => {
     if (loading) return <div>Loading reports...</div>;
 
     return (
-        <div className="space-y-4">
+        <div className="page-shell">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold">Admin Reports</h1>
+                <h1 className="page-title">Admin Reports</h1>
                 <Button onClick={load} disabled={loading || saving}>Refresh</Button>
             </div>
 
             <div className="space-y-3">
-                {reports.length === 0 ? <p className="text-gray-500">No reports.</p> : reports.map((report) => (
-                    <div key={report.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                {reports.length === 0 ? <p className="text-[#8DA0BF]">No reports.</p> : reports.map((report) => (
+                    <div key={report.id} className="section-card">
                         <div className="flex justify-between items-start gap-3">
                             <div className="space-y-1">
-                                <p className="text-sm text-gray-600">Report ID: {report.id}</p>
-                                <p className="font-semibold">{report.reason || report.type}</p>
-                                <p className="text-sm text-gray-700">{report.details || report.description}</p>
-                                <p className="text-xs text-gray-400">Filed: {new Date(report.createdAt || Date.now()).toLocaleString()}</p>
+                                <p className="text-sm text-[#8DA0BF]">Report ID: {report.id}</p>
+                                <p className="font-semibold text-[#DCE7F5]">{report.reason || report.type}</p>
+                                <p className="text-sm text-[#8DA0BF]">{report.details || report.description}</p>
+                                <p className="text-xs text-[#8DA0BF]">Filed: {new Date(report.createdAt || Date.now()).toLocaleString()}</p>
                             </div>
                             <div className="flex flex-col items-end gap-2 min-w-[160px]">
-                                <span className="text-xs uppercase tracking-wide px-2 py-1 rounded bg-gray-100 text-gray-700">{report.status}</span>
+                                <span className="rounded-full bg-[#0E1620] px-2 py-1 text-xs uppercase tracking-wide text-[#8DA0BF]">{report.status}</span>
                                 <select
-                                    className="border border-gray-300 rounded px-2 py-1 text-sm"
+                                    className="rounded-lg border border-white/10 bg-[#0E1620] px-2 py-1 text-sm text-[#DCE7F5]"
                                     value={report.status}
                                     onChange={(e) => handleStatusChange(report.id, e.target.value)}
                                     disabled={saving}

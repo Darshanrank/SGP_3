@@ -45,6 +45,16 @@ const Calendar = () => {
 
     if (loading) return <div className="section-card text-center">Loading...</div>;
 
+    const dayBuckets = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, idx) => ({
+        label,
+        count: events.filter((event) => {
+            if (!event.startTime) return false;
+            return new Date(event.startTime).getDay() === idx;
+        }).length,
+    }));
+    const upcomingCount = events.filter((event) => event.startTime && new Date(event.startTime) > new Date()).length;
+    const scheduledSwaps = events.filter((event) => Boolean(event.swapId)).length;
+
     return (
         <div className="page-shell">
             <h1 className="page-title">My Schedule</h1>
@@ -60,27 +70,53 @@ const Calendar = () => {
                 <Input label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                 <Button type="submit" disabled={saving}>Create Event</Button>
             </form>
+
+            <section className="section-card space-y-4">
+                <div className="flex items-center justify-between">
+                    <h2 className="section-title">Weekly Overview</h2>
+                    <p className="text-sm text-[#8DA0BF]">Upcoming sessions and swap availability</p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <article className="rounded-xl border border-white/10 bg-[#0E1620] p-4">
+                        <p className="text-sm text-[#8DA0BF]">Upcoming Sessions</p>
+                        <p className="mt-1 text-3xl font-semibold text-[#DCE7F5]">{upcomingCount}</p>
+                    </article>
+                    <article className="rounded-xl border border-white/10 bg-[#0E1620] p-4">
+                        <p className="text-sm text-[#8DA0BF]">Scheduled Swaps</p>
+                        <p className="mt-1 text-3xl font-semibold text-[#DCE7F5]">{scheduledSwaps}</p>
+                    </article>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+                    {dayBuckets.map((day) => (
+                        <article key={day.label} className="rounded-xl border border-white/10 bg-[#0E1620] p-3 text-center">
+                            <p className="text-xs uppercase tracking-wide text-[#8DA0BF]">{day.label}</p>
+                            <p className="mt-1 text-2xl font-semibold text-[#DCE7F5]">{day.count}</p>
+                            <p className="text-xs text-[#6F83A3]">sessions</p>
+                        </article>
+                    ))}
+                </div>
+            </section>
             
             <div className="section-card p-0! overflow-hidden">
                 {events.length === 0 ? (
-                    <div className="p-6 text-center text-gray-500">
+                    <div className="p-6 text-center text-[#8DA0BF]">
                         No active classes scheduled.
                     </div>
                 ) : (
-                    <ul className="divide-y divide-gray-200">
+                    <ul className="divide-y divide-white/5">
                         {events.map(cls => (
-                            <li key={cls.id} className="p-5 md:p-6 hover:bg-gray-50">
+                            <li key={cls.id} className="p-5 md:p-6 hover:bg-[#151D27] transition-colors">
                                 <div className="flex justify-between items-center">
                                     <div>
-                                        <h3 className="text-[17px] font-semibold text-gray-900">
+                                        <h3 className="text-[17px] font-semibold text-[#DCE7F5]">
                                             {cls.title || `Event #${cls.id}`}
                                         </h3>
-                                        <p className="text-sm text-gray-500">
+                                        <p className="text-sm text-[#8DA0BF]">
                                             {cls.startTime ? new Date(cls.startTime).toLocaleString() : 'No start'}
                                             {cls.endTime ? ` → ${new Date(cls.endTime).toLocaleString()}` : ''}
                                         </p>
-                                        {cls.location && <p className="text-sm text-gray-500">Location: {cls.location}</p>}
-                                        {cls.description && <p className="text-sm text-gray-600 mt-1">{cls.description}</p>}
+                                        {cls.location && <p className="text-sm text-[#8DA0BF]">Location: {cls.location}</p>}
+                                        {cls.description && <p className="mt-1 text-sm text-[#8DA0BF]">{cls.description}</p>}
                                     </div>
                                     {cls.swapId && (
                                         <Link to={`/swaps/${cls.swapId}`}>

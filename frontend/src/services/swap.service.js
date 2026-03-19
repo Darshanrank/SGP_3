@@ -12,8 +12,12 @@ export const getMyRequests = async (type, page = 1, limit = 20) => {
     return response.data;
 };
 
-export const updateRequestStatus = async (requestId, status) => {
-    const response = await api.put(`/swaps/requests/${requestId}`, { status });
+export const updateRequestStatus = async (requestId, status, cancelReason) => {
+    const payload = { status };
+    if (typeof cancelReason === 'string' && cancelReason.trim()) {
+        payload.cancelReason = cancelReason.trim();
+    }
+    const response = await api.put(`/swaps/requests/${requestId}`, payload);
     return response.data;
 };
 

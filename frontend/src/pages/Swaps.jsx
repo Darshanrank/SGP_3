@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { getMyRequests, updateRequestStatus, getMyClasses } from '../services/swap.service';
 import { Button } from '../components/ui/Button';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import InputDialog from '../components/ui/InputDialog';
 import { ListItemSkeleton } from '../components/ui/Skeleton';
 import { toast } from 'react-hot-toast';
 import clsx from 'clsx';
@@ -11,16 +12,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRightLeft, Clock, CheckCircle, XCircle, Ban, MessageSquare, BookOpen, GraduationCap, Plus, Inbox, Send, Users, Play, X, ExternalLink } from 'lucide-react';
 
 const statusConfig = {
-    PENDING: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
-    ACCEPTED: { label: 'Accepted', color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
-    REJECTED: { label: 'Rejected', color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
-    CANCELLED: { label: 'Cancelled', color: 'bg-gray-100 text-gray-600 border-gray-200', icon: Ban },
+    PENDING: { label: 'Pending', color: 'bg-[#F59E0B]/20 text-[#F59E0B] border-[#F59E0B]/35', icon: Clock },
+    ACCEPTED: { label: 'Accepted', color: 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/35', icon: CheckCircle },
+    REJECTED: { label: 'Rejected', color: 'bg-[#EF4444]/20 text-[#EF4444] border-[#EF4444]/35', icon: XCircle },
+    CANCELLED: { label: 'Cancelled', color: 'bg-[#8DA0BF]/15 text-[#8DA0BF] border-white/10', icon: Ban },
 };
 
 const classStatusConfig = {
-    ONGOING: { label: 'Ongoing', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-    COMPLETED: { label: 'Completed', color: 'bg-green-100 text-green-800 border-green-200' },
-    CANCELLED: { label: 'Cancelled', color: 'bg-gray-100 text-gray-600 border-gray-200' },
+    ONGOING: { label: 'Ongoing', color: 'bg-[#0A4D9F]/20 text-[#7BB2FF] border-[#0A4D9F]/35' },
+    COMPLETED: { label: 'Completed', color: 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/35' },
+    CANCELLED: { label: 'Cancelled', color: 'bg-[#8DA0BF]/15 text-[#8DA0BF] border-white/10' },
 };
 
 const timeAgo = (dateStr) => {
@@ -50,11 +51,11 @@ const StatusBadge = ({ status }) => {
 
 const EmptyState = ({ icon: Icon, title, description, action }) => (
     <div className="text-center py-16">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-            <Icon className="h-8 w-8 text-gray-400" />
+        <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-[#0E1620]">
+            <Icon className="h-8 w-8 text-[#8DA0BF]" />
         </div>
-        <h3 className="font-semibold text-gray-900">{title}</h3>
-        <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">{description}</p>
+        <h3 className="font-semibold text-[#DCE7F5]">{title}</h3>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-[#8DA0BF]">{description}</p>
         {action && <div className="mt-4">{action}</div>}
     </div>
 );
@@ -96,9 +97,18 @@ const Swaps = () => {
 
     // Confirm dialogs
     const [confirmDialog, setConfirmDialog] = useState({ open: false, requestId: null, action: '', title: '', message: '' });
+    const [cancelDialog, setCancelDialog] = useState({ open: false, requestId: null, targetUsername: '' });
 
     const openConfirm = (requestId, action, title, message) => {
         setConfirmDialog({ open: true, requestId, action, title, message });
+    };
+
+    const openCancelDialog = (requestId, targetUsername) => {
+        setCancelDialog({ open: true, requestId, targetUsername });
+    };
+
+    const closeCancelDialog = () => {
+        setCancelDialog({ open: false, requestId: null, targetUsername: '' });
     };
 
     const handleConfirmAction = async () => {
@@ -114,6 +124,18 @@ const Swaps = () => {
             queryClient.invalidateQueries({ queryKey: ['swaps'] });
         } catch (error) {
             toast.error(error?.response?.data?.message || 'Failed to update request');
+        }
+    };
+
+    const handleCancelWithReason = async (reason) => {
+        const { requestId } = cancelDialog;
+        closeCancelDialog();
+        try {
+            await updateRequestStatus(requestId, 'CANCELLED', reason);
+            toast.success('Request cancelled.');
+            queryClient.invalidateQueries({ queryKey: ['swaps'] });
+        } catch (error) {
+            toast.error(error?.response?.data?.message || 'Failed to cancel request');
         }
     };
 
@@ -139,22 +161,22 @@ const Swaps = () => {
         const otherUsername = otherUser?.username || 'Unknown';
 
         return (
-            <div key={req.id} className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+            <div key={req.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)] transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
                 <div className="p-5">
                     {/* Header row */}
                     <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm shrink-0">
+                            <div className="h-10 w-10 shrink-0 rounded-full bg-[#0A4D9F]/25 flex items-center justify-center text-[#DCE7F5] font-bold text-sm">
                                 {otherUsername[0].toUpperCase()}
                             </div>
                             <div className="min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    <Link to={`/u/${otherUsername}`} className="font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+                                    <Link to={`/u/${otherUsername}`} className="font-semibold text-[#DCE7F5] hover:text-[#0A4D9F] transition-colors">
                                         {otherUsername}
                                     </Link>
-                                    <span className="text-xs text-gray-400">{isReceived ? 'sent you a request' : 'received your request'}</span>
+                                    <span className="text-xs text-[#6F83A3]">{isReceived ? 'sent you a request' : 'received your request'}</span>
                                 </div>
-                                <p className="text-xs text-gray-400 mt-0.5">{timeAgo(req.createdAt)}</p>
+                                <p className="mt-0.5 text-xs text-[#6F83A3]">{timeAgo(req.createdAt)}</p>
                             </div>
                         </div>
                         <StatusBadge status={req.status} />
@@ -162,9 +184,9 @@ const Swaps = () => {
 
                     {/* Skills info */}
                     <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                        <div className="flex-1 bg-green-50 rounded-lg p-3 border border-green-100">
+                        <div className="flex-1 rounded-lg border border-[#22C55E]/25 bg-[#22C55E]/10 p-3">
                             <div className="flex items-center justify-between mb-1">
-                                <div className="flex items-center gap-1.5 text-xs font-medium text-green-700">
+                                <div className="flex items-center gap-1.5 text-xs font-medium text-[#22C55E]">
                                     <BookOpen className="h-3.5 w-3.5" />
                                     {isReceived ? 'They want to learn' : 'You want to learn'}
                                 </div>
@@ -175,20 +197,20 @@ const Swaps = () => {
                                             videoUrl: req.learnSkill?.preview?.videoUrl,
                                             proofUrl: req.learnSkill?.proofUrl
                                         })}
-                                        className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 font-medium transition-colors"
+                                        className="flex items-center gap-1 text-xs font-medium text-[#22C55E] transition-colors hover:text-[#86efac]"
                                     >
                                         <Play className="h-3 w-3" />
                                         Preview
                                     </button>
                                 )}
                             </div>
-                            <p className="font-semibold text-gray-900 text-sm">{req.learnSkill?.skill?.name || 'Unknown skill'}</p>
+                            <p className="text-sm font-semibold text-[#DCE7F5]">{req.learnSkill?.skill?.name || 'Unknown skill'}</p>
                         </div>
 
                         {req.teachSkill?.skill?.name && (
-                            <div className="flex-1 bg-blue-50 rounded-lg p-3 border border-blue-100">
+                            <div className="flex-1 rounded-lg border border-[#0A4D9F]/25 bg-[#0A4D9F]/12 p-3">
                                 <div className="flex items-center justify-between mb-1">
-                                    <div className="flex items-center gap-1.5 text-xs font-medium text-blue-700">
+                                    <div className="flex items-center gap-1.5 text-xs font-medium text-[#7BB2FF]">
                                         <GraduationCap className="h-3.5 w-3.5" />
                                         {isReceived ? 'They offer to teach' : 'You offer to teach'}
                                     </div>
@@ -199,38 +221,38 @@ const Swaps = () => {
                                                 videoUrl: req.teachSkill?.preview?.videoUrl,
                                                 proofUrl: req.teachSkill?.proofUrl
                                             })}
-                                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                                            className="flex items-center gap-1 text-xs font-medium text-[#7BB2FF] transition-colors hover:text-[#9fc8ff]"
                                         >
                                             <Play className="h-3 w-3" />
                                             Preview
                                         </button>
                                     )}
                                 </div>
-                                <p className="font-semibold text-gray-900 text-sm">{req.teachSkill.skill.name}</p>
+                                <p className="text-sm font-semibold text-[#DCE7F5]">{req.teachSkill.skill.name}</p>
                             </div>
                         )}
                     </div>
 
                     {/* Message */}
                     {req.message && (
-                        <div className="mt-3 flex items-start gap-2 bg-gray-50 rounded-lg p-3 border border-gray-100">
-                            <MessageSquare className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
-                            <p className="text-sm text-gray-600 italic">&ldquo;{req.message}&rdquo;</p>
+                        <div className="mt-3 flex items-start gap-2 rounded-lg border border-white/10 bg-[#0E1620] p-3">
+                            <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-[#8DA0BF]" />
+                            <p className="text-sm italic text-[#8DA0BF]">&ldquo;{req.message}&rdquo;</p>
                         </div>
                     )}
 
                     {/* Cancel reason */}
                     {req.cancelReason && (
-                        <div className="mt-3 flex items-start gap-2 bg-red-50 rounded-lg p-3 border border-red-100">
-                            <Ban className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
-                            <p className="text-sm text-red-600">Reason: {req.cancelReason}</p>
+                        <div className="mt-3 flex items-start gap-2 rounded-lg border border-[#EF4444]/30 bg-[#EF4444]/12 p-3">
+                            <Ban className="mt-0.5 h-4 w-4 shrink-0 text-[#EF4444]" />
+                            <p className="text-sm text-[#EF4444]">Reason: {req.cancelReason}</p>
                         </div>
                     )}
                 </div>
 
                 {/* Actions footer */}
                 {req.status === 'PENDING' && (
-                    <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">
+                    <div className="flex justify-end gap-2 border-t border-white/10 bg-[#0E1620] px-5 py-3">
                         {isReceived ? (
                             <>
                                 <Button
@@ -253,7 +275,7 @@ const Swaps = () => {
                             <Button
                                 size="sm"
                                 variant="danger"
-                                onClick={() => openConfirm(req.id, 'CANCELLED', 'Cancel Request', `Are you sure you want to cancel your swap request to @${otherUsername}?`)}
+                                onClick={() => openCancelDialog(req.id, otherUsername)}
                             >
                                 <Ban className="h-4 w-4 mr-1" />
                                 Cancel Request
@@ -263,14 +285,26 @@ const Swaps = () => {
                 )}
 
                 {/* View class link if accepted */}
-                {req.status === 'ACCEPTED' && req.swapClass && (
-                    <div className="px-5 py-3 bg-green-50 border-t border-green-100 flex justify-end">
-                        <Link to={`/swaps/${req.swapClass.id}`}>
-                            <Button size="sm" variant="secondary">
-                                <ArrowRightLeft className="h-4 w-4 mr-1" />
-                                Go to Classroom
+                {req.status === 'ACCEPTED' && (
+                    <div className="flex flex-wrap justify-end gap-2 border-t border-[#22C55E]/30 bg-[#22C55E]/10 px-5 py-3">
+                        {req.swapClass && (
+                            <Link to={`/swaps/${req.swapClass.id}`}>
+                                <Button size="sm" variant="secondary">
+                                    <ArrowRightLeft className="h-4 w-4 mr-1" />
+                                    Go to Classroom
+                                </Button>
+                            </Link>
+                        )}
+                        {!isReceived && (
+                            <Button
+                                size="sm"
+                                variant="danger"
+                                onClick={() => openCancelDialog(req.id, otherUsername)}
+                            >
+                                <Ban className="h-4 w-4 mr-1" />
+                                Cancel Request
                             </Button>
-                        </Link>
+                        )}
                     </div>
                 )}
             </div>
@@ -289,20 +323,20 @@ const Swaps = () => {
         const isCompleted = cls.completion?.completedAt;
 
         return (
-            <div key={cls.id} className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+            <div key={cls.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)] transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
                 <div className="p-5">
                     <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-sm shrink-0">
+                            <div className="h-10 w-10 shrink-0 rounded-full bg-[#0A4D9F]/25 flex items-center justify-center text-[#DCE7F5] font-bold text-sm">
                                 {partnerName[0].toUpperCase()}
                             </div>
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <Link to={`/u/${partnerName}`} className="font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+                                    <Link to={`/u/${partnerName}`} className="font-semibold text-[#DCE7F5] hover:text-[#0A4D9F] transition-colors">
                                         {partnerName}
                                     </Link>
                                 </div>
-                                <p className="text-xs text-gray-400 mt-0.5">Swap #{cls.id}</p>
+                                <p className="mt-0.5 text-xs text-[#6F83A3]">Swap #{cls.id}</p>
                             </div>
                         </div>
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${classCfg.color}`}>
@@ -312,9 +346,9 @@ const Swaps = () => {
 
                     {/* Skills */}
                     <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                        <div className="flex-1 bg-green-50 rounded-lg p-3 border border-green-100">
+                        <div className="flex-1 rounded-lg border border-[#22C55E]/25 bg-[#22C55E]/10 p-3">
                             <div className="flex items-center justify-between mb-1">
-                                <div className="flex items-center gap-1.5 text-xs font-medium text-green-700">
+                                    <div className="flex items-center gap-1.5 text-xs font-medium text-[#22C55E]">
                                     <BookOpen className="h-3.5 w-3.5" /> Learning
                                 </div>
                                 {(learnSkillObj?.preview?.videoUrl || learnSkillObj?.proofUrl) && (
@@ -324,18 +358,18 @@ const Swaps = () => {
                                             videoUrl: learnSkillObj?.preview?.videoUrl,
                                             proofUrl: learnSkillObj?.proofUrl
                                         })}
-                                        className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 font-medium transition-colors"
+                                        className="flex items-center gap-1 text-xs font-medium text-[#22C55E] transition-colors hover:text-[#86efac]"
                                     >
                                         <Play className="h-3 w-3" /> Preview
                                     </button>
                                 )}
                             </div>
-                            <p className="font-semibold text-gray-900 text-sm">{learnSkill}</p>
+                            <p className="text-sm font-semibold text-[#DCE7F5]">{learnSkill}</p>
                         </div>
                         {teachSkill && (
-                            <div className="flex-1 bg-blue-50 rounded-lg p-3 border border-blue-100">
+                            <div className="flex-1 rounded-lg border border-[#0A4D9F]/25 bg-[#0A4D9F]/12 p-3">
                                 <div className="flex items-center justify-between mb-1">
-                                    <div className="flex items-center gap-1.5 text-xs font-medium text-blue-700">
+                                    <div className="flex items-center gap-1.5 text-xs font-medium text-[#7BB2FF]">
                                         <GraduationCap className="h-3.5 w-3.5" /> Teaching
                                     </div>
                                     {(teachSkillObj?.preview?.videoUrl || teachSkillObj?.proofUrl) && (
@@ -345,36 +379,36 @@ const Swaps = () => {
                                                 videoUrl: teachSkillObj?.preview?.videoUrl,
                                                 proofUrl: teachSkillObj?.proofUrl
                                             })}
-                                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                                            className="flex items-center gap-1 text-xs font-medium text-[#7BB2FF] transition-colors hover:text-[#9fc8ff]"
                                         >
                                             <Play className="h-3 w-3" /> Preview
                                         </button>
                                     )}
                                 </div>
-                                <p className="font-semibold text-gray-900 text-sm">{teachSkill}</p>
+                                <p className="text-sm font-semibold text-[#DCE7F5]">{teachSkill}</p>
                             </div>
                         )}
                     </div>
 
                     {/* Completion progress */}
                     {cls.status === 'ONGOING' && cls.completion && (
-                        <div className="mt-3 bg-yellow-50 rounded-lg p-3 border border-yellow-100">
-                            <p className="text-xs font-medium text-yellow-700">
+                        <div className="mt-3 rounded-lg border border-[#F59E0B]/25 bg-[#F59E0B]/10 p-3">
+                            <p className="text-xs font-medium text-[#F59E0B]">
                                 Completion: {[cls.completion.completedByUser1, cls.completion.completedByUser2].filter(Boolean).length}/2 users marked complete
                             </p>
                         </div>
                     )}
 
                     {isCompleted && (
-                        <div className="mt-3 bg-green-50 rounded-lg p-3 border border-green-100">
-                            <p className="text-xs font-medium text-green-700">
+                        <div className="mt-3 rounded-lg border border-[#22C55E]/25 bg-[#22C55E]/10 p-3">
+                            <p className="text-xs font-medium text-[#22C55E]">
                                 Completed on {new Date(cls.completion.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
                         </div>
                     )}
                 </div>
 
-                <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex justify-end">
+                <div className="flex justify-end border-t border-white/10 bg-[#0E1620] px-5 py-3">
                     <Link to={`/swaps/${cls.id}`}>
                         <Button size="sm" variant="secondary">
                             <ArrowRightLeft className="h-4 w-4 mr-1" />
@@ -391,23 +425,23 @@ const Swaps = () => {
             {/* Video Preview Modal */}
             {videoPreview && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setVideoPreview(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between p-4 border-b border-gray-100">
-                            <h3 className="font-semibold text-gray-900">{videoPreview.skillName} - Preview</h3>
-                            <button onClick={() => setVideoPreview(null)} className="p-1 rounded-full hover:bg-gray-100 transition-colors">
-                                <X className="h-5 w-5 text-gray-500" />
+                    <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)]" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between border-b border-white/10 p-4">
+                            <h3 className="font-semibold text-[#DCE7F5]">{videoPreview.skillName} - Preview</h3>
+                            <button onClick={() => setVideoPreview(null)} className="rounded-full p-1 transition-colors hover:bg-[#151D27]">
+                                <X className="h-5 w-5 text-[#8DA0BF]" />
                             </button>
                         </div>
                         <div className="p-4 space-y-4">
                             {videoPreview.videoUrl ? (
                                 <div>
-                                    <p className="text-xs font-medium text-gray-500 mb-2">Demo Video</p>
-                                    <video src={videoPreview.videoUrl} controls className="w-full rounded-lg border border-gray-200" />
+                                    <p className="mb-2 text-xs font-medium text-[#8DA0BF]">Demo Video</p>
+                                    <video src={videoPreview.videoUrl} controls className="w-full rounded-lg border border-white/10" />
                                 </div>
                             ) : (
-                                <div className="text-center py-8 bg-gray-50 rounded-lg">
-                                    <Play className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                                    <p className="text-sm text-gray-400">No demo video available</p>
+                                <div className="rounded-lg bg-[#0E1620] py-8 text-center">
+                                    <Play className="mx-auto mb-2 h-10 w-10 text-[#6F83A3]" />
+                                    <p className="text-sm text-[#8DA0BF]">No demo video available</p>
                                 </div>
                             )}
                             {videoPreview.proofUrl && (
@@ -415,14 +449,14 @@ const Swaps = () => {
                                     href={videoPreview.proofUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                                    className="flex items-center gap-2 text-sm font-medium text-[#7BB2FF] transition-colors hover:text-[#9fc8ff]"
                                 >
                                     <ExternalLink className="h-4 w-4" />
                                     View Proof / Portfolio Link
                                 </a>
                             )}
                             {!videoPreview.videoUrl && !videoPreview.proofUrl && (
-                                <p className="text-center text-sm text-gray-400">No preview content available for this skill.</p>
+                                <p className="text-center text-sm text-[#8DA0BF]">No preview content available for this skill.</p>
                             )}
                         </div>
                     </div>
@@ -434,20 +468,27 @@ const Swaps = () => {
                 title={confirmDialog.title}
                 message={confirmDialog.message}
                 confirmLabel={
-                    confirmDialog.action === 'ACCEPTED' ? 'Accept' :
-                    confirmDialog.action === 'REJECTED' ? 'Reject' :
-                    'Cancel Request'
+                    confirmDialog.action === 'ACCEPTED' ? 'Accept' : 'Reject'
                 }
                 variant={confirmDialog.action === 'ACCEPTED' ? 'primary' : 'danger'}
                 onConfirm={handleConfirmAction}
                 onCancel={() => setConfirmDialog({ open: false, requestId: null, action: '', title: '', message: '' })}
             />
 
+            <InputDialog
+                open={cancelDialog.open}
+                title={`Cancel request to @${cancelDialog.targetUsername}`}
+                placeholder="Enter cancellation reason (min 5 characters)"
+                submitLabel="Cancel Request"
+                onSubmit={handleCancelWithReason}
+                onCancel={closeCancelDialog}
+            />
+
             {/* Page header */}
             <div className="flex flex-wrap justify-between items-start gap-4">
                 <div>
                     <h1 className="page-title">My Swaps</h1>
-                    <p className="text-sm text-gray-500 mt-0.5">Manage your skill swap requests and classrooms</p>
+                    <p className="mt-0.5 text-sm text-[#8DA0BF]">Manage your skill swap requests and classrooms</p>
                 </div>
                 <Button onClick={() => navigate('/swaps/new')} className="gap-2">
                     <Plus className="h-4 w-4" />
@@ -457,22 +498,22 @@ const Swaps = () => {
 
             <div className="section-card p-0! overflow-hidden">
                 {/* Tabs */}
-                <div className="flex border-b border-gray-200 px-2 sm:px-4">
+                <div className="flex border-b border-white/10 px-2 sm:px-4">
                     {tabs.map(tab => (
                         <button
                             key={tab.key}
                             className={clsx(
                                 'flex items-center gap-2 px-4 py-3 font-medium text-sm focus:outline-none transition-colors relative',
                                 activeTab === tab.key
-                                    ? 'border-b-2 border-blue-500 text-blue-600'
-                                    : 'text-gray-500 hover:text-gray-700'
+                                    ? 'border-b-2 border-[#0A4D9F] text-[#DCE7F5]'
+                                    : 'text-[#8DA0BF] hover:text-[#DCE7F5]'
                             )}
                             onClick={() => { setActiveTab(tab.key); setStatusFilter('ALL'); }}
                         >
                             <tab.icon className="h-4 w-4" />
                             {tab.label}
                             {tab.badge > 0 && (
-                                <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-xs font-bold bg-blue-600 text-white">
+                                <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-[#0A4D9F] px-1.5 text-xs font-bold text-white">
                                     {tab.badge}
                                 </span>
                             )}
@@ -491,10 +532,10 @@ const Swaps = () => {
                                     key={status}
                                     onClick={() => setStatusFilter(status)}
                                     className={clsx(
-                                        'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                                        'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                                         statusFilter === status
-                                            ? 'bg-blue-600 text-white border-blue-600'
-                                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                                            ? 'border-[#0A4D9F] bg-[#0A4D9F] text-white'
+                                            : 'border-white/10 bg-[#0E1620] text-[#8DA0BF] hover:border-white/20 hover:text-[#DCE7F5]'
                                     )}
                                 >
                                     {status === 'ALL' ? 'All' : statusConfig[status]?.label || status} ({count})

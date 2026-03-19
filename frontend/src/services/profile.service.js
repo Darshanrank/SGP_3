@@ -33,3 +33,12 @@ export const getPublicProfileByUsername = async (username) => {
     const response = await api.get(`/profile/username/${encodeURIComponent(username)}`);
     return response.data;
 };
+
+export const getFeaturedProfiles = async (limit = 8, category = '', search = '') => {
+    const params = new URLSearchParams();
+    params.append('limit', String(limit));
+    if (category) params.append('category', category);
+    if (search) params.append('search', search);
+    const response = await api.get(`/profile/featured?${params.toString()}`);
+    return response.data;
+};

@@ -7,9 +7,9 @@ import { Button } from '../components/ui/Button';
 
 const rankIcon = (rank) => {
     if (rank === 1) return <Trophy className="h-6 w-6 text-yellow-500" />;
-    if (rank === 2) return <Medal className="h-6 w-6 text-gray-400" />;
+    if (rank === 2) return <Medal className="h-6 w-6 text-[#9AA9C2]" />;
     if (rank === 3) return <Award className="h-6 w-6 text-amber-600" />;
-    return <span className="text-sm font-bold text-gray-500 w-6 text-center">{rank}</span>;
+    return <span className="w-6 text-center text-sm font-bold text-[#8DA0BF]">{rank}</span>;
 };
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
@@ -31,7 +31,7 @@ const Leaderboard = () => {
         return (
             <div className="section-card space-y-4">
                 {[...Array(5)].map((_, i) => (
-                    <div key={i} className="h-16 bg-gray-100 rounded-lg animate-pulse" />
+                    <div key={i} className="h-16 rounded-lg bg-[#0E1620] animate-pulse" />
                 ))}
             </div>
         );
@@ -44,17 +44,28 @@ const Leaderboard = () => {
 
             <div className="section-card p-0! overflow-hidden">
                 <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+                    <thead className="bg-[#0E1620] border-b border-white/10">
                         <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-16">Rank</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">User</th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Points</th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Swaps</th>
+                            <th className="w-16 px-4 py-3 text-left text-xs font-semibold uppercase text-[#8DA0BF]">Rank</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#8DA0BF]">User</th>
+                            <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[#8DA0BF]">Points</th>
+                            <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[#8DA0BF]">Swaps</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-white/5">
                         {leaders.map((entry) => (
-                            <tr key={entry.userId} className={`hover:bg-gray-50 transition-colors ${entry.rank <= 3 ? 'bg-yellow-50/40' : ''}`}>
+                            <tr
+                                key={entry.userId}
+                                className={`transition-colors hover:bg-[#151D27] ${
+                                    entry.rank === 1
+                                        ? 'bg-[#0A4D9F]/14'
+                                        : entry.rank === 2
+                                            ? 'bg-[#22C55E]/10'
+                                            : entry.rank === 3
+                                                ? 'bg-[#7BB2FF]/10'
+                                                : ''
+                                }`}
+                            >
                                 <td className="px-4 py-3">
                                     <div className="flex items-center justify-center">{rankIcon(entry.rank)}</div>
                                 </td>
@@ -64,28 +75,28 @@ const Leaderboard = () => {
                                             <img
                                                 src={entry.avatarUrl.startsWith('http') ? entry.avatarUrl : `${API_BASE}${entry.avatarUrl}`}
                                                 alt=""
-                                                className="h-9 w-9 rounded-full object-cover border border-gray-200"
+                                                className="h-9 w-9 rounded-full object-cover border border-white/10"
                                             />
                                         ) : (
-                                            <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">
+                                            <div className="h-9 w-9 rounded-full bg-[#0A4D9F]/25 flex items-center justify-center text-[#DCE7F5] font-bold text-sm">
                                                 {entry.username?.charAt(0).toUpperCase()}
                                             </div>
                                         )}
                                         <div>
-                                            <Link to={`/u/${entry.username}`} className="font-semibold text-blue-600 hover:underline text-sm">
+                                            <Link to={`/u/${entry.username}`} className="text-sm font-semibold text-[#DCE7F5] hover:text-[#0A4D9F]">
                                                 {entry.username}
                                             </Link>
-                                            {entry.fullName && <p className="text-xs text-gray-500">{entry.fullName}</p>}
+                                            {entry.fullName && <p className="text-xs text-[#8DA0BF]">{entry.fullName}</p>}
                                         </div>
                                     </div>
                                 </td>
-                                <td className="px-4 py-3 text-right font-bold text-sm text-green-700">{entry.points}</td>
-                                <td className="px-4 py-3 text-right text-sm text-gray-600">{entry.totalSwaps}</td>
+                                <td className="px-4 py-3 text-right text-sm font-bold text-[#22C55E]">{entry.points}</td>
+                                <td className="px-4 py-3 text-right text-sm text-[#8DA0BF]">{entry.totalSwaps}</td>
                             </tr>
                         ))}
                         {leaders.length === 0 && (
                             <tr>
-                                <td colSpan={4} className="px-4 py-8 text-center text-gray-400">No users on the leaderboard yet.</td>
+                                <td colSpan={4} className="px-4 py-8 text-center text-[#8DA0BF]">No users on the leaderboard yet.</td>
                             </tr>
                         )}
                     </tbody>
@@ -95,7 +106,7 @@ const Leaderboard = () => {
             {/* Pagination */}
             <div className="flex justify-center gap-2">
                 <Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} variant="ghost">Previous</Button>
-                <span className="flex items-center text-sm font-medium">
+                <span className="flex items-center text-sm font-medium text-[#8DA0BF]">
                     Page {page} {meta.totalPages ? `of ${meta.totalPages}` : ''}
                 </span>
                 <Button disabled={meta.totalPages && page >= meta.totalPages} onClick={() => setPage(p => p + 1)} variant="ghost">Next</Button>
