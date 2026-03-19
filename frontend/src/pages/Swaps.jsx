@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getMyRequests, updateRequestStatus, getMyClasses } from '../services/swap.service';
+import { blockUser, getMyBlockedUsers, submitReport, unblockUser } from '../services/safety.service';
 import { Button } from '../components/ui/Button';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import InputDialog from '../components/ui/InputDialog';
@@ -7,9 +8,12 @@ import { ListItemSkeleton } from '../components/ui/Skeleton';
 import { toast } from 'react-hot-toast';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRightLeft, Clock, CheckCircle, XCircle, Ban, MessageSquare, BookOpen, GraduationCap, Plus, Inbox, Send, Users, Play, X, ExternalLink } from 'lucide-react';
+import { ArrowRightLeft, Clock, CheckCircle, XCircle, Ban, MessageSquare, BookOpen, GraduationCap, Plus, Inbox, Send, Users, Play, X, ExternalLink, Shield, RotateCcw } from 'lucide-react';
+
+const reportReasons = ['SPAM', 'HARASSMENT', 'SCAM_OR_FRAUD', 'INAPPROPRIATE_CONTENT', 'IMPERSONATION', 'OTHER'];
 
 const statusConfig = {
     PENDING: { label: 'Pending', color: 'bg-[#F59E0B]/20 text-[#F59E0B] border-[#F59E0B]/35', icon: Clock },
@@ -62,11 +66,17 @@ const EmptyState = ({ icon: Icon, title, description, action }) => (
 
 const Swaps = () => {
     const { user } = useAuth();
+    const { chatUnreadByClass } = useSocket();
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('received');
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [videoPreview, setVideoPreview] = useState(null); // { skillName, videoUrl, proofUrl }
+    const [safetyBusy, setSafetyBusy] = useState(false);
+    const [blockMenuOpen, setBlockMenuOpen] = useState(false);
+    const [reportModal, setReportModal] = useState({ open: false, userId: null, username: '' });
+    const [reportReason, setReportReason] = useState('HARASSMENT');
+    const [reportDescription, setReportDescription] = useState('');
 
     const { data: sentRequests = [], isLoading: loadingSent } = useQuery({
         queryKey: ['swaps', 'sent'],
@@ -93,6 +103,19 @@ const Swaps = () => {
             return Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
         },
         staleTime: 30000,
+    });
+
+    const {
+        data: blockedUsers = [],
+        isLoading: loadingBlockedUsers,
+        refetch: refetchBlockedUsers,
+    } = useQuery({
+        queryKey: ['swaps', 'blocked-users'],
+        queryFn: async () => {
+            const res = await getMyBlockedUsers();
+            return Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+        },
+        staleTime: 15000,
     });
 
     // Confirm dialogs
@@ -155,10 +178,13 @@ const Swaps = () => {
         { key: 'classes', label: 'Classes', icon: Users, badge: ongoingClassCount },
     ];
 
+    const blockedUsersCount = blockedUsers.length;
+
     const renderRequestCard = (req, type) => {
         const isReceived = type === 'received';
         const otherUser = isReceived ? req.fromUser : req.toUser;
         const otherUsername = otherUser?.username || 'Unknown';
+        const otherUserId = otherUser?.userId;
 
         return (
             <div key={req.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)] transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
@@ -281,6 +307,36 @@ const Swaps = () => {
                                 Cancel Request
                             </Button>
                         )}
+                        {otherUserId && (
+                            <>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setReportModal({ open: true, userId: otherUserId, username: otherUsername })}
+                                    disabled={safetyBusy}
+                                >
+                                    Report
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="danger"
+                                    onClick={async () => {
+                                        setSafetyBusy(true);
+                                        try {
+                                            await blockUser(otherUserId);
+                                            toast.success(`Blocked @${otherUsername}`);
+                                        } catch (error) {
+                                            toast.error(error?.response?.data?.message || 'Failed to block user');
+                                        } finally {
+                                            setSafetyBusy(false);
+                                        }
+                                    }}
+                                    disabled={safetyBusy}
+                                >
+                                    Block
+                                </Button>
+                            </>
+                        )}
                     </div>
                 )}
 
@@ -305,6 +361,67 @@ const Swaps = () => {
                                 Cancel Request
                             </Button>
                         )}
+                        {otherUserId && (
+                            <>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setReportModal({ open: true, userId: otherUserId, username: otherUsername })}
+                                    disabled={safetyBusy}
+                                >
+                                    Report
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="danger"
+                                    onClick={async () => {
+                                        setSafetyBusy(true);
+                                        try {
+                                            await blockUser(otherUserId);
+                                            toast.success(`Blocked @${otherUsername}`);
+                                        } catch (error) {
+                                            toast.error(error?.response?.data?.message || 'Failed to block user');
+                                        } finally {
+                                            setSafetyBusy(false);
+                                        }
+                                    }}
+                                    disabled={safetyBusy}
+                                >
+                                    Block
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {(req.status !== 'ACCEPTED' && req.status !== 'PENDING') && otherUserId && (
+                    <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 bg-[#0E1620] px-5 py-3">
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setReportModal({ open: true, userId: otherUserId, username: otherUsername })}
+                            disabled={safetyBusy}
+                        >
+                            Report
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={async () => {
+                                setSafetyBusy(true);
+                                try {
+                                    await blockUser(otherUserId);
+                                    toast.success(`Blocked @${otherUsername}`);
+                                } catch (error) {
+                                    toast.error(error?.response?.data?.message || 'Failed to block user');
+                                } finally {
+                                    setSafetyBusy(false);
+                                }
+                            }}
+                            disabled={safetyBusy}
+                        >
+                            Block
+                        </Button>
                     </div>
                 )}
             </div>
@@ -315,12 +432,17 @@ const Swaps = () => {
         const fromUser = cls.swapRequest?.fromUser?.username || 'Unknown';
         const toUser = cls.swapRequest?.toUser?.username || 'Unknown';
         const partnerName = fromUser === user?.username ? toUser : fromUser;
+        const partnerUserId = cls.swapRequest?.fromUser?.userId === user?.userId
+            ? cls.swapRequest?.toUser?.userId
+            : cls.swapRequest?.fromUser?.userId;
         const learnSkillObj = cls.swapRequest?.learnSkill;
         const teachSkillObj = cls.swapRequest?.teachSkill;
         const learnSkill = learnSkillObj?.skill?.name || 'Unknown';
         const teachSkill = teachSkillObj?.skill?.name;
         const classCfg = classStatusConfig[cls.status] || classStatusConfig.ONGOING;
         const isCompleted = cls.completion?.completedAt;
+
+        const unreadForClass = chatUnreadByClass?.[String(cls.id)] || 0;
 
         return (
             <div key={cls.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)] transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
@@ -409,10 +531,45 @@ const Swaps = () => {
                 </div>
 
                 <div className="flex justify-end border-t border-white/10 bg-[#0E1620] px-5 py-3">
+                    {partnerUserId && (
+                        <div className="mr-2 flex gap-2">
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setReportModal({ open: true, userId: partnerUserId, username: partnerName })}
+                                disabled={safetyBusy}
+                            >
+                                Report
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="danger"
+                                onClick={async () => {
+                                    setSafetyBusy(true);
+                                    try {
+                                        await blockUser(partnerUserId);
+                                        toast.success(`Blocked @${partnerName}`);
+                                    } catch (error) {
+                                        toast.error(error?.response?.data?.message || 'Failed to block user');
+                                    } finally {
+                                        setSafetyBusy(false);
+                                    }
+                                }}
+                                disabled={safetyBusy}
+                            >
+                                Block
+                            </Button>
+                        </div>
+                    )}
                     <Link to={`/swaps/${cls.id}`}>
-                        <Button size="sm" variant="secondary">
+                        <Button size="sm" variant="secondary" className="relative">
                             <ArrowRightLeft className="h-4 w-4 mr-1" />
                             {cls.status === 'ONGOING' ? 'Enter Classroom' : 'View Details'}
+                            {unreadForClass > 0 && (
+                                <span className="ml-2 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-[#0A4D9F] px-1.5 text-[10px] font-bold text-white">
+                                    {unreadForClass > 99 ? '99+' : unreadForClass}
+                                </span>
+                            )}
                         </Button>
                     </Link>
                 </div>
@@ -463,6 +620,61 @@ const Swaps = () => {
                 </div>
             )}
 
+            {reportModal.open && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setReportModal({ open: false, userId: null, username: '' })}>
+                    <div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#111721] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.55)]" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-semibold text-[#DCE7F5]">Report @{reportModal.username}</h3>
+                        <p className="mt-1 text-sm text-[#8DA0BF]">This report is sent to admins for review.</p>
+                        <div className="mt-4 space-y-3">
+                            <select
+                                value={reportReason}
+                                onChange={(e) => setReportReason(e.target.value)}
+                                className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]"
+                            >
+                                {reportReasons.map((reason) => (
+                                    <option key={reason} value={reason}>{reason}</option>
+                                ))}
+                            </select>
+                            <textarea
+                                value={reportDescription}
+                                onChange={(e) => setReportDescription(e.target.value)}
+                                placeholder="Optional details"
+                                rows={4}
+                                className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
+                            />
+                        </div>
+                        <div className="mt-4 flex justify-end gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => setReportModal({ open: false, userId: null, username: '' })} disabled={safetyBusy}>Cancel</Button>
+                            <Button
+                                size="sm"
+                                variant="danger"
+                                disabled={safetyBusy || !reportModal.userId}
+                                onClick={async () => {
+                                    if (!reportModal.userId) return;
+                                    setSafetyBusy(true);
+                                    try {
+                                        await submitReport({
+                                            reportedUserId: reportModal.userId,
+                                            reason: reportReason,
+                                            description: reportDescription.trim() || undefined
+                                        });
+                                        toast.success('Report submitted');
+                                        setReportDescription('');
+                                        setReportModal({ open: false, userId: null, username: '' });
+                                    } catch (error) {
+                                        toast.error(error?.response?.data?.message || 'Failed to submit report');
+                                    } finally {
+                                        setSafetyBusy(false);
+                                    }
+                                }}
+                            >
+                                Submit Report
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <ConfirmDialog
                 open={confirmDialog.open}
                 title={confirmDialog.title}
@@ -496,7 +708,7 @@ const Swaps = () => {
                 </Button>
             </div>
 
-            <div className="section-card p-0! overflow-hidden">
+            <div className="section-card relative p-0! overflow-visible">
                 {/* Tabs */}
                 <div className="flex border-b border-white/10 px-2 sm:px-4">
                     {tabs.map(tab => (
@@ -508,7 +720,11 @@ const Swaps = () => {
                                     ? 'border-b-2 border-[#0A4D9F] text-[#DCE7F5]'
                                     : 'text-[#8DA0BF] hover:text-[#DCE7F5]'
                             )}
-                            onClick={() => { setActiveTab(tab.key); setStatusFilter('ALL'); }}
+                            onClick={() => {
+                                setActiveTab(tab.key);
+                                setStatusFilter('ALL');
+                                setBlockMenuOpen(false);
+                            }}
                         >
                             <tab.icon className="h-4 w-4" />
                             {tab.label}
@@ -519,6 +735,85 @@ const Swaps = () => {
                             )}
                         </button>
                     ))}
+
+                    <div className="relative ml-auto self-center pr-1">
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 rounded-lg border border-white/10 bg-[#0E1620] text-[#8DA0BF] hover:text-[#DCE7F5]"
+                            onClick={() => setBlockMenuOpen((prev) => !prev)}
+                        >
+                            <Shield className="mr-1.5 h-3.5 w-3.5" />
+                            Blocked Users
+                            {blockedUsersCount > 0 && (
+                                <span className="ml-2 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-[#0A4D9F] px-1.5 text-[10px] font-bold text-white">
+                                    {blockedUsersCount > 99 ? '99+' : blockedUsersCount}
+                                </span>
+                            )}
+                        </Button>
+
+                        {blockMenuOpen && (
+                            <div className="absolute right-0 top-full z-30 mt-2 w-80 overflow-hidden rounded-xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)]">
+                                <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+                                    <p className="text-sm font-semibold text-[#DCE7F5]">Blocked Users</p>
+                                    <button
+                                        type="button"
+                                        className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-[#8DA0BF] hover:text-[#DCE7F5]"
+                                        onClick={() => refetchBlockedUsers()}
+                                    >
+                                        <RotateCcw className="h-3 w-3" />
+                                        Refresh
+                                    </button>
+                                </div>
+
+                                <div className="max-h-72 space-y-2 overflow-y-auto p-3">
+                                    {loadingBlockedUsers && (
+                                        <p className="text-sm text-[#8DA0BF]">Loading blocked users...</p>
+                                    )}
+
+                                    {!loadingBlockedUsers && blockedUsersCount === 0 && (
+                                        <p className="text-sm text-[#8DA0BF]">No blocked users.</p>
+                                    )}
+
+                                    {!loadingBlockedUsers && blockedUsers.map((entry) => {
+                                        const blocked = entry?.blockedUser;
+                                        const blockedUserId = blocked?.userId || entry?.blockedUserId;
+                                        const displayName = blocked?.profile?.fullName || blocked?.username || `User ${blockedUserId}`;
+                                        const handle = blocked?.username ? `@${blocked.username}` : `#${blockedUserId}`;
+
+                                        return (
+                                            <div key={entry.id || blockedUserId} className="flex items-center justify-between rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2">
+                                                <div className="min-w-0">
+                                                    <p className="truncate text-sm font-medium text-[#DCE7F5]">{displayName}</p>
+                                                    <p className="truncate text-xs text-[#8DA0BF]">{handle}</p>
+                                                </div>
+                                                <Button
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    disabled={safetyBusy || !blockedUserId}
+                                                    onClick={async () => {
+                                                        if (!blockedUserId) return;
+                                                        setSafetyBusy(true);
+                                                        try {
+                                                            await unblockUser(blockedUserId);
+                                                            toast.success(`Unblocked ${handle}`);
+                                                            queryClient.invalidateQueries({ queryKey: ['swaps', 'blocked-users'] });
+                                                        } catch (error) {
+                                                            toast.error(error?.response?.data?.message || 'Failed to unblock user');
+                                                        } finally {
+                                                            setSafetyBusy(false);
+                                                        }
+                                                    }}
+                                                >
+                                                    Unblock
+                                                </Button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Status filter (for request tabs only) */}

@@ -15,6 +15,7 @@ import {
     getMyReports,
     getReports,
     updateReportStatus,
+    moderateReportAction,
     createPenalty,
     getMyPenalties,
     getPenalties,
@@ -62,6 +63,7 @@ router.get('/rewards', getMyRewards);
 router.get('/reports/my', getMyReports);
 router.get('/reports', requireAdmin, getReports);
 router.put('/reports/:id', requireAdmin, updateReportStatus);
+router.post('/reports/:id/action', requireAdmin, moderateReportAction);
 
 // Penalties (admin)
 router.post('/penalties', requireAdmin, validatePenaltyInput, createPenalty);

@@ -14,10 +14,14 @@ import chatRoute from './routes/chat.routes.js'
 import metaRoute from './routes/meta.routes.js'
 import matchingRoute from './routes/matching.routes.js'
 import reviewRoute from './routes/review.routes.js'
+import blockRoute from './routes/block.routes.js'
+import reportRoute from './routes/report.routes.js'
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { verifyAccessToken } from './utils/jwt.js';
 import prisma from './prisma/client.js';
+import { markMessagesDeliveredService, markMessagesReadService } from './services/chat.service.js';
+import { areUsersBlocked } from './services/block.service.js';
 const app = express();
 const server = createServer(app);
 const frontendOrigin = conf.FRONTEND_URL || 'http://localhost:5173';
@@ -56,6 +60,32 @@ const isUserInClass = async (userId, classId) => {
     return swapClass.swapRequest.fromUserId === userId || swapClass.swapRequest.toUserId === userId;
 };
 
+const getPartnerIdInClass = async (userId, classId) => {
+    const swapClass = await prisma.swapClass.findUnique({
+        where: { id: Number(classId) },
+        include: { swapRequest: { select: { fromUserId: true, toUserId: true } } }
+    });
+    if (!swapClass) return null;
+    if (swapClass.swapRequest.fromUserId === userId) return swapClass.swapRequest.toUserId;
+    if (swapClass.swapRequest.toUserId === userId) return swapClass.swapRequest.fromUserId;
+    return null;
+};
+
+const getRoomUserIds = async (room, ioInstance) => {
+    const sockets = await ioInstance.in(room).fetchSockets();
+    return [...new Set(
+        sockets
+            .map((s) => s.user?.userId)
+            .filter((id) => Number.isInteger(id))
+    )];
+};
+
+const emitChatPresence = async (classId, ioInstance) => {
+    const room = `chat_${classId}`;
+    const userIds = await getRoomUserIds(room, ioInstance);
+    ioInstance.to(room).emit('chat_presence', { classId: Number(classId), userIds });
+};
+
 // Store io instance in app so controllers can access it
 app.set('io', io);
 
@@ -72,64 +102,99 @@ io.on('connection', (socket) => {
     socket.on('join_chat', async (classId) => {
         try {
             const userId = socket.user?.userId;
-            const allowed = await isUserInClass(userId, Number(classId));
+            const normalizedClassId = Number(classId);
+            const allowed = await isUserInClass(userId, normalizedClassId);
             if (!allowed) {
                 logger.warn('Unauthorized join_chat attempt', { socketId: socket.id, userId, classId });
                 return socket.emit('error', 'Not authorized for this class');
             }
+
+            const partnerId = await getPartnerIdInClass(userId, normalizedClassId);
+            if (partnerId) {
+                const blocked = await areUsersBlocked(userId, partnerId);
+                if (blocked) {
+                    return socket.emit('error', 'Chat unavailable because one user is blocked');
+                }
+            }
+
             const room = `chat_${classId}`;
             socket.join(room);
             logger.info(`Socket ${socket.id} joined room ${room}`);
+
+            const delivered = await markMessagesDeliveredService(userId, normalizedClassId);
+            if (delivered.count > 0) {
+                io.to(room).emit('messages_delivered', {
+                    classId: normalizedClassId,
+                    deliveredToUserId: userId,
+                    deliveredAt: delivered.deliveredAt
+                });
+            }
+
+            await emitChatPresence(normalizedClassId, io);
         } catch (err) {
             logger.warn('join_chat failed', { socketId: socket.id, err: err.message });
             socket.emit('error', 'Unable to join room');
         }
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnecting', async () => {
         logger.info('User disconnected from socket', { socketId: socket.id });
+        const joinedClassRooms = Array.from(socket.rooms).filter((room) => room.startsWith('chat_'));
+        for (const room of joinedClassRooms) {
+            const classId = room.replace('chat_', '');
+            await emitChatPresence(classId, io);
+        }
     });
 
     // Typing indicators — relay to the chat room
-    socket.on('typing_start', async (classId) => {
+    const relayTypingStart = async (classId) => {
         try {
             const userId = socket.user?.userId;
             const allowed = await isUserInClass(userId, Number(classId));
             if (!allowed) return;
+            const partnerId = await getPartnerIdInClass(userId, Number(classId));
+            if (partnerId && await areUsersBlocked(userId, partnerId)) return;
             socket.to(`chat_${classId}`).emit('user_typing', { userId, classId });
+            socket.to(`chat_${classId}`).emit('typing', { userId, classId });
         } catch (_) {}
-    });
+    };
 
-    socket.on('typing_stop', async (classId) => {
+    const relayTypingStop = async (classId) => {
         try {
             const userId = socket.user?.userId;
             const allowed = await isUserInClass(userId, Number(classId));
             if (!allowed) return;
+            const partnerId = await getPartnerIdInClass(userId, Number(classId));
+            if (partnerId && await areUsersBlocked(userId, partnerId)) return;
             socket.to(`chat_${classId}`).emit('user_stop_typing', { userId, classId });
+            socket.to(`chat_${classId}`).emit('stopTyping', { userId, classId });
         } catch (_) {}
-    });
+    };
+
+    socket.on('typing_start', relayTypingStart);
+    socket.on('typing', relayTypingStart);
+    socket.on('typing_stop', relayTypingStop);
+    socket.on('stopTyping', relayTypingStop);
 
     // Mark messages as read
     socket.on('mark_read', async (classId) => {
         try {
             const userId = socket.user?.userId;
-            const allowed = await isUserInClass(userId, Number(classId));
+            const normalizedClassId = Number(classId);
+            const allowed = await isUserInClass(userId, normalizedClassId);
             if (!allowed) return;
+            const partnerId = await getPartnerIdInClass(userId, normalizedClassId);
+            if (partnerId && await areUsersBlocked(userId, partnerId)) return;
 
-            const chatRoom = await prisma.chatRoom.findUnique({ where: { swapClassId: Number(classId) } });
-            if (!chatRoom) return;
-
-            await prisma.chatMessage.updateMany({
-                where: {
-                    chatRoomId: chatRoom.id,
-                    senderId: { not: userId },
-                    isRead: false,
-                },
-                data: { isRead: true },
-            });
+            const result = await markMessagesReadService(userId, normalizedClassId);
+            if (result.count === 0) return;
 
             // Notify sender that their messages were read
-            socket.to(`chat_${classId}`).emit('messages_read', { classId, readByUserId: userId });
+            socket.to(`chat_${classId}`).emit('messages_read', {
+                classId: normalizedClassId,
+                readByUserId: userId,
+                readAt: result.readAt
+            });
         } catch (err) {
             logger.warn('mark_read failed', { socketId: socket.id, err: err.message });
         }
@@ -202,6 +267,8 @@ app.use('/api/chat', chatRoute);
 app.use('/api/meta', metaRoute);
 app.use('/api/matching', matchingRoute);
 app.use('/api/reviews', reviewRoute);
+app.use('/api/blocks', blockRoute);
+app.use('/api/reports', reportRoute);
 
 app.use((err, req, res, next) => {
     const statusCode = err.statusCode || 500;

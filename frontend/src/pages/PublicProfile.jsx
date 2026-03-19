@@ -2,10 +2,15 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getPublicProfile, getPublicProfileByUsername } from '../services/profile.service';
 import { getUserRating, getUserReviews } from '../services/review.service';
+import { blockUser, getBlockStatus, submitReport, unblockUser } from '../services/safety.service';
+import { useAuth } from '../context/AuthContext';
+import { Button } from '../components/ui/Button';
+import { toast } from 'react-hot-toast';
 import { Star, Github, Linkedin, Globe, Youtube, ExternalLink, ChevronDown, ChevronUp, Trophy, Award, Zap, ArrowRightLeft, Play } from 'lucide-react';
 
 const levelLabel = { LOW: 'Beginner', MEDIUM: 'Intermediate', HIGH: 'Advanced' };
 const levelColor = { LOW: 'bg-blue-100 text-blue-700', MEDIUM: 'bg-yellow-100 text-yellow-700', HIGH: 'bg-green-100 text-green-700' };
+const reportReasons = ['SPAM', 'HARASSMENT', 'SCAM_OR_FRAUD', 'INAPPROPRIATE_CONTENT', 'IMPERSONATION', 'OTHER'];
 
 const SocialLink = ({ href, icon: Icon, label, color }) => {
     if (!href) return null;
@@ -76,14 +81,22 @@ const TeachSkillCard = ({ skill }) => {
 
 const PublicProfile = () => {
     const { userId, username } = useParams();
+    const { user } = useAuth();
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [accessError, setAccessError] = useState('');
     const [rating, setRating] = useState({ avgRating: 0, reviewCount: 0 });
     const [reviews, setReviews] = useState([]);
+    const [blockStatus, setBlockStatus] = useState({ isBlocking: false, isBlockedBy: false, blocked: false });
+    const [safetyBusy, setSafetyBusy] = useState(false);
+    const [reportOpen, setReportOpen] = useState(false);
+    const [reportReason, setReportReason] = useState('HARASSMENT');
+    const [reportDescription, setReportDescription] = useState('');
 
     useEffect(() => {
         const fetchProfile = async () => {
             try {
+                setAccessError('');
                 const data = username
                     ? await getPublicProfileByUsername(username)
                     : await getPublicProfile(userId);
@@ -99,7 +112,14 @@ const PublicProfile = () => {
                     setReviews(reviewsData?.data || []);
                 }
             } catch (error) {
-                console.error("Failed to load profile", error);
+                console.error('Failed to load profile', error);
+                const apiCode = error?.response?.data?.code;
+                const apiMessage = error?.response?.data?.message;
+                if (apiCode === 'USER_BLOCKED') {
+                    setAccessError('You cannot view this profile because one of you has blocked the other.');
+                } else {
+                    setAccessError(apiMessage || 'Failed to load profile');
+                }
             } finally {
                 setLoading(false);
             }
@@ -107,6 +127,56 @@ const PublicProfile = () => {
 
         if (username || userId) fetchProfile();
     }, [username, userId]);
+
+    useEffect(() => {
+        const fetchStatus = async () => {
+            if (!user?.userId || !profile?.userId || user.userId === profile.userId) return;
+            try {
+                const status = await getBlockStatus(profile.userId);
+                setBlockStatus(status || { isBlocking: false, isBlockedBy: false, blocked: false });
+            } catch (_) {}
+        };
+        fetchStatus();
+    }, [user?.userId, profile?.userId]);
+
+    const handleToggleBlock = async () => {
+        if (!profile?.userId) return;
+        setSafetyBusy(true);
+        try {
+            if (blockStatus?.isBlocking) {
+                await unblockUser(profile.userId);
+                setBlockStatus({ isBlocking: false, isBlockedBy: false, blocked: false });
+                toast.success('User unblocked');
+            } else {
+                await blockUser(profile.userId);
+                setBlockStatus({ isBlocking: true, isBlockedBy: false, blocked: true });
+                toast.success('User blocked');
+            }
+        } catch (error) {
+            toast.error(error?.response?.data?.message || 'Failed to update block status');
+        } finally {
+            setSafetyBusy(false);
+        }
+    };
+
+    const handleSubmitReport = async () => {
+        if (!profile?.userId) return;
+        setSafetyBusy(true);
+        try {
+            await submitReport({
+                reportedUserId: profile.userId,
+                reason: reportReason,
+                description: reportDescription.trim() || undefined
+            });
+            toast.success('Report submitted to admins');
+            setReportOpen(false);
+            setReportDescription('');
+        } catch (error) {
+            toast.error(error?.response?.data?.message || 'Failed to submit report');
+        } finally {
+            setSafetyBusy(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -133,8 +203,8 @@ const PublicProfile = () => {
         return (
             <div className="max-w-4xl mx-auto py-16 text-center">
                 <div className="text-6xl mb-4">😕</div>
-                <h2 className="text-2xl font-bold text-gray-900">Profile not found</h2>
-                <p className="text-gray-500 mt-2">This user doesn't exist or their profile is unavailable.</p>
+                <h2 className="text-2xl font-bold text-gray-900">Profile unavailable</h2>
+                <p className="text-gray-500 mt-2">{accessError || "This user doesn't exist or their profile is unavailable."}</p>
             </div>
         );
     }
@@ -145,6 +215,7 @@ const PublicProfile = () => {
     const badges = profile.badges || [];
     const reward = profile.rewards || { points: 0, totalSwaps: 0 };
     const p = profile.profile || {};
+    const isOwnProfile = user?.userId === profile.userId;
 
     const socialLinks = [
         { href: p.githubLink, icon: Github, label: 'GitHub', color: 'bg-gray-100 text-gray-800 hover:bg-gray-200' },
@@ -155,6 +226,46 @@ const PublicProfile = () => {
 
     return (
         <div className="max-w-4xl mx-auto py-8 px-4 space-y-6">
+            {reportOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setReportOpen(false)}>
+                    <div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#111721] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.55)]" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-semibold text-[#DCE7F5]">Report @{profile.username}</h3>
+                        <p className="mt-1 text-sm text-[#8DA0BF]">Select a reason and optionally add details.</p>
+
+                        <div className="mt-4 space-y-3">
+                            <div>
+                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Reason</label>
+                                <select
+                                    value={reportReason}
+                                    onChange={(e) => setReportReason(e.target.value)}
+                                    className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]"
+                                >
+                                    {reportReasons.map((reason) => (
+                                        <option key={reason} value={reason}>{reason}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Description (optional)</label>
+                                <textarea
+                                    value={reportDescription}
+                                    onChange={(e) => setReportDescription(e.target.value)}
+                                    rows={4}
+                                    maxLength={1000}
+                                    className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
+                                    placeholder="Provide context for admins"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-4 flex justify-end gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => setReportOpen(false)} disabled={safetyBusy}>Cancel</Button>
+                            <Button size="sm" variant="danger" onClick={handleSubmitReport} disabled={safetyBusy}>Submit Report</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ───── Profile Header ───── */}
             <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
                 <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
@@ -210,6 +321,17 @@ const PublicProfile = () => {
                                 <p className="text-gray-400 italic">No bio yet.</p>
                             )}
                         </div>
+
+                        {!isOwnProfile && user?.userId && (
+                            <div className="mt-5 flex flex-wrap gap-2">
+                                <Button size="sm" variant="secondary" onClick={() => setReportOpen(true)} disabled={safetyBusy}>
+                                    Report User
+                                </Button>
+                                <Button size="sm" variant={blockStatus?.isBlocking ? 'danger' : 'ghost'} onClick={handleToggleBlock} disabled={safetyBusy}>
+                                    {blockStatus?.isBlocking ? 'Unblock User' : 'Block User'}
+                                </Button>
+                            </div>
+                        )}
 
                         {p.learningLanguage && (
                             <div className="mt-4">

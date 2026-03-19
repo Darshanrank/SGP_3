@@ -54,6 +54,8 @@
     reportsFiled      Report[]       @relation("Reporter")
     reportsReceived   Report[]       @relation("ReportedUser")
     penalties         AdminPenalty[]
+    blockedUsers      BlockedUser[]  @relation("Blocker")
+    blockedByUsers    BlockedUser[]  @relation("BlockedUser")
 
     // Sessions
     refreshTokens    RefreshToken[]
@@ -216,18 +218,33 @@
     messages     ChatMessage[]
   }
 
+  enum ChatMessageType {
+    TEXT
+    IMAGE
+    FILE
+  }
+
   model ChatMessage {
-    id          Int      @id @default(autoincrement())
-    chatRoomId  Int
-    chatRoom    ChatRoom @relation(fields: [chatRoomId], references: [id])
-    senderId    Int
-    sender      Users    @relation(fields: [senderId], references: [userId])
-    message     String   @db.Text
-    isRead      Boolean  @default(false)
-    createdAt   DateTime @default(now())
+    id              Int             @id @default(autoincrement())
+    chatRoomId      Int
+    chatRoom        ChatRoom        @relation(fields: [chatRoomId], references: [id])
+    senderId        Int
+    sender          Users           @relation(fields: [senderId], references: [userId])
+    message         String          @db.Text
+    messageType     ChatMessageType @default(TEXT)
+    attachmentUrl   String?
+    attachmentName  String?
+    attachmentMime  String?
+    attachmentSize  Int?
+    deliveredAt     DateTime?
+    isRead          Boolean         @default(false)
+    readAt          DateTime?
+    createdAt       DateTime        @default(now())
 
     @@index([chatRoomId])
     @@index([senderId])
+    @@index([createdAt])
+    @@index([isRead])
   }
 
   model SwapCompletion {
@@ -328,6 +345,19 @@
     reason         String
     status         ReportStatus @default(OPEN)
     createdAt      DateTime     @default(now())
+  }
+
+  model BlockedUser {
+    id             Int      @id @default(autoincrement())
+    blockerId      Int
+    blocker        Users    @relation("Blocker", fields: [blockerId], references: [userId])
+    blockedUserId  Int
+    blockedUser    Users    @relation("BlockedUser", fields: [blockedUserId], references: [userId])
+    createdAt      DateTime @default(now())
+
+    @@unique([blockerId, blockedUserId])
+    @@index([blockerId])
+    @@index([blockedUserId])
   }
 
   enum PenaltyType {

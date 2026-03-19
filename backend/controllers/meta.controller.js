@@ -14,6 +14,7 @@ import {
     getMyReportsService,
     getReportsService,
     updateReportStatusService,
+    moderateReportService,
     createPenaltyService,
     getMyPenaltiesService,
     getPenaltiesService,
@@ -212,6 +213,19 @@ export const updateReportStatus = async (req, res, next) => {
             throw new ValidationError('Invalid report id', 'INVALID_REPORT_ID');
         }
         const report = await updateReportStatusService(reportId, req.body);
+        res.json(report);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const moderateReportAction = async (req, res, next) => {
+    try {
+        const reportId = Number.parseInt(req.params.id, 10);
+        if (!Number.isInteger(reportId)) {
+            throw new ValidationError('Invalid report id', 'INVALID_REPORT_ID');
+        }
+        const report = await moderateReportService(reportId, req.body);
         res.json(report);
     } catch (error) {
         next(error);

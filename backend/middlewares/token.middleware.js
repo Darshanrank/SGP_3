@@ -20,3 +20,23 @@ export const validateTokenMiddleware = (req, res, next) => {
         return res.status(401).json({ message: 'Invalid or expired token' });
     }
 }; 
+
+export const optionalTokenMiddleware = (req, _res, next) => {
+    let token = req.headers['authorization'];
+    if (!token) {
+        return next();
+    }
+
+    if (token.startsWith('Bearer ')) {
+        token = token.slice(7, token.length);
+    }
+
+    try {
+        const decoded = verifyAccessToken(token);
+        req.user = decoded;
+    } catch (_err) {
+        // Ignore invalid optional tokens for public endpoints.
+    }
+
+    return next();
+};

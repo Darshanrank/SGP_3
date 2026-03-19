@@ -56,7 +56,8 @@ export const getPublicProfile = async (req, res, next) => {
         if (!Number.isInteger(userId)) {
             throw new ValidationError('Invalid user id', 'INVALID_USER_ID');
         }
-        const profile = await getPublicProfileService(userId);
+        const viewerId = req.user?.userId ?? null;
+        const profile = await getPublicProfileService(userId, viewerId);
         res.json(profile);
     } catch (error) {
         next(error);
@@ -79,7 +80,8 @@ export const deleteAccount = async (req, res, next) => {
 export const getPublicProfileByUsername = async (req, res, next) => {
     try {
         const username = req.params.username;
-        const profile = await getPublicProfileByUsernameService(username);
+        const viewerId = req.user?.userId ?? null;
+        const profile = await getPublicProfileByUsernameService(username, viewerId);
         res.json(profile);
     } catch (error) {
         next(error);

@@ -92,7 +92,8 @@ const userSkillSchema = z.object({
 
 const reportSchema = z.object({
     reportedUserId: z.preprocess(toInt, z.number().int().positive()),
-    reason: z.string().min(5).max(1000)
+    reason: z.enum(['SPAM', 'HARASSMENT', 'SCAM_OR_FRAUD', 'INAPPROPRIATE_CONTENT', 'IMPERSONATION', 'OTHER']),
+    description: z.string().trim().max(1000).optional().nullable()
 });
 
 const calendarEventSchema = z.object({

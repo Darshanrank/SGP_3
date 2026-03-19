@@ -1,8 +1,9 @@
-import { NotFound, ValidationError } from '../errors/generic.errors.js';
+import { ForbiddenError, NotFound, ValidationError } from '../errors/generic.errors.js';
 import { sendEmailService } from './sendEmail.service.js';
 import prisma from '../prisma/client.js';
 import sanitizeHtml from 'sanitize-html';
 import { conf } from '../conf/conf.js';
+import { areUsersBlocked } from './block.service.js';
 
 // Allow safe HTML in bio (from TinyMCE) but strip dangerous tags/attributes
 const sanitizeBio = (html) => sanitizeHtml(html, {
@@ -184,7 +185,14 @@ export const updateProfileService = async (userId, data) => {
     });
 };
 
-export const getPublicProfileService = async (userId) => {
+export const getPublicProfileService = async (userId, viewerId = null) => {
+    if (Number.isInteger(viewerId) && viewerId !== userId) {
+        const blocked = await areUsersBlocked(viewerId, userId);
+        if (blocked) {
+            throw new ForbiddenError('This user is blocked.', 'USER_BLOCKED');
+        }
+    }
+
     const user = await prisma.users.findUnique({
         where: { userId },
         select: {
@@ -219,7 +227,7 @@ export const getPublicProfileService = async (userId) => {
     return user;
 };
 
-export const getPublicProfileByUsernameService = async (username) => {
+export const getPublicProfileByUsernameService = async (username, viewerId = null) => {
     const normalizedUsername = String(username || '').trim().toLowerCase();
 
     const user = await prisma.users.findFirst({
@@ -253,6 +261,14 @@ export const getPublicProfileByUsernameService = async (username) => {
     if (!user) {
         throw new NotFound('User not found');
     }
+
+    if (Number.isInteger(viewerId) && viewerId !== user.userId) {
+        const blocked = await areUsersBlocked(viewerId, user.userId);
+        if (blocked) {
+            throw new ForbiddenError('This user is blocked.', 'USER_BLOCKED');
+        }
+    }
+
     return user;
 };
 

@@ -2,6 +2,7 @@ import prisma from '../prisma/client.js';
 import { NotFound, ValidationError, ForbiddenError } from '../errors/generic.errors.js';
 import { assertUserInClass } from '../utils/assertUserInClass.js';
 import { evaluateBadges } from '../utils/badgeEvaluator.js';
+import { assertUsersNotBlocked } from './block.service.js';
 
 export const createSwapRequestService = async (fromUserId, data) => {
     const { toUserId, teachSkillId, learnSkillId, message } = data;
@@ -12,6 +13,8 @@ export const createSwapRequestService = async (fromUserId, data) => {
 
     const targetUser = await prisma.users.findUnique({ where: { userId: toUserId } });
     if (!targetUser) throw new NotFound('Target user not found');
+
+    await assertUsersNotBlocked(fromUserId, toUserId);
 
     // Validate own skill (optional now)
     if (teachSkillId) {
@@ -222,8 +225,8 @@ export const getMyClassesService = async (userId, { page = 1, limit = 20 } = {})
             include: {
                 swapRequest: {
                     include: {
-                        fromUser: { select: { username: true } },
-                        toUser: { select: { username: true } },
+                        fromUser: { select: { username: true, userId: true } },
+                        toUser: { select: { username: true, userId: true } },
                         teachSkill: { include: { skill: true, preview: true } },
                         learnSkill: { include: { skill: true, preview: true } }
                     }

@@ -1,6 +1,6 @@
 import express from 'express';
 import { getMyProfile, updateProfile, getPublicProfile, getPublicProfileByUsername, sendUpcomingReminder, deleteAccount, getFeaturedProfiles } from '../controllers/profile.controller.js';
-import { validateTokenMiddleware } from '../middlewares/token.middleware.js';
+import { optionalTokenMiddleware, validateTokenMiddleware } from '../middlewares/token.middleware.js';
 import { uploadMiddleware } from '../middlewares/upload.middleware.js';
 
 const router = express.Router();
@@ -12,7 +12,7 @@ router.post('/me/send-reminder', validateTokenMiddleware, sendUpcomingReminder);
 router.delete('/me', validateTokenMiddleware, deleteAccount);
 
 router.get('/featured', getFeaturedProfiles);
-router.get('/username/:username', getPublicProfileByUsername);
-router.get('/:id', getPublicProfile);
+router.get('/username/:username', optionalTokenMiddleware, getPublicProfileByUsername);
+router.get('/:id', optionalTokenMiddleware, getPublicProfile);
 
 export default router;

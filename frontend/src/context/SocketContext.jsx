@@ -12,9 +12,22 @@ const socketUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000').repl
 export const SocketProvider = ({ children }) => {
     const { user } = useAuth();
     const socketRef = useRef(null);
+    const [socket, setSocket] = useState(null);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [chatUnreadByClass, setChatUnreadByClass] = useState({});
     const reconnectAttempts = useRef(0);
     const MAX_RECONNECT_ATTEMPTS = 5;
+
+    const clearChatUnread = (classId) => {
+        if (!classId) return;
+        const key = String(classId);
+        setChatUnreadByClass((prev) => {
+            if (!prev[key]) return prev;
+            const next = { ...prev };
+            delete next[key];
+            return next;
+        });
+    };
 
     useEffect(() => {
         if (!user) {
@@ -23,6 +36,7 @@ export const SocketProvider = ({ children }) => {
                 socketRef.current.disconnect();
                 socketRef.current = null;
             }
+            setSocket(null);
             reconnectAttempts.current = 0;
             return;
         }
@@ -31,7 +45,7 @@ export const SocketProvider = ({ children }) => {
         const token = getToken();
         if (!token) return;
 
-        const socket = io(socketUrl, {
+        const socketInstance = io(socketUrl, {
             withCredentials: true,
             autoConnect: true,
             auth: { token },
@@ -41,15 +55,16 @@ export const SocketProvider = ({ children }) => {
             reconnectionDelayMax: 10000,
         });
 
-        socketRef.current = socket;
+        socketRef.current = socketInstance;
+        setSocket(socketInstance);
 
-        socket.on('connect', () => {
-            console.log('[Socket] Connected for notifications', socket.id);
+        socketInstance.on('connect', () => {
+            console.log('[Socket] Connected for notifications', socketInstance.id);
             reconnectAttempts.current = 0;
         });
 
         // Listen for real-time notifications
-        socket.on('new_notification', (notification) => {
+        socketInstance.on('new_notification', (notification) => {
             setUnreadCount((c) => c + 1);
             toast(notification.message || 'New notification', {
                 icon: '🔔',
@@ -58,25 +73,32 @@ export const SocketProvider = ({ children }) => {
         });
 
         // Listen for new chat messages (lightweight toast)
-        socket.on('new_chat_message', (data) => {
+        socketInstance.on('new_chat_message', (data) => {
+            const classKey = String(data?.classId || '');
+            if (classKey) {
+                setChatUnreadByClass((prev) => ({
+                    ...prev,
+                    [classKey]: (prev[classKey] || 0) + 1
+                }));
+            }
             toast(`${data.senderName || 'Someone'}: ${data.preview}`, {
                 icon: '💬',
                 duration: 3000,
             });
         });
 
-        socket.on('disconnect', (reason) => {
+        socketInstance.on('disconnect', (reason) => {
             console.log('[Socket] Disconnected:', reason);
         });
 
         // Handle auth errors — refresh token and reconnect
-        socket.on('connect_error', async (err) => {
+        socketInstance.on('connect_error', async (err) => {
             console.warn('[Socket] Connection error:', err.message);
             if (err.message === 'AUTH_INVALID' || err.message === 'AUTH_MISSING') {
                 reconnectAttempts.current += 1;
                 if (reconnectAttempts.current > MAX_RECONNECT_ATTEMPTS) {
                     console.warn('[Socket] Max reconnect attempts reached, giving up.');
-                    socket.disconnect();
+                    socketInstance.disconnect();
                     return;
                 }
                 try {
@@ -87,8 +109,8 @@ export const SocketProvider = ({ children }) => {
                         const store = localStorage.getItem('token') ? localStorage : sessionStorage;
                         store.setItem('token', newToken);
                         // Update socket auth and reconnect
-                        socket.auth = { token: newToken };
-                        socket.connect();
+                        socketInstance.auth = { token: newToken };
+                        socketInstance.connect();
                     }
                 } catch (refreshErr) {
                     console.warn('[Socket] Token refresh failed, cannot reconnect:', refreshErr.message);
@@ -97,16 +119,18 @@ export const SocketProvider = ({ children }) => {
         });
 
         return () => {
-            socket.off('new_notification');
-            socket.off('new_chat_message');
-            socket.off('connect_error');
-            socket.disconnect();
+            socketInstance.off('new_notification');
+            socketInstance.off('new_chat_message');
+            socketInstance.off('connect_error');
+            socketInstance.disconnect();
             socketRef.current = null;
+            setSocket(null);
+            setChatUnreadByClass({});
         };
     }, [user]);
 
     return (
-        <SocketContext.Provider value={{ socket: socketRef.current, unreadCount, setUnreadCount }}>
+        <SocketContext.Provider value={{ socket, unreadCount, setUnreadCount, chatUnreadByClass, clearChatUnread }}>
             {children}
         </SocketContext.Provider>
     );

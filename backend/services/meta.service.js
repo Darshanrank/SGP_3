@@ -1,5 +1,18 @@
 import prisma from '../prisma/client.js';
 import { NotFound, ValidationError } from '../errors/generic.errors.js';
+import { conf } from '../conf/conf.js';
+
+const ALLOWED_REPORT_REASONS = new Set([
+    'SPAM',
+    'HARASSMENT',
+    'SCAM_OR_FRAUD',
+    'INAPPROPRIATE_CONTENT',
+    'IMPERSONATION',
+    'OTHER'
+]);
+const MAX_REPORTS_PER_DAY = 5;
+
+const normalizeReportReason = (reason) => String(reason || '').trim().toUpperCase();
 
 export const getNotificationsService = async (userId, { page = 1, limit = 20, isRead } = {}) => {
     const skip = (page - 1) * limit;
@@ -102,10 +115,16 @@ export const getDashboardStatsService = async (userId) => {
 };
 
 export const reportUserService = async (reporterId, data) => {
-    const { reportedUserId, reason } = data;
+    const reportedUserId = Number(data?.reportedUserId);
+    const normalizedReason = normalizeReportReason(data?.reason);
+    const description = typeof data?.description === 'string' ? data.description.trim() : '';
 
     if (reporterId === reportedUserId) {
         throw new ValidationError('You cannot report yourself');
+    }
+
+    if (!ALLOWED_REPORT_REASONS.has(normalizedReason)) {
+        throw new ValidationError('Invalid report reason', 'INVALID_REPORT_REASON');
     }
 
     const reportedUser = await prisma.users.findUnique({
@@ -116,13 +135,59 @@ export const reportUserService = async (reporterId, data) => {
         throw new NotFound('Reported user not found');
     }
 
-    return await prisma.report.create({
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+
+    const [alreadyOpenReport, reportsToday] = await Promise.all([
+        prisma.report.findFirst({
+            where: {
+                reporterId,
+                reportedUserId,
+                status: 'OPEN'
+            }
+        }),
+        prisma.report.count({
+            where: {
+                reporterId,
+                createdAt: { gte: dayStart }
+            }
+        })
+    ]);
+
+    if (alreadyOpenReport) {
+        throw new ValidationError('You already have an open report for this user', 'DUPLICATE_REPORT');
+    }
+
+    if (reportsToday >= MAX_REPORTS_PER_DAY) {
+        throw new ValidationError('Daily report limit reached', 'REPORT_LIMIT_REACHED');
+    }
+
+    const reportReason = description
+        ? `${normalizedReason}: ${description}`
+        : normalizedReason;
+
+    const report = await prisma.report.create({
         data: {
             reporterId,
             reportedUserId,
-            reason
+            reason: reportReason
         }
     });
+
+    if (Array.isArray(conf.ADMIN_USER_IDS) && conf.ADMIN_USER_IDS.length > 0) {
+        const notifications = conf.ADMIN_USER_IDS
+            .filter((adminUserId) => Number.isInteger(adminUserId) && adminUserId !== reporterId)
+            .map((adminUserId) => ({
+                userId: adminUserId,
+                type: 'ADMIN',
+                message: `New user report submitted (#${report.id}) against @${reportedUser.username}`
+            }));
+        if (notifications.length > 0) {
+            await prisma.notification.createMany({ data: notifications });
+        }
+    }
+
+    return report;
 };
 
 export const getCalendarEventsService = async (userId, { page = 1, limit = 20, from, to } = {}) => {
@@ -279,15 +344,75 @@ export const updateReportStatusService = async (reportId, data) => {
     });
 };
 
+export const moderateReportService = async (reportId, data = {}) => {
+    const action = String(data?.action || '').trim().toUpperCase();
+    const adminReason = typeof data?.reason === 'string' ? data.reason.trim() : '';
+
+    if (!['WARNING', 'SUSPEND', 'BAN', 'REJECT'].includes(action)) {
+        throw new ValidationError('Invalid moderation action', 'INVALID_MODERATION_ACTION');
+    }
+
+    const report = await prisma.report.findUnique({
+        where: { id: reportId },
+        include: {
+            reportedUser: { select: { userId: true, username: true } }
+        }
+    });
+    if (!report) throw new NotFound('Report not found');
+
+    if (action === 'REJECT') {
+        return prisma.report.update({
+            where: { id: reportId },
+            data: { status: 'REJECTED' }
+        });
+    }
+
+    const penaltyType = action;
+    const reason = adminReason || `Moderation action from report #${reportId}`;
+
+    return prisma.$transaction(async (tx) => {
+        await tx.adminPenalty.create({
+            data: {
+                userId: report.reportedUserId,
+                reason,
+                penaltyType
+            }
+        });
+
+        await tx.notification.create({
+            data: {
+                userId: report.reportedUserId,
+                type: 'SYSTEM',
+                message: `You received a ${penaltyType.toLowerCase()} from moderation. Reason: ${reason}`
+            }
+        });
+
+        return tx.report.update({
+            where: { id: reportId },
+            data: { status: 'RESOLVED' }
+        });
+    });
+};
+
 // Penalties
 export const createPenaltyService = async (data) => {
     const { userId, reason, penaltyType } = data;
     const user = await prisma.users.findUnique({ where: { userId } });
     if (!user) throw new NotFound('User not found');
 
-    return await prisma.adminPenalty.create({
+    const penalty = await prisma.adminPenalty.create({
         data: { userId, reason, penaltyType }
     });
+
+    await prisma.notification.create({
+        data: {
+            userId,
+            type: 'SYSTEM',
+            message: `Admin action: ${penaltyType.toLowerCase()}. Reason: ${reason}`
+        }
+    });
+
+    return penalty;
 };
 
 export const getMyPenaltiesService = async (userId) => {
