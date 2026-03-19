@@ -5,10 +5,19 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Link } from 'react-router-dom';
 
+const normalizeEvent = (event) => ({
+    ...event,
+    startTime: event.startTime || event.eventDate || null,
+    endTime: event.endTime || null,
+    location: event.location || '',
+    swapId: event.swapId || event.swapClassId || null
+});
+
 const Calendar = () => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [submitError, setSubmitError] = useState('');
     const [form, setForm] = useState({ title: '', description: '', startTime: '', endTime: '', location: '' });
 
     useEffect(() => {
@@ -18,7 +27,7 @@ const Calendar = () => {
                 // A real calendar would integrate a library like react-big-calendar
                 const data = await getCalendarEvents();
                 const list = data?.data || data?.events || data || [];
-                setEvents(list);
+                setEvents(Array.isArray(list) ? list.map(normalizeEvent) : []);
             } catch (error) {
                 console.error(error);
             } finally {
@@ -30,14 +39,29 @@ const Calendar = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!form.title || !form.startTime) return;
+        if (!form.title || !form.startTime) {
+            setSubmitError('Title and start time are required.');
+            return;
+        }
+        setSubmitError('');
         setSaving(true);
         try {
-            const created = await createCalendarEvent(form);
-            setEvents((prev) => [created?.event || created || form, ...prev]);
+            const payload = {
+                title: form.title,
+                eventDate: form.startTime,
+                description: form.description || undefined
+            };
+            const created = await createCalendarEvent(payload);
+            const normalizedCreated = normalizeEvent({
+                ...(created?.event || created || {}),
+                endTime: form.endTime || null,
+                location: form.location || ''
+            });
+            setEvents((prev) => [normalizedCreated, ...prev]);
             setForm({ title: '', description: '', startTime: '', endTime: '', location: '' });
         } catch (err) {
             console.error(err);
+            setSubmitError(err?.response?.data?.message || 'Could not create event. Please try again.');
         } finally {
             setSaving(false);
         }
@@ -68,6 +92,7 @@ const Calendar = () => {
                     <Input label="End" type="datetime-local" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
                 </div>
                 <Input label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                {submitError ? <p className="text-sm text-red-300">{submitError}</p> : null}
                 <Button type="submit" disabled={saving}>Create Event</Button>
             </form>
 

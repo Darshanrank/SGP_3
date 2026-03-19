@@ -540,13 +540,31 @@ const Profile = () => {
                 }
             }
 
-            // Remove old skills that are no longer in the form
+            // Remove old skills that are no longer in the form.
+            // Keep explicit error handling so users know when backend constraints block deletion.
             const removed = existingUserSkills.filter((item) => !retainedSkillIds.has(item.id));
-            await Promise.all(removed.map(item => removeSkill(item.id).catch(() => {})));
+            const removeFailures = [];
+
+            for (const item of removed) {
+                try {
+                    await removeSkill(item.id);
+                } catch (err) {
+                    removeFailures.push(err?.response?.data?.message || `Failed to remove skill #${item.id}`);
+                }
+            }
 
             const updatedUser = await refreshUser();
-            if (skillSaveErrors > 0) {
-                toast.error(`${skillSaveErrors} skill(s) could not be saved. Please try again.`);
+            if (skillSaveErrors > 0 || removeFailures.length > 0) {
+                if (skillSaveErrors > 0) {
+                    toast.error(`${skillSaveErrors} skill(s) could not be saved. Please try again.`);
+                }
+
+                if (removeFailures.length > 0) {
+                    const uniqueRemovalMessages = [...new Set(removeFailures)];
+                    const baseMessage = `${removeFailures.length} skill(s) could not be removed.`;
+                    const detailMessage = uniqueRemovalMessages[0] ? ` ${uniqueRemovalMessages[0]}` : '';
+                    toast.error(`${baseMessage}${detailMessage}`);
+                }
             } else {
                 toast.success(finalize ? 'Profile setup saved successfully' : 'Changes saved');
             }

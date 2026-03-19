@@ -255,17 +255,21 @@ const Skills = () => {
                                     <div key={us.id} className="rounded-2xl border border-white/10 bg-[#0E1620] p-5 flex justify-between items-center transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setPreviewUser(us)}
+                                                <Link
+                                                    to={`/u/${us.user.username}`}
                                                     className="cursor-pointer text-left font-semibold text-[#DCE7F5] hover:text-[#0A4D9F]"
                                                 >
                                                     {us.user.username}
-                                                </button>
+                                                </Link>
                                                 {(us.preview?.videoUrl || us.proofUrl) && (
-                                                    <span className="inline-flex items-center gap-1 rounded-full bg-[#22C55E]/20 px-2 py-0.5 text-xs text-[#22C55E]">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPreviewUser(us)}
+                                                        className="inline-flex items-center gap-1 rounded-full bg-[#22C55E]/20 px-2 py-0.5 text-xs text-[#22C55E] transition hover:bg-[#22C55E]/30"
+                                                        aria-label={`Open ${us.user.username} demo`}
+                                                    >
                                                         <Play className="h-3 w-3" /> Demo
-                                                    </span>
+                                                    </button>
                                                 )}
                                             </div>
                                             <div className="text-sm text-[#8DA0BF]">Level: {us.level}</div>
