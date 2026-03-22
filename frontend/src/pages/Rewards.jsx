@@ -56,8 +56,6 @@ const Rewards = () => {
         load();
     }, []);
 
-    if (loading) return <div className="section-card text-center">Loading...</div>;
-
     const points = Number(rewards?.points || 0);
     const totalSwaps = Number(rewards?.totalSwaps ?? rewards?.swaps ?? 0);
     const unlockedBadgeNames = new Set(
@@ -154,6 +152,8 @@ const Rewards = () => {
         });
         localStorage.setItem(storageKey, String(latest.id));
     }, [rewardHistory, rewards?.userId]);
+
+    if (loading) return <div className="section-card text-center">Loading...</div>;
 
     return (
         <div className="page-shell">
