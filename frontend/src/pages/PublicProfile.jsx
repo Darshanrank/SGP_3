@@ -444,7 +444,7 @@ const PublicProfile = () => {
                                         {[1, 2, 3, 4, 5].map((s) => (
                                             <Star
                                                 key={s}
-                                                className={`h-4 w-4 ${s <= r.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                                                className={`h-4 w-4 ${s <= (r.overallRating || r.rating || 0) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
                                             />
                                         ))}
                                     </div>

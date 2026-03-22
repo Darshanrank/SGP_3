@@ -7,10 +7,29 @@ import {
     addClassTodo, 
     toggleTodo, 
     completeClass,
-    getMyClasses 
+    getMyClasses,
+    getPinnedResources,
+    addPinnedResource,
+    deletePinnedResource,
+    getCodeSnippets,
+    addCodeSnippet,
+    deleteCodeSnippet,
+    getClassroomFiles,
+    uploadClassroomFile,
+    getSharedNote,
+    updateSharedNote
 } from '../controllers/swap.controller.js';
 import { validateTokenMiddleware } from '../middlewares/token.middleware.js';
-import { validateSwapRequestInput, validateSwapStatusInput, validateTodoInput, validateToggleTodoInput } from '../middlewares/validation.middleware.js';
+import {
+    validateSwapRequestInput,
+    validateSwapStatusInput,
+    validateTodoInput,
+    validateToggleTodoInput,
+    validatePinnedResourceInput,
+    validateCodeSnippetInput,
+    validateSharedNoteInput
+} from '../middlewares/validation.middleware.js';
+import { uploadClassroomFileMiddleware } from '../middlewares/upload.middleware.js';
 
 const router = express.Router();
 
@@ -31,5 +50,20 @@ router.put('/classes/todos/:todoId', validateToggleTodoInput, toggleTodo);
 
 // Completion
 router.post('/classes/:id/complete', completeClass);
+
+// Classroom productivity tools
+router.get('/classes/:id/resources', getPinnedResources);
+router.post('/classes/:id/resources', validatePinnedResourceInput, addPinnedResource);
+router.delete('/classes/:id/resources/:resourceId', deletePinnedResource);
+
+router.get('/classes/:id/snippets', getCodeSnippets);
+router.post('/classes/:id/snippets', validateCodeSnippetInput, addCodeSnippet);
+router.delete('/classes/:id/snippets/:snippetId', deleteCodeSnippet);
+
+router.get('/classes/:id/files', getClassroomFiles);
+router.post('/classes/:id/files', uploadClassroomFileMiddleware.single('classroomFile'), uploadClassroomFile);
+
+router.get('/classes/:id/notes', getSharedNote);
+router.put('/classes/:id/notes', validateSharedNoteInput, updateSharedNote);
 
 export default router;

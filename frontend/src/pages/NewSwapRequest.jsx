@@ -11,7 +11,7 @@ import { Button } from '../components/ui/Button';
 import { Search, ArrowRightLeft, Send, ChevronLeft, User, BookOpen, GraduationCap, X, Play, ExternalLink } from 'lucide-react';
 
 const levelLabel = { LOW: 'Beginner', MEDIUM: 'Intermediate', HIGH: 'Advanced' };
-const levelColor = { LOW: 'bg-blue-100 text-blue-700', MEDIUM: 'bg-yellow-100 text-yellow-700', HIGH: 'bg-green-100 text-green-700' };
+const levelColor = { LOW: 'bg-blue-500/10 text-blue-400', MEDIUM: 'bg-amber-500/10 text-amber-400', HIGH: 'bg-green-500/10 text-green-400' };
 
 const MESSAGE_MAX = 1000;
 
@@ -172,7 +172,7 @@ const NewSwapRequest = () => {
 
             {/* Step indicator */}
             <div className="flex items-center gap-2 mb-8">
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${step === 1 ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${step === 1 ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}`}>
                     <User className="h-4 w-4" />
                     1. Select User
                 </div>
@@ -246,7 +246,7 @@ const NewSwapRequest = () => {
                                             )}
                                             <div className="flex flex-wrap gap-1.5 mt-2">
                                                 {(u.matchingTeachSkills || []).slice(0, 4).map((s) => (
-                                                    <span key={s.skillId} className="text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded-full border border-green-200">
+                                                    <span key={s.skillId} className="text-xs px-2 py-0.5 bg-green-500/10 text-green-400 rounded-full border border-green-500/30">
                                                         {s.skillName}
                                                     </span>
                                                 ))}
@@ -299,8 +299,8 @@ const NewSwapRequest = () => {
                     {/* Select skill to learn (required) */}
                     <div>
                         <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-3">
-                            <BookOpen className="h-5 w-5 text-green-600" />
-                            What do you want to learn? <span className="text-red-500">*</span>
+                            <BookOpen className="h-5 w-5 text-green-500" />
+                            What do you want to learn? <span className="text-red-400">*</span>
                         </h2>
                         <p className="text-sm text-gray-500 mb-4">Select a skill that {targetProfile?.profile?.fullName || targetProfile?.username || 'this user'} can teach you</p>
 
@@ -315,8 +315,8 @@ const NewSwapRequest = () => {
                                         key={skill.id}
                                         className={`relative border rounded-xl p-4 cursor-pointer transition-all ${
                                             selectedLearnSkillId === skill.id
-                                                ? 'border-[#22C55E] bg-[#22C55E]/12 ring-2 ring-[#22C55E]/30'
-                                                : 'border-white/10 bg-[#111721] hover:border-[#22C55E]/45 hover:bg-[#151D27]'
+                                                ? 'border-green-500/50 bg-green-500/10 ring-2 ring-green-500/30'
+                                                : 'border-white/10 bg-[#111721] hover:border-green-500/30 hover:bg-[#151D27]'
                                         }`}
                                         onClick={() => setSelectedLearnSkillId(skill.id)}
                                     >
@@ -464,7 +464,7 @@ const NewSwapRequest = () => {
                                 <span className="font-medium text-gray-900">
                                     {selectedLearnSkillId
                                         ? targetTeachSkills.find(s => s.id === selectedLearnSkillId)?.skill?.name || '—'
-                                        : <span className="text-red-500 italic">Not selected</span>
+                                        : <span className="text-red-400 italic">Not selected</span>
                                     }
                                 </span>
                             </div>

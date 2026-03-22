@@ -3,8 +3,27 @@ import { NotFound, ValidationError, ForbiddenError } from '../errors/generic.err
 import { assertUserInClass } from '../utils/assertUserInClass.js';
 import { evaluateBadges } from '../utils/badgeEvaluator.js';
 import { assertUsersNotBlocked } from './block.service.js';
+import sanitizeHtml from 'sanitize-html';
+import { createNotificationForUserService } from './notification.service.js';
 
-export const createSwapRequestService = async (fromUserId, data) => {
+const sanitizePlainText = (value) => sanitizeHtml(String(value || ''), { allowedTags: [], allowedAttributes: {} }).trim();
+
+const ensureClassOwnership = async (userId, classId) => {
+    await assertUserInClass(userId, classId);
+};
+
+const assertValidHttpUrl = (value, fieldName = 'url') => {
+    try {
+        const parsed = new URL(value);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+            throw new ValidationError(`Invalid ${fieldName}`);
+        }
+    } catch (_) {
+        throw new ValidationError(`Invalid ${fieldName}`);
+    }
+};
+
+export const createSwapRequestService = async (fromUserId, data, { io } = {}) => {
     const { toUserId, teachSkillId, learnSkillId, message } = data;
 
     if (fromUserId === toUserId) {
@@ -55,13 +74,13 @@ export const createSwapRequestService = async (fromUserId, data) => {
         }
     });
 
-    // Create Notification
-    await prisma.notification.create({
-        data: {
-            userId: toUserId,
-            type: 'SWAP_REQUEST',
-            message: `You have a new swap request!`
-        }
+    await createNotificationForUserService({
+        userId: toUserId,
+        type: 'SWAP_REQUEST',
+        message: 'You have a new swap request!',
+        link: '/swaps',
+        metadata: { requestId: request.id, fromUserId },
+        io
     });
 
     return request;
@@ -104,7 +123,7 @@ export const getMyRequestsService = async (userId, type, { page = 1, limit = 20 
     };
 };
 
-export const updateRequestStatusService = async (userId, requestId, data) => {
+export const updateRequestStatusService = async (userId, requestId, data, { io } = {}) => {
     const { status, cancelReason } = data;
     const normalizedCancelReason = typeof cancelReason === 'string' ? cancelReason.trim() : '';
     const allowedStatuses = ['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED'];
@@ -152,7 +171,7 @@ export const updateRequestStatusService = async (userId, requestId, data) => {
 
     const notifyUserId = request.fromUserId === userId ? request.toUserId : request.fromUserId;
 
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
         const updated = await tx.swapRequest.update({
             where: { id: requestId },
             data: {
@@ -170,24 +189,6 @@ export const updateRequestStatusService = async (userId, requestId, data) => {
                     data: { swapRequestId: request.id }
                 });
             }
-
-            await tx.notification.create({
-                data: {
-                    userId: notifyUserId,
-                    type: 'ACCEPTED',
-                    message: 'Your swap request has been accepted!'
-                }
-            });
-        }
-
-        if (status === 'REJECTED') {
-            await tx.notification.create({
-                data: {
-                    userId: notifyUserId,
-                    type: 'SYSTEM',
-                    message: 'Your swap request was rejected.'
-                }
-            });
         }
 
         if (status === 'CANCELLED') {
@@ -195,17 +196,45 @@ export const updateRequestStatusService = async (userId, requestId, data) => {
                 where: { swapRequestId: request.id },
                 data: { status: 'CANCELLED', endedAt: new Date() }
             });
-            await tx.notification.create({
-                data: {
-                    userId: notifyUserId,
-                    type: 'SYSTEM',
-                    message: 'A swap request was cancelled.'
-                }
-            });
         }
 
         return updated;
     });
+
+    if (status === 'ACCEPTED') {
+        await createNotificationForUserService({
+            userId: notifyUserId,
+            type: 'ACCEPTED',
+            message: 'Your swap request has been accepted!',
+            link: '/swaps',
+            metadata: { requestId },
+            io
+        });
+    }
+
+    if (status === 'REJECTED') {
+        await createNotificationForUserService({
+            userId: notifyUserId,
+            type: 'SYSTEM',
+            message: 'Your swap request was rejected.',
+            link: '/swaps',
+            metadata: { requestId, status },
+            io
+        });
+    }
+
+    if (status === 'CANCELLED') {
+        await createNotificationForUserService({
+            userId: notifyUserId,
+            type: 'SYSTEM',
+            message: 'A swap request was cancelled.',
+            link: '/swaps',
+            metadata: { requestId, status },
+            io
+        });
+    }
+
+    return result;
 };
 
 export const getMyClassesService = async (userId, { page = 1, limit = 20 } = {}) => {
@@ -257,6 +286,25 @@ export const getClassDetailsService = async (userId, classId) => {
         where: { id: classId },
         include: {
             todos: true,
+            pinnedResources: {
+                include: {
+                    creator: { select: { userId: true, username: true } }
+                },
+                orderBy: { createdAt: 'desc' }
+            },
+            codeSnippets: {
+                include: {
+                    creator: { select: { userId: true, username: true } }
+                },
+                orderBy: { createdAt: 'desc' }
+            },
+            classroomFiles: {
+                include: {
+                    uploader: { select: { userId: true, username: true } }
+                },
+                orderBy: { createdAt: 'desc' }
+            },
+            sharedNote: true,
             chatRoom: true,
             completion: true,
             reviews: {
@@ -389,4 +437,182 @@ export const completeClassService = async (userId, classId) => {
     }
 
     return finalCompletion;
+};
+
+export const getPinnedResourcesService = async (userId, classId) => {
+    await ensureClassOwnership(userId, classId);
+
+    return prisma.pinnedResource.findMany({
+        where: { swapClassId: classId },
+        include: {
+            creator: { select: { userId: true, username: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+};
+
+export const addPinnedResourceService = async (userId, classId, data) => {
+    await ensureClassOwnership(userId, classId);
+
+    const title = sanitizePlainText(data?.title);
+    const url = String(data?.url || '').trim();
+
+    if (!title) {
+        throw new ValidationError('Resource title is required');
+    }
+    if (!url) {
+        throw new ValidationError('Resource URL is required');
+    }
+    assertValidHttpUrl(url, 'resource URL');
+
+    return prisma.pinnedResource.create({
+        data: {
+            swapClassId: classId,
+            title,
+            url,
+            createdBy: userId
+        },
+        include: {
+            creator: { select: { userId: true, username: true } }
+        }
+    });
+};
+
+export const deletePinnedResourceService = async (userId, classId, resourceId) => {
+    await ensureClassOwnership(userId, classId);
+
+    const resource = await prisma.pinnedResource.findUnique({
+        where: { id: resourceId }
+    });
+
+    if (!resource || resource.swapClassId !== classId) {
+        throw new NotFound('Pinned resource not found');
+    }
+
+    await prisma.pinnedResource.delete({ where: { id: resourceId } });
+    return { success: true };
+};
+
+export const getCodeSnippetsService = async (userId, classId) => {
+    await ensureClassOwnership(userId, classId);
+
+    return prisma.codeSnippet.findMany({
+        where: { swapClassId: classId },
+        include: {
+            creator: { select: { userId: true, username: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+};
+
+export const addCodeSnippetService = async (userId, classId, data) => {
+    await ensureClassOwnership(userId, classId);
+
+    const title = sanitizePlainText(data?.title);
+    const language = sanitizePlainText(data?.language || 'text').toLowerCase();
+    const code = sanitizeHtml(String(data?.code || ''), { allowedTags: [], allowedAttributes: {} });
+
+    if (!title) {
+        throw new ValidationError('Snippet title is required');
+    }
+    if (!code.trim()) {
+        throw new ValidationError('Snippet code is required');
+    }
+
+    return prisma.codeSnippet.create({
+        data: {
+            swapClassId: classId,
+            title,
+            language: language || 'text',
+            code,
+            createdBy: userId
+        },
+        include: {
+            creator: { select: { userId: true, username: true } }
+        }
+    });
+};
+
+export const deleteCodeSnippetService = async (userId, classId, snippetId) => {
+    await ensureClassOwnership(userId, classId);
+
+    const snippet = await prisma.codeSnippet.findUnique({
+        where: { id: snippetId }
+    });
+
+    if (!snippet || snippet.swapClassId !== classId) {
+        throw new NotFound('Code snippet not found');
+    }
+
+    await prisma.codeSnippet.delete({ where: { id: snippetId } });
+    return { success: true };
+};
+
+export const getClassroomFilesService = async (userId, classId) => {
+    await ensureClassOwnership(userId, classId);
+
+    return prisma.classroomFile.findMany({
+        where: { swapClassId: classId },
+        include: {
+            uploader: { select: { userId: true, username: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+};
+
+export const addClassroomFileService = async (userId, classId, data) => {
+    await ensureClassOwnership(userId, classId);
+
+    const fileName = sanitizePlainText(data?.fileName);
+    const fileUrl = String(data?.fileUrl || '').trim();
+
+    if (!fileName || !fileUrl) {
+        throw new ValidationError('File name and URL are required');
+    }
+
+    return prisma.classroomFile.create({
+        data: {
+            swapClassId: classId,
+            fileName,
+            fileUrl,
+            uploadedBy: userId
+        },
+        include: {
+            uploader: { select: { userId: true, username: true } }
+        }
+    });
+};
+
+export const getSharedNoteService = async (userId, classId) => {
+    await ensureClassOwnership(userId, classId);
+
+    const note = await prisma.sharedNote.findUnique({
+        where: { swapClassId: classId }
+    });
+
+    if (note) return note;
+
+    return prisma.sharedNote.create({
+        data: {
+            swapClassId: classId,
+            content: ''
+        }
+    });
+};
+
+export const upsertSharedNoteService = async (userId, classId, data) => {
+    await ensureClassOwnership(userId, classId);
+
+    const content = sanitizeHtml(String(data?.content || ''), { allowedTags: [], allowedAttributes: {} });
+
+    return prisma.sharedNote.upsert({
+        where: { swapClassId: classId },
+        create: {
+            swapClassId: classId,
+            content
+        },
+        update: {
+            content
+        }
+    });
 };

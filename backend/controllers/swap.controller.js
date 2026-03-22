@@ -6,25 +6,27 @@ import {
     getClassDetailsService, 
     addClassTodoService, 
     toggleTodoService, 
-    completeClassService 
+    completeClassService,
+    getPinnedResourcesService,
+    addPinnedResourceService,
+    deletePinnedResourceService,
+    getCodeSnippetsService,
+    addCodeSnippetService,
+    deleteCodeSnippetService,
+    getClassroomFilesService,
+    addClassroomFileService,
+    getSharedNoteService,
+    upsertSharedNoteService
 } from '../services/swap.service.js';
 import { ValidationError } from '../errors/generic.errors.js';
-import { pushNotification } from '../utils/pushNotification.js';
-import prisma from '../prisma/client.js';
+import { conf } from '../conf/conf.js';
 
 // Create Swap Request
 export const createSwapRequest = async (req, res, next) => {
     try {
         const userId = req.user.userId;
-        const request = await createSwapRequestService(userId, req.body);
-
-        // Push real-time notification to the target user
         const io = req.app.get('io');
-        const latestNotif = await prisma.notification.findFirst({
-            where: { userId: request.toUserId, type: 'SWAP_REQUEST' },
-            orderBy: { createdAt: 'desc' }
-        });
-        if (latestNotif) pushNotification(io, request.toUserId, latestNotif);
+        const request = await createSwapRequestService(userId, req.body, { io });
 
         res.status(201).json(request);
     } catch (error) {
@@ -54,20 +56,8 @@ export const updateRequestStatus = async (req, res, next) => {
         if (!Number.isInteger(requestId)) {
             throw new ValidationError('Invalid request id', 'INVALID_REQUEST_ID');
         }
-        // Get request before update to know who to notify
-        const original = await prisma.swapRequest.findUnique({ where: { id: requestId } });
-        const result = await updateRequestStatusService(userId, requestId, req.body);
-
-        // Push real-time notification to the other user
-        if (original) {
-            const notifyUserId = original.fromUserId === userId ? original.toUserId : original.fromUserId;
-            const io = req.app.get('io');
-            const latestNotif = await prisma.notification.findFirst({
-                where: { userId: notifyUserId },
-                orderBy: { createdAt: 'desc' }
-            });
-            if (latestNotif) pushNotification(io, notifyUserId, latestNotif);
-        }
+        const io = req.app.get('io');
+        const result = await updateRequestStatusService(userId, requestId, req.body, { io });
 
         res.json(result);
     } catch (error) {
@@ -144,6 +134,158 @@ export const completeClass = async (req, res, next) => {
         }
         const result = await completeClassService(userId, classId);
         res.json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+const normalizeId = (value, fieldName) => {
+    const id = Number.parseInt(value, 10);
+    if (!Number.isInteger(id)) {
+        throw new ValidationError(`Invalid ${fieldName}`, `INVALID_${fieldName.toUpperCase().replace(/\s+/g, '_')}`);
+    }
+    return id;
+};
+
+const getUploadedFileUrl = (file) => {
+    if (!file) return null;
+    if (file.location) return file.location;
+    const relativePath = String(file.path || '').replace(/\\/g, '/');
+    if (!relativePath) return null;
+    return `${conf.BACKEND_URL || `http://localhost:${conf.PORT}`}/${relativePath}`;
+};
+
+export const getPinnedResources = async (req, res, next) => {
+    try {
+        const classId = normalizeId(req.params.id, 'class id');
+        const userId = req.user.userId;
+        const resources = await getPinnedResourcesService(userId, classId);
+        res.json(resources);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const addPinnedResource = async (req, res, next) => {
+    try {
+        const classId = normalizeId(req.params.id, 'class id');
+        const userId = req.user.userId;
+        const resource = await addPinnedResourceService(userId, classId, req.body);
+        res.status(201).json(resource);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const deletePinnedResource = async (req, res, next) => {
+    try {
+        const classId = normalizeId(req.params.id, 'class id');
+        const resourceId = normalizeId(req.params.resourceId, 'resource id');
+        const userId = req.user.userId;
+        const result = await deletePinnedResourceService(userId, classId, resourceId);
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getCodeSnippets = async (req, res, next) => {
+    try {
+        const classId = normalizeId(req.params.id, 'class id');
+        const userId = req.user.userId;
+        const snippets = await getCodeSnippetsService(userId, classId);
+        res.json(snippets);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const addCodeSnippet = async (req, res, next) => {
+    try {
+        const classId = normalizeId(req.params.id, 'class id');
+        const userId = req.user.userId;
+        const snippet = await addCodeSnippetService(userId, classId, req.body);
+        res.status(201).json(snippet);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const deleteCodeSnippet = async (req, res, next) => {
+    try {
+        const classId = normalizeId(req.params.id, 'class id');
+        const snippetId = normalizeId(req.params.snippetId, 'snippet id');
+        const userId = req.user.userId;
+        const result = await deleteCodeSnippetService(userId, classId, snippetId);
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getClassroomFiles = async (req, res, next) => {
+    try {
+        const classId = normalizeId(req.params.id, 'class id');
+        const userId = req.user.userId;
+        const files = await getClassroomFilesService(userId, classId);
+        res.json(files);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const uploadClassroomFile = async (req, res, next) => {
+    try {
+        const classId = normalizeId(req.params.id, 'class id');
+        const userId = req.user.userId;
+        if (!req.file) {
+            throw new ValidationError('Classroom file is required');
+        }
+
+        const fileUrl = getUploadedFileUrl(req.file);
+        if (!fileUrl) {
+            throw new ValidationError('Could not resolve uploaded file URL');
+        }
+
+        const saved = await addClassroomFileService(userId, classId, {
+            fileName: req.file.originalname,
+            fileUrl
+        });
+
+        res.status(201).json(saved);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getSharedNote = async (req, res, next) => {
+    try {
+        const classId = normalizeId(req.params.id, 'class id');
+        const userId = req.user.userId;
+        const note = await getSharedNoteService(userId, classId);
+        res.json(note);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateSharedNote = async (req, res, next) => {
+    try {
+        const classId = normalizeId(req.params.id, 'class id');
+        const userId = req.user.userId;
+        const note = await upsertSharedNoteService(userId, classId, req.body);
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`chat_${classId}`).emit('shared_note_updated', {
+                classId,
+                content: note.content,
+                updatedAt: note.updatedAt,
+                updatedBy: userId
+            });
+        }
+
+        res.json(note);
     } catch (error) {
         next(error);
     }

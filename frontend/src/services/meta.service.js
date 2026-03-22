@@ -1,8 +1,11 @@
 // src/services/meta.service.js
 import api from './api';
 
-export const getNotifications = async () => {
-    const response = await api.get('/meta/notifications');
+export const getNotifications = async ({ page = 1, limit = 20, isRead, type } = {}) => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (isRead !== undefined && isRead !== null) params.append('isRead', String(isRead));
+    if (type) params.append('type', String(type));
+    const response = await api.get(`/meta/notifications?${params.toString()}`);
     return response.data;
 };
 
@@ -21,6 +24,43 @@ export const markNotificationUnread = async (id) => {
 
 export const markAllNotificationsRead = async () => {
     const response = await api.put('/meta/notifications/read-all');
+    return response.data;
+};
+
+export const deleteNotification = async (id) => {
+    const response = await api.delete(`/meta/notifications/${id}`);
+    return response.data;
+};
+
+export const clearNotifications = async () => {
+    const response = await api.delete('/meta/notifications');
+    return response.data;
+};
+
+export const getNotificationPreferences = async () => {
+    const response = await api.get('/meta/notifications/preferences');
+    return response.data;
+};
+
+export const updateNotificationPreferences = async (payload) => {
+    const response = await api.put('/meta/notifications/preferences', payload);
+    return response.data;
+};
+
+export const getPushPublicKey = async () => {
+    const response = await api.get('/meta/notifications/push-public-key');
+    return response.data;
+};
+
+export const savePushSubscription = async (subscription) => {
+    const response = await api.post('/meta/notifications/push-subscriptions', subscription);
+    return response.data;
+};
+
+export const removePushSubscription = async (endpoint) => {
+    const response = await api.delete('/meta/notifications/push-subscriptions', {
+        data: { endpoint }
+    });
     return response.data;
 };
 

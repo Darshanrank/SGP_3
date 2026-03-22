@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getMyRequests, updateRequestStatus, getMyClasses } from '../services/swap.service';
 import { blockUser, getMyBlockedUsers, submitReport, unblockUser } from '../services/safety.service';
+import { getPublicProfileByUsername } from '../services/profile.service';
+import { getCalendarEvents } from '../services/meta.service';
 import { Button } from '../components/ui/Button';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import InputDialog from '../components/ui/InputDialog';
@@ -11,22 +13,19 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRightLeft, Clock, CheckCircle, XCircle, Ban, MessageSquare, BookOpen, GraduationCap, Plus, Inbox, Send, Users, Play, X, ExternalLink, Shield, RotateCcw } from 'lucide-react';
+import { ArrowRightLeft, Clock, CheckCircle, XCircle, Ban, MessageSquare, Plus, Inbox, Send, Users, Play, X, ExternalLink, Shield, RotateCcw, MoreVertical, MessageCircle, User, Repeat2, CalendarDays } from 'lucide-react';
 
 const reportReasons = ['SPAM', 'HARASSMENT', 'SCAM_OR_FRAUD', 'INAPPROPRIATE_CONTENT', 'IMPERSONATION', 'OTHER'];
 
 const statusConfig = {
-    PENDING: { label: 'Pending', color: 'bg-[#F59E0B]/20 text-[#F59E0B] border-[#F59E0B]/35', icon: Clock },
-    ACCEPTED: { label: 'Accepted', color: 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/35', icon: CheckCircle },
-    REJECTED: { label: 'Rejected', color: 'bg-[#EF4444]/20 text-[#EF4444] border-[#EF4444]/35', icon: XCircle },
-    CANCELLED: { label: 'Cancelled', color: 'bg-[#8DA0BF]/15 text-[#8DA0BF] border-white/10', icon: Ban },
+    PENDING: { label: 'Pending', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' },
+    ACCEPTED: { label: 'Accepted', color: 'bg-green-500/10 text-green-400 border-green-500/30' },
+    REJECTED: { label: 'Rejected', color: 'bg-red-500/10 text-red-400 border-red-500/30' },
+    COMPLETED: { label: 'Completed', color: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
+    CANCELLED: { label: 'Cancelled', color: 'bg-gray-500/10 text-gray-400 border-gray-500/30' },
 };
 
-const classStatusConfig = {
-    ONGOING: { label: 'Ongoing', color: 'bg-[#0A4D9F]/20 text-[#7BB2FF] border-[#0A4D9F]/35' },
-    COMPLETED: { label: 'Completed', color: 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/35' },
-    CANCELLED: { label: 'Cancelled', color: 'bg-[#8DA0BF]/15 text-[#8DA0BF] border-white/10' },
-};
+const SWAP_TIMELINE_STEPS = ['Request', 'Accepted', 'Classroom', 'Completed'];
 
 const timeAgo = (dateStr) => {
     const now = new Date();
@@ -44,14 +43,38 @@ const timeAgo = (dateStr) => {
 
 const StatusBadge = ({ status }) => {
     const cfg = statusConfig[status] || statusConfig.PENDING;
-    const Icon = cfg.icon;
     return (
-        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.color}`}>
-            <Icon className="h-3 w-3" />
+        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${cfg.color}`}>
             {cfg.label}
         </span>
     );
 };
+
+const SwapTimeline = ({ activeStep }) => (
+    <div className="mt-4 rounded-xl border border-white/10 bg-[#0E1620] px-3 py-3">
+        <div className="flex items-center gap-2 overflow-x-auto">
+            {SWAP_TIMELINE_STEPS.map((step, index) => {
+                const isCompleted = index <= activeStep;
+                const nextCompleted = index < SWAP_TIMELINE_STEPS.length - 1 && index + 1 <= activeStep;
+                return (
+                    <div key={step} className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 whitespace-nowrap">
+                            <span
+                                className={`h-2 w-2 rounded-full ${isCompleted ? 'bg-blue-400' : 'bg-gray-500'}`}
+                            />
+                            <span className={`text-xs ${isCompleted ? 'text-[#DCE7F5]' : 'text-[#8DA0BF]'}`}>
+                                {step}
+                            </span>
+                        </div>
+                        {index < SWAP_TIMELINE_STEPS.length - 1 && (
+                            <span className={`h-0.5 w-8 rounded ${nextCompleted ? 'bg-blue-400/80' : 'bg-gray-700'}`} />
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    </div>
+);
 
 const EmptyState = ({ icon: Icon, title, description, action }) => (
     <div className="text-center py-16">
@@ -74,9 +97,24 @@ const Swaps = () => {
     const [videoPreview, setVideoPreview] = useState(null); // { skillName, videoUrl, proofUrl }
     const [safetyBusy, setSafetyBusy] = useState(false);
     const [blockMenuOpen, setBlockMenuOpen] = useState(false);
+    const [actionMenuKey, setActionMenuKey] = useState(null);
+    const [blockConfirm, setBlockConfirm] = useState({ open: false, userId: null, username: '' });
     const [reportModal, setReportModal] = useState({ open: false, userId: null, username: '' });
     const [reportReason, setReportReason] = useState('HARASSMENT');
     const [reportDescription, setReportDescription] = useState('');
+    const [hoveredUsername, setHoveredUsername] = useState(null);
+    const [loadingPreviewUsername, setLoadingPreviewUsername] = useState(null);
+    const [profilePreviewCache, setProfilePreviewCache] = useState({});
+
+    useEffect(() => {
+        const handleDocClick = (event) => {
+            if (!event.target.closest('[data-swap-action-menu]')) {
+                setActionMenuKey(null);
+            }
+        };
+        document.addEventListener('click', handleDocClick);
+        return () => document.removeEventListener('click', handleDocClick);
+    }, []);
 
     const { data: sentRequests = [], isLoading: loadingSent } = useQuery({
         queryKey: ['swaps', 'sent'],
@@ -101,6 +139,15 @@ const Swaps = () => {
         queryFn: async () => {
             const res = await getMyClasses();
             return Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+        },
+        staleTime: 30000,
+    });
+
+    const { data: calendarEventsPayload } = useQuery({
+        queryKey: ['swaps', 'calendar-events'],
+        queryFn: async () => {
+            const res = await getCalendarEvents(1, 200);
+            return res;
         },
         staleTime: 30000,
     });
@@ -168,6 +215,233 @@ const Swaps = () => {
         return requests.filter(r => r.status === statusFilter);
     };
 
+    const calendarEvents = Array.isArray(calendarEventsPayload)
+        ? calendarEventsPayload
+        : Array.isArray(calendarEventsPayload?.data)
+            ? calendarEventsPayload.data
+            : [];
+
+    const nextSessionByClassId = useMemo(() => {
+        const now = new Date();
+        const mapped = {};
+
+        calendarEvents.forEach((event) => {
+            const classId = event?.swapClassId;
+            if (!classId) return;
+
+            const eventDate = event?.eventDate ? new Date(event.eventDate) : null;
+            if (!eventDate || Number.isNaN(eventDate.getTime())) return;
+
+            const current = mapped[classId];
+            if (eventDate < now) return;
+            if (!current || eventDate < current) {
+                mapped[classId] = eventDate;
+            }
+        });
+
+        return mapped;
+    }, [calendarEvents]);
+
+    const formatNextSession = (sessionDate) => {
+        if (!sessionDate) return 'No session scheduled';
+        return sessionDate.toLocaleString('en-US', {
+            weekday: 'short',
+            hour: 'numeric',
+            minute: '2-digit'
+        }).replace(',', ' •');
+    };
+
+    const renderSwapDirectionBlock = ({ teachSkill, learnSkill, teachLabel = 'You teach', learnLabel = 'You learn' }) => (
+        <div className="mt-3 rounded-lg border border-white/10 bg-[#0E1620] p-3">
+            <div className="flex items-center justify-center gap-4">
+                <div className="w-28 rounded-lg border border-white/10 bg-[#0F172A] px-3 py-2 text-center">
+                    <p className="truncate text-sm font-medium text-[#DCE7F5]">{teachSkill || 'Not specified'}</p>
+                    <p className="mt-1 text-[11px] text-[#8DA0BF]">{teachLabel}</p>
+                </div>
+
+                <Repeat2 className="h-4 w-4 shrink-0 text-gray-400" />
+
+                <div className="w-28 rounded-lg border border-white/10 bg-[#0F172A] px-3 py-2 text-center">
+                    <p className="truncate text-sm font-medium text-[#DCE7F5]">{learnSkill || 'Not specified'}</p>
+                    <p className="mt-1 text-[11px] text-[#8DA0BF]">{learnLabel}</p>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderTabEmptyState = (title, description) => (
+        <div className="mx-auto max-w-xl rounded-xl border border-white/10 bg-[#0F172A] p-8 text-center">
+            <h3 className="text-lg font-medium text-white">{title}</h3>
+            <p className="mt-2 text-sm text-gray-400">{description}</p>
+            <Button
+                size="sm"
+                className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-500"
+                onClick={() => navigate('/discover')}
+            >
+                Discover Skills
+            </Button>
+        </div>
+    );
+
+    const handleOpenChat = (swapClassId) => {
+        if (!swapClassId) {
+            toast('Chat will be available once the request is accepted.');
+            return;
+        }
+        navigate(`/swaps/${swapClassId}`);
+    };
+
+    const openReportForUser = (userId, username) => {
+        setReportModal({ open: true, userId, username });
+        setActionMenuKey(null);
+    };
+
+    const openBlockConfirm = (userId, username) => {
+        setBlockConfirm({ open: true, userId, username });
+        setActionMenuKey(null);
+    };
+
+    const handleConfirmBlock = async () => {
+        if (!blockConfirm.userId) return;
+        setSafetyBusy(true);
+        try {
+            await blockUser(blockConfirm.userId);
+            toast.success(`Blocked @${blockConfirm.username}`);
+            setBlockConfirm({ open: false, userId: null, username: '' });
+            queryClient.invalidateQueries({ queryKey: ['swaps', 'blocked-users'] });
+        } catch (error) {
+            toast.error(error?.response?.data?.message || 'Failed to block user');
+        } finally {
+            setSafetyBusy(false);
+        }
+    };
+
+    const loadProfilePreview = async (username) => {
+        if (!username || profilePreviewCache[username]) return;
+        setLoadingPreviewUsername(username);
+        try {
+            const profile = await getPublicProfileByUsername(username);
+            setProfilePreviewCache((prev) => ({ ...prev, [username]: profile }));
+        } catch (_) {
+            setProfilePreviewCache((prev) => ({ ...prev, [username]: null }));
+        } finally {
+            setLoadingPreviewUsername((prev) => (prev === username ? null : prev));
+        }
+    };
+
+    const renderProfileHoverCard = (username) => {
+        if (hoveredUsername !== username) return null;
+
+        const profile = profilePreviewCache[username];
+        const isLoading = loadingPreviewUsername === username;
+        const teaches = (profile?.userSkills || [])
+            .filter((item) => item.type === 'TEACH')
+            .map((item) => item?.skill?.name)
+            .filter(Boolean)
+            .slice(0, 3);
+        const availability = Array.isArray(profile?.availability)
+            ? profile.availability.map((slot) => String(slot.dayOfWeek || '').slice(0, 3)).filter(Boolean).slice(0, 4)
+            : [];
+        const ratingValue = Number(profile?.reputationMetrics?.averageRating || 0);
+        const ratingLabel = ratingValue > 0 ? ratingValue.toFixed(1) : 'New';
+        const fullName = profile?.profile?.fullName || username;
+
+        return (
+            <div className="absolute left-0 top-full z-30 mt-2 w-56 rounded-lg border border-white/10 bg-[#0F172A] p-4 shadow-lg">
+                {isLoading ? (
+                    <p className="text-xs text-[#8DA0BF]">Loading profile...</p>
+                ) : !profile ? (
+                    <p className="text-xs text-[#8DA0BF]">Profile preview unavailable.</p>
+                ) : (
+                    <>
+                        <div className="flex items-center gap-2">
+                            {profile?.profile?.avatarUrl ? (
+                                <img src={profile.profile.avatarUrl} alt={fullName} className="h-9 w-9 rounded-full object-cover" />
+                            ) : (
+                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0A4D9F]/30 text-sm font-semibold text-[#DCE7F5]">
+                                    {String(fullName)[0].toUpperCase()}
+                                </div>
+                            )}
+                            <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-[#DCE7F5]">{fullName}</p>
+                                <p className="truncate text-xs text-[#8DA0BF]">@{username}</p>
+                            </div>
+                        </div>
+                        <p className="mt-2 text-xs text-[#DCE7F5]">⭐ {ratingLabel}</p>
+                        <p className="mt-2 text-xs text-[#8DA0BF]">Teaches:</p>
+                        <p className="text-xs text-[#DCE7F5]">{teaches.length ? teaches.join(', ') : 'Not listed'}</p>
+                        <p className="mt-2 text-xs text-[#8DA0BF]">Availability:</p>
+                        <p className="text-xs text-[#DCE7F5]">{availability.length ? availability.join(' ') : 'Not set'}</p>
+                    </>
+                )}
+            </div>
+        );
+    };
+
+    const renderCardActionMenu = ({ menuKey, userId, username, chatClassId }) => {
+        if (!userId) return null;
+        const isOpen = actionMenuKey === menuKey;
+
+        return (
+            <div className="relative" data-swap-action-menu>
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setActionMenuKey((prev) => (prev === menuKey ? null : menuKey));
+                    }}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-[#0E1620] text-[#8DA0BF] transition hover:bg-[#1F2937] hover:text-[#DCE7F5]"
+                    aria-label="Open actions"
+                >
+                    <MoreVertical className="h-4 w-4" />
+                </button>
+
+                {isOpen && (
+                    <div className="absolute right-0 top-10 z-30 w-44 rounded-xl border border-white/5 bg-[#111827] p-2 shadow-[0_16px_40px_rgba(0,0,0,0.55)]">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                navigate(`/u/${username}`);
+                                setActionMenuKey(null);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-[#DCE7F5] transition hover:bg-[#1F2937]"
+                        >
+                            <User className="h-4 w-4" />
+                            View Profile
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                handleOpenChat(chatClassId);
+                                setActionMenuKey(null);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-[#DCE7F5] transition hover:bg-[#1F2937]"
+                        >
+                            <MessageCircle className="h-4 w-4" />
+                            Open Chat
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => openReportForUser(userId, username)}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-[#DCE7F5] transition hover:bg-[#1F2937]"
+                        >
+                            <Shield className="h-4 w-4" />
+                            Report User
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => openBlockConfirm(userId, username)}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-red-400 transition hover:bg-red-500/10"
+                        >
+                            <Ban className="h-4 w-4" />
+                            Block User
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     const pendingReceivedCount = receivedRequests.filter(r => r.status === 'PENDING').length;
     const pendingSentCount = sentRequests.filter(r => r.status === 'PENDING').length;
     const ongoingClassCount = activeClasses.filter(c => c.status === 'ONGOING').length;
@@ -179,19 +453,43 @@ const Swaps = () => {
     ];
 
     const blockedUsersCount = blockedUsers.length;
+    const activeSwapsCount = activeClasses.filter((c) => c.status === 'ONGOING').length;
+    const pendingRequestsCount = [...receivedRequests, ...sentRequests].filter((r) => r.status === 'PENDING').length;
+    const completedSwapsCount = activeClasses.filter((c) => c.status === 'COMPLETED').length;
 
     const renderRequestCard = (req, type) => {
         const isReceived = type === 'received';
         const otherUser = isReceived ? req.fromUser : req.toUser;
         const otherUsername = otherUser?.username || 'Unknown';
         const otherUserId = otherUser?.userId;
+        const requestTimelineStep = (() => {
+            if (req.status === 'PENDING') return 0;
+            if (req.status === 'REJECTED') return 0;
+            if (req.status === 'CANCELLED') return req.swapClass ? 2 : 0;
+            if (req.status === 'ACCEPTED') {
+                if (req.swapClass?.status === 'COMPLETED') return 3;
+                if (req.swapClass) return 2;
+                return 1;
+            }
+            return 0;
+        })();
+        const teachSkillName = isReceived ? req.learnSkill?.skill?.name : req.teachSkill?.skill?.name;
+        const learnSkillName = isReceived ? req.teachSkill?.skill?.name : req.learnSkill?.skill?.name;
+        const nextSession = req.swapClass?.id ? nextSessionByClassId[req.swapClass.id] : null;
 
         return (
             <div key={req.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)] transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
-                <div className="p-5">
+                <div className="p-4">
                     {/* Header row */}
                     <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div
+                            className="relative flex min-w-0 items-center gap-3"
+                            onMouseEnter={() => {
+                                setHoveredUsername(otherUsername);
+                                loadProfilePreview(otherUsername);
+                            }}
+                            onMouseLeave={() => setHoveredUsername((prev) => (prev === otherUsername ? null : prev))}
+                        >
                             <div className="h-10 w-10 shrink-0 rounded-full bg-[#0A4D9F]/25 flex items-center justify-center text-[#DCE7F5] font-bold text-sm">
                                 {otherUsername[0].toUpperCase()}
                             </div>
@@ -204,59 +502,32 @@ const Swaps = () => {
                                 </div>
                                 <p className="mt-0.5 text-xs text-[#6F83A3]">{timeAgo(req.createdAt)}</p>
                             </div>
+                            {renderProfileHoverCard(otherUsername)}
                         </div>
-                        <StatusBadge status={req.status} />
+                        <div className="flex items-center gap-2">
+                            <StatusBadge status={req.status} />
+                            {renderCardActionMenu({
+                                menuKey: `request-${req.id}`,
+                                userId: otherUserId,
+                                username: otherUsername,
+                                chatClassId: req.swapClass?.id
+                            })}
+                        </div>
                     </div>
 
-                    {/* Skills info */}
-                    <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                        <div className="flex-1 rounded-lg border border-[#22C55E]/25 bg-[#22C55E]/10 p-3">
-                            <div className="flex items-center justify-between mb-1">
-                                <div className="flex items-center gap-1.5 text-xs font-medium text-[#22C55E]">
-                                    <BookOpen className="h-3.5 w-3.5" />
-                                    {isReceived ? 'They want to learn' : 'You want to learn'}
-                                </div>
-                                {(req.learnSkill?.preview?.videoUrl || req.learnSkill?.proofUrl) && (
-                                    <button
-                                        onClick={() => setVideoPreview({
-                                            skillName: req.learnSkill?.skill?.name,
-                                            videoUrl: req.learnSkill?.preview?.videoUrl,
-                                            proofUrl: req.learnSkill?.proofUrl
-                                        })}
-                                        className="flex items-center gap-1 text-xs font-medium text-[#22C55E] transition-colors hover:text-[#86efac]"
-                                    >
-                                        <Play className="h-3 w-3" />
-                                        Preview
-                                    </button>
-                                )}
-                            </div>
-                            <p className="text-sm font-semibold text-[#DCE7F5]">{req.learnSkill?.skill?.name || 'Unknown skill'}</p>
-                        </div>
+                    {renderSwapDirectionBlock({
+                        teachSkill: teachSkillName,
+                        learnSkill: learnSkillName,
+                        teachLabel: 'You teach',
+                        learnLabel: 'You learn'
+                    })}
 
-                        {req.teachSkill?.skill?.name && (
-                            <div className="flex-1 rounded-lg border border-[#0A4D9F]/25 bg-[#0A4D9F]/12 p-3">
-                                <div className="flex items-center justify-between mb-1">
-                                    <div className="flex items-center gap-1.5 text-xs font-medium text-[#7BB2FF]">
-                                        <GraduationCap className="h-3.5 w-3.5" />
-                                        {isReceived ? 'They offer to teach' : 'You offer to teach'}
-                                    </div>
-                                    {(req.teachSkill?.preview?.videoUrl || req.teachSkill?.proofUrl) && (
-                                        <button
-                                            onClick={() => setVideoPreview({
-                                                skillName: req.teachSkill?.skill?.name,
-                                                videoUrl: req.teachSkill?.preview?.videoUrl,
-                                                proofUrl: req.teachSkill?.proofUrl
-                                            })}
-                                            className="flex items-center gap-1 text-xs font-medium text-[#7BB2FF] transition-colors hover:text-[#9fc8ff]"
-                                        >
-                                            <Play className="h-3 w-3" />
-                                            Preview
-                                        </button>
-                                    )}
-                                </div>
-                                <p className="text-sm font-semibold text-[#DCE7F5]">{req.teachSkill.skill.name}</p>
-                            </div>
-                        )}
+                    <div className="mt-3 rounded-lg border border-white/10 bg-[#0E1620] p-3">
+                        <p className="text-[11px] uppercase tracking-wide text-gray-400">Next Session</p>
+                        <p className="mt-1 inline-flex items-center gap-2 text-sm font-medium text-white">
+                            <CalendarDays className="h-4 w-4 text-gray-400" />
+                            {formatNextSession(nextSession)}
+                        </p>
                     </div>
 
                     {/* Message */}
@@ -269,16 +540,18 @@ const Swaps = () => {
 
                     {/* Cancel reason */}
                     {req.cancelReason && (
-                        <div className="mt-3 flex items-start gap-2 rounded-lg border border-[#EF4444]/30 bg-[#EF4444]/12 p-3">
-                            <Ban className="mt-0.5 h-4 w-4 shrink-0 text-[#EF4444]" />
-                            <p className="text-sm text-[#EF4444]">Reason: {req.cancelReason}</p>
+                        <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+                            <p className="text-sm font-medium text-red-300">Cancellation reason</p>
+                            <p className="mt-1 text-sm text-red-200">{req.cancelReason}</p>
                         </div>
                     )}
+
+                    <SwapTimeline activeStep={requestTimelineStep} />
                 </div>
 
                 {/* Actions footer */}
                 {req.status === 'PENDING' && (
-                    <div className="flex justify-end gap-2 border-t border-white/10 bg-[#0E1620] px-5 py-3">
+                    <div className="flex justify-end gap-2 border-t border-white/10 bg-[#0E1620] px-4 py-2.5">
                         {isReceived ? (
                             <>
                                 <Button
@@ -307,123 +580,55 @@ const Swaps = () => {
                                 Cancel Request
                             </Button>
                         )}
-                        {otherUserId && (
-                            <>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => setReportModal({ open: true, userId: otherUserId, username: otherUsername })}
-                                    disabled={safetyBusy}
-                                >
-                                    Report
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="danger"
-                                    onClick={async () => {
-                                        setSafetyBusy(true);
-                                        try {
-                                            await blockUser(otherUserId);
-                                            toast.success(`Blocked @${otherUsername}`);
-                                        } catch (error) {
-                                            toast.error(error?.response?.data?.message || 'Failed to block user');
-                                        } finally {
-                                            setSafetyBusy(false);
-                                        }
-                                    }}
-                                    disabled={safetyBusy}
-                                >
-                                    Block
-                                </Button>
-                            </>
-                        )}
                     </div>
                 )}
 
-                {/* View class link if accepted */}
-                {req.status === 'ACCEPTED' && (
-                    <div className="flex flex-wrap justify-end gap-2 border-t border-[#22C55E]/30 bg-[#22C55E]/10 px-5 py-3">
-                        {req.swapClass && (
-                            <Link to={`/swaps/${req.swapClass.id}`}>
-                                <Button size="sm" variant="secondary">
-                                    <ArrowRightLeft className="h-4 w-4 mr-1" />
-                                    Go to Classroom
-                                </Button>
-                            </Link>
-                        )}
-                        {!isReceived && (
-                            <Button
-                                size="sm"
-                                variant="danger"
-                                onClick={() => openCancelDialog(req.id, otherUsername)}
-                            >
-                                <Ban className="h-4 w-4 mr-1" />
-                                Cancel Request
-                            </Button>
-                        )}
-                        {otherUserId && (
-                            <>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => setReportModal({ open: true, userId: otherUserId, username: otherUsername })}
-                                    disabled={safetyBusy}
-                                >
-                                    Report
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="danger"
-                                    onClick={async () => {
-                                        setSafetyBusy(true);
-                                        try {
-                                            await blockUser(otherUserId);
-                                            toast.success(`Blocked @${otherUsername}`);
-                                        } catch (error) {
-                                            toast.error(error?.response?.data?.message || 'Failed to block user');
-                                        } finally {
-                                            setSafetyBusy(false);
-                                        }
-                                    }}
-                                    disabled={safetyBusy}
-                                >
-                                    Block
-                                </Button>
-                            </>
-                        )}
-                    </div>
-                )}
-
-                {(req.status !== 'ACCEPTED' && req.status !== 'PENDING') && otherUserId && (
-                    <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 bg-[#0E1620] px-5 py-3">
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setReportModal({ open: true, userId: otherUserId, username: otherUsername })}
-                            disabled={safetyBusy}
-                        >
-                            Report
-                        </Button>
+                {req.status === 'ACCEPTED' && !isReceived && (
+                    <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 bg-[#0E1620] px-4 py-2.5">
                         <Button
                             size="sm"
                             variant="danger"
-                            onClick={async () => {
-                                setSafetyBusy(true);
-                                try {
-                                    await blockUser(otherUserId);
-                                    toast.success(`Blocked @${otherUsername}`);
-                                } catch (error) {
-                                    toast.error(error?.response?.data?.message || 'Failed to block user');
-                                } finally {
-                                    setSafetyBusy(false);
-                                }
-                            }}
-                            disabled={safetyBusy}
+                            onClick={() => openCancelDialog(req.id, otherUsername)}
                         >
-                            Block
+                            <Ban className="h-4 w-4 mr-1" />
+                            Cancel Request
                         </Button>
                     </div>
                 )}
+
+                <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 bg-[#0E1620] px-4 py-2.5">
+                    {req.swapClass ? (
+                        <Link to={`/swaps/${req.swapClass.id}`}>
+                            <Button size="sm" variant="secondary" className="gap-1.5">
+                                <ArrowRightLeft className="h-4 w-4" />
+                                Go to Classroom
+                            </Button>
+                        </Link>
+                    ) : (
+                        <Button size="sm" variant="secondary" className="gap-1.5" disabled>
+                            <ArrowRightLeft className="h-4 w-4" />
+                            Classroom
+                        </Button>
+                    )}
+
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1.5 bg-[#0F172A] border border-white/10 text-gray-200 hover:bg-[#1E293B]"
+                        onClick={() => handleOpenChat(req.swapClass?.id)}
+                        disabled={!req.swapClass}
+                    >
+                        <MessageCircle className="h-4 w-4" />
+                        Chat
+                    </Button>
+
+                    <Link to={`/u/${otherUsername}`}>
+                        <Button size="sm" variant="secondary" className="gap-1.5">
+                            <User className="h-4 w-4" />
+                            Profile
+                        </Button>
+                    </Link>
+                </div>
             </div>
         );
     };
@@ -439,16 +644,29 @@ const Swaps = () => {
         const teachSkillObj = cls.swapRequest?.teachSkill;
         const learnSkill = learnSkillObj?.skill?.name || 'Unknown';
         const teachSkill = teachSkillObj?.skill?.name;
-        const classCfg = classStatusConfig[cls.status] || classStatusConfig.ONGOING;
+        const classBadgeStatus = cls.status === 'COMPLETED'
+            ? 'COMPLETED'
+            : cls.status === 'CANCELLED'
+                ? 'CANCELLED'
+                : 'ACCEPTED';
+        const classTimelineStep = cls.status === 'COMPLETED' ? 3 : 2;
         const isCompleted = cls.completion?.completedAt;
+        const nextSession = nextSessionByClassId[cls.id] || null;
 
         const unreadForClass = chatUnreadByClass?.[String(cls.id)] || 0;
 
         return (
             <div key={cls.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)] transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
-                <div className="p-5">
+                <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
+                        <div
+                            className="relative flex items-center gap-3"
+                            onMouseEnter={() => {
+                                setHoveredUsername(partnerName);
+                                loadProfilePreview(partnerName);
+                            }}
+                            onMouseLeave={() => setHoveredUsername((prev) => (prev === partnerName ? null : prev))}
+                        >
                             <div className="h-10 w-10 shrink-0 rounded-full bg-[#0A4D9F]/25 flex items-center justify-center text-[#DCE7F5] font-bold text-sm">
                                 {partnerName[0].toUpperCase()}
                             </div>
@@ -460,56 +678,32 @@ const Swaps = () => {
                                 </div>
                                 <p className="mt-0.5 text-xs text-[#6F83A3]">Swap #{cls.id}</p>
                             </div>
+                            {renderProfileHoverCard(partnerName)}
                         </div>
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${classCfg.color}`}>
-                            {classCfg.label}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <StatusBadge status={classBadgeStatus} />
+                            {renderCardActionMenu({
+                                menuKey: `class-${cls.id}`,
+                                userId: partnerUserId,
+                                username: partnerName,
+                                chatClassId: cls.id
+                            })}
+                        </div>
                     </div>
 
-                    {/* Skills */}
-                    <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                        <div className="flex-1 rounded-lg border border-[#22C55E]/25 bg-[#22C55E]/10 p-3">
-                            <div className="flex items-center justify-between mb-1">
-                                    <div className="flex items-center gap-1.5 text-xs font-medium text-[#22C55E]">
-                                    <BookOpen className="h-3.5 w-3.5" /> Learning
-                                </div>
-                                {(learnSkillObj?.preview?.videoUrl || learnSkillObj?.proofUrl) && (
-                                    <button
-                                        onClick={() => setVideoPreview({
-                                            skillName: learnSkill,
-                                            videoUrl: learnSkillObj?.preview?.videoUrl,
-                                            proofUrl: learnSkillObj?.proofUrl
-                                        })}
-                                        className="flex items-center gap-1 text-xs font-medium text-[#22C55E] transition-colors hover:text-[#86efac]"
-                                    >
-                                        <Play className="h-3 w-3" /> Preview
-                                    </button>
-                                )}
-                            </div>
-                            <p className="text-sm font-semibold text-[#DCE7F5]">{learnSkill}</p>
-                        </div>
-                        {teachSkill && (
-                            <div className="flex-1 rounded-lg border border-[#0A4D9F]/25 bg-[#0A4D9F]/12 p-3">
-                                <div className="flex items-center justify-between mb-1">
-                                    <div className="flex items-center gap-1.5 text-xs font-medium text-[#7BB2FF]">
-                                        <GraduationCap className="h-3.5 w-3.5" /> Teaching
-                                    </div>
-                                    {(teachSkillObj?.preview?.videoUrl || teachSkillObj?.proofUrl) && (
-                                        <button
-                                            onClick={() => setVideoPreview({
-                                                skillName: teachSkill,
-                                                videoUrl: teachSkillObj?.preview?.videoUrl,
-                                                proofUrl: teachSkillObj?.proofUrl
-                                            })}
-                                            className="flex items-center gap-1 text-xs font-medium text-[#7BB2FF] transition-colors hover:text-[#9fc8ff]"
-                                        >
-                                            <Play className="h-3 w-3" /> Preview
-                                        </button>
-                                    )}
-                                </div>
-                                <p className="text-sm font-semibold text-[#DCE7F5]">{teachSkill}</p>
-                            </div>
-                        )}
+                    {renderSwapDirectionBlock({
+                        teachSkill,
+                        learnSkill,
+                        teachLabel: 'You teach',
+                        learnLabel: 'You learn'
+                    })}
+
+                    <div className="mt-3 rounded-lg border border-white/10 bg-[#0E1620] p-3">
+                        <p className="text-[11px] uppercase tracking-wide text-gray-400">Next Session</p>
+                        <p className="mt-1 inline-flex items-center gap-2 text-sm font-medium text-white">
+                            <CalendarDays className="h-4 w-4 text-gray-400" />
+                            {formatNextSession(nextSession)}
+                        </p>
                     </div>
 
                     {/* Completion progress */}
@@ -528,41 +722,13 @@ const Swaps = () => {
                             </p>
                         </div>
                     )}
+
+                    <SwapTimeline activeStep={classTimelineStep} />
                 </div>
 
-                <div className="flex justify-end border-t border-white/10 bg-[#0E1620] px-5 py-3">
-                    {partnerUserId && (
-                        <div className="mr-2 flex gap-2">
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setReportModal({ open: true, userId: partnerUserId, username: partnerName })}
-                                disabled={safetyBusy}
-                            >
-                                Report
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="danger"
-                                onClick={async () => {
-                                    setSafetyBusy(true);
-                                    try {
-                                        await blockUser(partnerUserId);
-                                        toast.success(`Blocked @${partnerName}`);
-                                    } catch (error) {
-                                        toast.error(error?.response?.data?.message || 'Failed to block user');
-                                    } finally {
-                                        setSafetyBusy(false);
-                                    }
-                                }}
-                                disabled={safetyBusy}
-                            >
-                                Block
-                            </Button>
-                        </div>
-                    )}
+                <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 bg-[#0E1620] px-4 py-2.5">
                     <Link to={`/swaps/${cls.id}`}>
-                        <Button size="sm" variant="secondary" className="relative">
+                        <Button size="sm" variant="secondary" className="relative gap-1.5">
                             <ArrowRightLeft className="h-4 w-4 mr-1" />
                             {cls.status === 'ONGOING' ? 'Enter Classroom' : 'View Details'}
                             {unreadForClass > 0 && (
@@ -570,6 +736,23 @@ const Swaps = () => {
                                     {unreadForClass > 99 ? '99+' : unreadForClass}
                                 </span>
                             )}
+                        </Button>
+                    </Link>
+
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1.5 bg-[#0F172A] border border-white/10 text-gray-200 hover:bg-[#1E293B]"
+                        onClick={() => handleOpenChat(cls.id)}
+                    >
+                        <MessageCircle className="h-4 w-4" />
+                        Chat
+                    </Button>
+
+                    <Link to={`/u/${partnerName}`}>
+                        <Button size="sm" variant="secondary" className="gap-1.5">
+                            <User className="h-4 w-4" />
+                            Profile
                         </Button>
                     </Link>
                 </div>
@@ -687,6 +870,17 @@ const Swaps = () => {
                 onCancel={() => setConfirmDialog({ open: false, requestId: null, action: '', title: '', message: '' })}
             />
 
+            <ConfirmDialog
+                open={blockConfirm.open}
+                title="Block this user?"
+                message="You will no longer receive swap requests or messages from this user."
+                confirmLabel="Confirm Block"
+                variant="danger"
+                confirmDisabled={safetyBusy}
+                onConfirm={handleConfirmBlock}
+                onCancel={() => setBlockConfirm({ open: false, userId: null, username: '' })}
+            />
+
             <InputDialog
                 open={cancelDialog.open}
                 title={`Cancel request to @${cancelDialog.targetUsername}`}
@@ -708,6 +902,38 @@ const Swaps = () => {
                 </Button>
             </div>
 
+            <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+                <article className="rounded-xl border border-white/10 bg-[#0F172A] p-5">
+                    <div className="flex items-center gap-3">
+                        <div className="rounded-lg border border-white/10 bg-[#111721] p-2">
+                            <Repeat2 className="h-4 w-4 text-[#9FC8FF]" />
+                        </div>
+                        <p className="text-sm text-gray-400">Active Swaps</p>
+                    </div>
+                    <p className="mt-3 text-3xl font-semibold text-white">{activeSwapsCount}</p>
+                </article>
+
+                <article className="rounded-xl border border-white/10 bg-[#0F172A] p-5">
+                    <div className="flex items-center gap-3">
+                        <div className="rounded-lg border border-white/10 bg-[#111721] p-2">
+                            <Clock className="h-4 w-4 text-yellow-400" />
+                        </div>
+                        <p className="text-sm text-gray-400">Pending Requests</p>
+                    </div>
+                    <p className="mt-3 text-3xl font-semibold text-white">{pendingRequestsCount}</p>
+                </article>
+
+                <article className="rounded-xl border border-white/10 bg-[#0F172A] p-5">
+                    <div className="flex items-center gap-3">
+                        <div className="rounded-lg border border-white/10 bg-[#111721] p-2">
+                            <CheckCircle className="h-4 w-4 text-blue-400" />
+                        </div>
+                        <p className="text-sm text-gray-400">Completed Swaps</p>
+                    </div>
+                    <p className="mt-3 text-3xl font-semibold text-white">{completedSwapsCount}</p>
+                </article>
+            </section>
+
             <div className="section-card relative p-0! overflow-visible">
                 {/* Tabs */}
                 <div className="flex border-b border-white/10 px-2 sm:px-4">
@@ -724,6 +950,7 @@ const Swaps = () => {
                                 setActiveTab(tab.key);
                                 setStatusFilter('ALL');
                                 setBlockMenuOpen(false);
+                                setActionMenuKey(null);
                             }}
                         >
                             <tab.icon className="h-4 w-4" />
@@ -753,7 +980,7 @@ const Swaps = () => {
                         </Button>
 
                         {blockMenuOpen && (
-                            <div className="absolute right-0 top-full z-30 mt-2 w-80 overflow-hidden rounded-xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)]">
+                            <div className="absolute right-0 top-full z-30 mt-2 w-[24rem] overflow-hidden rounded-xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)]">
                                 <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
                                     <p className="text-sm font-semibold text-[#DCE7F5]">Blocked Users</p>
                                     <button
@@ -766,13 +993,23 @@ const Swaps = () => {
                                     </button>
                                 </div>
 
-                                <div className="max-h-72 space-y-2 overflow-y-auto p-3">
+                                <div className="max-h-80 space-y-3 overflow-y-auto p-3">
                                     {loadingBlockedUsers && (
                                         <p className="text-sm text-[#8DA0BF]">Loading blocked users...</p>
                                     )}
 
                                     {!loadingBlockedUsers && blockedUsersCount === 0 && (
-                                        <p className="text-sm text-[#8DA0BF]">No blocked users.</p>
+                                        <div className="rounded-xl border border-white/10 bg-[#0F172A] p-6 text-center">
+                                            <h4 className="text-lg font-medium text-white">No blocked users</h4>
+                                            <p className="mt-2 text-sm text-gray-400">Users you block will appear here.</p>
+                                            <button
+                                                type="button"
+                                                className="mt-4 rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-xs text-[#DCE7F5] transition hover:bg-[#151D27]"
+                                                onClick={() => toast('Use the actions menu on swap cards to block users when needed.')}
+                                            >
+                                                Learn More
+                                            </button>
+                                        </div>
                                     )}
 
                                     {!loadingBlockedUsers && blockedUsers.map((entry) => {
@@ -780,16 +1017,36 @@ const Swaps = () => {
                                         const blockedUserId = blocked?.userId || entry?.blockedUserId;
                                         const displayName = blocked?.profile?.fullName || blocked?.username || `User ${blockedUserId}`;
                                         const handle = blocked?.username ? `@${blocked.username}` : `#${blockedUserId}`;
+                                        const blockedAt = entry?.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown';
+                                        const reason = entry?.reason || 'Manual block';
 
                                         return (
-                                            <div key={entry.id || blockedUserId} className="flex items-center justify-between rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2">
-                                                <div className="min-w-0">
-                                                    <p className="truncate text-sm font-medium text-[#DCE7F5]">{displayName}</p>
-                                                    <p className="truncate text-xs text-[#8DA0BF]">{handle}</p>
+                                            <div key={entry.id || blockedUserId} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-[#0F172A] p-4">
+                                                <div className="flex min-w-0 items-center gap-3">
+                                                    {blocked?.profile?.avatarUrl ? (
+                                                        <img
+                                                            src={blocked.profile.avatarUrl}
+                                                            alt={displayName}
+                                                            className="h-10 w-10 shrink-0 rounded-full object-cover"
+                                                        />
+                                                    ) : (
+                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0A4D9F]/25 text-sm font-semibold text-[#DCE7F5]">
+                                                            {(blocked?.username || 'U')[0].toUpperCase()}
+                                                        </div>
+                                                    )}
+
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-sm font-medium text-[#DCE7F5]">{displayName}</p>
+                                                        <p className="truncate text-xs text-[#8DA0BF]">{handle}</p>
+                                                        <p className="mt-1 text-xs text-[#8DA0BF]">Reason: {reason}</p>
+                                                        <p className="text-xs text-[#8DA0BF]">Blocked on: {blockedAt}</p>
+                                                    </div>
                                                 </div>
+
                                                 <Button
                                                     size="sm"
-                                                    variant="secondary"
+                                                    variant="ghost"
+                                                    className="border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20"
                                                     disabled={safetyBusy || !blockedUserId}
                                                     onClick={async () => {
                                                         if (!blockedUserId) return;
@@ -819,7 +1076,7 @@ const Swaps = () => {
                 {/* Status filter (for request tabs only) */}
                 {(activeTab === 'received' || activeTab === 'sent') && (
                     <div className="p-4 flex gap-2 flex-wrap">
-                        {['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED'].map(status => {
+                        {['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED', 'COMPLETED'].map(status => {
                             const currentRequests = activeTab === 'received' ? receivedRequests : sentRequests;
                             const count = status === 'ALL' ? currentRequests.length : currentRequests.filter(r => r.status === status).length;
                             return (
@@ -847,13 +1104,16 @@ const Swaps = () => {
                     <div className="space-y-5">
                         {loadingReceived ? <ListItemSkeleton count={3} /> : (
                             filterRequests(receivedRequests).length === 0 ? (
-                                <EmptyState
-                                    icon={Inbox}
-                                    title={statusFilter !== 'ALL' ? `No ${statusConfig[statusFilter]?.label.toLowerCase()} requests` : 'No requests received'}
-                                    description={statusFilter !== 'ALL' ? 'Try changing the filter to see other requests.' : 'When someone sends you a swap request, it will appear here.'}
-                                />
+                                renderTabEmptyState(
+                                    statusFilter === 'ALL'
+                                        ? 'No swaps yet.'
+                                        : `No ${String(statusConfig[statusFilter]?.label || statusFilter).toLowerCase()} swaps yet.`,
+                                    'Find users and start a new skill exchange.'
+                                )
                             ) : (
-                                filterRequests(receivedRequests).map(req => renderRequestCard(req, 'received'))
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    {filterRequests(receivedRequests).map(req => renderRequestCard(req, 'received'))}
+                                </div>
                             )
                         )}
                     </div>
@@ -863,19 +1123,16 @@ const Swaps = () => {
                     <div className="space-y-5">
                         {loadingSent ? <ListItemSkeleton count={3} /> : (
                             filterRequests(sentRequests).length === 0 ? (
-                                <EmptyState
-                                    icon={Send}
-                                    title={statusFilter !== 'ALL' ? `No ${statusConfig[statusFilter]?.label.toLowerCase()} requests` : 'No requests sent'}
-                                    description={statusFilter !== 'ALL' ? 'Try changing the filter to see other requests.' : 'Start by browsing skills and sending a swap request.'}
-                                    action={statusFilter === 'ALL' && (
-                                        <Button size="sm" onClick={() => navigate('/swaps/new')}>
-                                            <Plus className="h-4 w-4 mr-1" />
-                                            Send Your First Request
-                                        </Button>
-                                    )}
-                                />
+                                renderTabEmptyState(
+                                    statusFilter === 'ALL'
+                                        ? 'No swaps yet.'
+                                        : `No ${String(statusConfig[statusFilter]?.label || statusFilter).toLowerCase()} swaps yet.`,
+                                    'Find users and start a new skill exchange.'
+                                )
                             ) : (
-                                filterRequests(sentRequests).map(req => renderRequestCard(req, 'sent'))
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    {filterRequests(sentRequests).map(req => renderRequestCard(req, 'sent'))}
+                                </div>
                             )
                         )}
                     </div>
@@ -885,13 +1142,11 @@ const Swaps = () => {
                     <div className="space-y-5">
                         {loadingClasses ? <ListItemSkeleton count={3} /> : (
                             activeClasses.length === 0 ? (
-                                <EmptyState
-                                    icon={Users}
-                                    title="No classrooms yet"
-                                    description="Once a swap request is accepted, a classroom will be created where you can collaborate."
-                                />
+                                renderTabEmptyState('No completed swaps yet.', 'Find users and start a new skill exchange.')
                             ) : (
-                                activeClasses.map(cls => renderClassCard(cls))
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    {activeClasses.map(cls => renderClassCard(cls))}
+                                </div>
                             )
                         )}
                     </div>

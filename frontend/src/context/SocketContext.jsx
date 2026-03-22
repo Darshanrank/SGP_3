@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import io from 'socket.io-client';
 import { toast } from 'react-hot-toast';
 import api from '../services/api';
+import { getNotifications, getUnreadCount } from '../services/meta.service';
 
 const SocketContext = createContext(null);
 
@@ -15,6 +16,7 @@ export const SocketProvider = ({ children }) => {
     const [socket, setSocket] = useState(null);
     const [unreadCount, setUnreadCount] = useState(0);
     const [chatUnreadByClass, setChatUnreadByClass] = useState({});
+    const [recentNotifications, setRecentNotifications] = useState([]);
     const reconnectAttempts = useRef(0);
     const MAX_RECONNECT_ATTEMPTS = 5;
 
@@ -29,6 +31,46 @@ export const SocketProvider = ({ children }) => {
         });
     };
 
+    const showBrowserNotification = async ({ title, body, data }) => {
+        if (typeof window === 'undefined' || !('Notification' in window)) return;
+        if (document.visibilityState === 'visible') return;
+
+        if (Notification.permission !== 'granted') return;
+
+        try {
+            if ('serviceWorker' in navigator) {
+                const registration = await navigator.serviceWorker.ready;
+                await registration.showNotification(title || 'SkillSwap', {
+                    body,
+                    data,
+                    icon: '/vite.svg',
+                    badge: '/vite.svg'
+                });
+                return;
+            }
+            new Notification(title || 'SkillSwap', { body, data });
+        } catch (_) {
+            // Ignore browser notification failures
+        }
+    };
+
+    const refreshNotificationState = async () => {
+        try {
+            const [countRes, notificationRes] = await Promise.all([
+                getUnreadCount(),
+                getNotifications({ page: 1, limit: 8 })
+            ]);
+
+            setUnreadCount(countRes?.unread ?? 0);
+            const notifications = Array.isArray(notificationRes)
+                ? notificationRes
+                : (notificationRes?.data || []);
+            setRecentNotifications(notifications);
+        } catch (_) {
+            // Ignore fetch failures on startup/reconnect
+        }
+    };
+
     useEffect(() => {
         if (!user) {
             // Disconnect if logged out
@@ -38,6 +80,8 @@ export const SocketProvider = ({ children }) => {
             }
             setSocket(null);
             reconnectAttempts.current = 0;
+            setRecentNotifications([]);
+            setUnreadCount(0);
             return;
         }
 
@@ -57,6 +101,7 @@ export const SocketProvider = ({ children }) => {
 
         socketRef.current = socketInstance;
         setSocket(socketInstance);
+        refreshNotificationState();
 
         socketInstance.on('connect', () => {
             console.log('[Socket] Connected for notifications', socketInstance.id);
@@ -66,9 +111,19 @@ export const SocketProvider = ({ children }) => {
         // Listen for real-time notifications
         socketInstance.on('new_notification', (notification) => {
             setUnreadCount((c) => c + 1);
+            setRecentNotifications((prev) => {
+                const next = [notification, ...prev.filter((item) => item.id !== notification.id)];
+                return next.slice(0, 8);
+            });
             toast(notification.message || 'New notification', {
                 icon: '🔔',
                 duration: 4000,
+            });
+
+            showBrowserNotification({
+                title: notification.type ? `SkillSwap - ${String(notification.type).replace(/_/g, ' ')}` : 'SkillSwap',
+                body: notification.message || 'You have a new notification',
+                data: { link: notification.link }
             });
         });
 
@@ -85,6 +140,22 @@ export const SocketProvider = ({ children }) => {
                 icon: '💬',
                 duration: 3000,
             });
+
+            showBrowserNotification({
+                title: `New message from ${data.senderName || 'Partner'}`,
+                body: data.preview || 'You have a new chat message',
+                data: { link: `/swaps/${data.classId}` }
+            });
+        });
+
+        socketInstance.on('class_reminder', (notification) => {
+            toast(notification?.message || 'Class reminder', { icon: '⏰', duration: 4000 });
+            showBrowserNotification({
+                title: 'Class reminder',
+                body: notification?.message || 'Your class starts soon',
+                data: { link: '/calendar' }
+            });
+            refreshNotificationState();
         });
 
         socketInstance.on('disconnect', (reason) => {
@@ -121,16 +192,27 @@ export const SocketProvider = ({ children }) => {
         return () => {
             socketInstance.off('new_notification');
             socketInstance.off('new_chat_message');
+            socketInstance.off('class_reminder');
             socketInstance.off('connect_error');
             socketInstance.disconnect();
             socketRef.current = null;
             setSocket(null);
             setChatUnreadByClass({});
+            setRecentNotifications([]);
         };
     }, [user]);
 
     return (
-        <SocketContext.Provider value={{ socket, unreadCount, setUnreadCount, chatUnreadByClass, clearChatUnread }}>
+        <SocketContext.Provider value={{
+            socket,
+            unreadCount,
+            setUnreadCount,
+            chatUnreadByClass,
+            clearChatUnread,
+            recentNotifications,
+            setRecentNotifications,
+            refreshNotificationState
+        }}>
             {children}
         </SocketContext.Provider>
     );

@@ -73,7 +73,7 @@ const ResetPassword = () => {
             >
               {showPassword ? 'Hide password' : 'Show password'}
             </button>
-            {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
+            {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
           </div>
 
           <div>

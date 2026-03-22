@@ -132,7 +132,7 @@ const AddSkill = () => {
                                 <option key={skill.id} value={skill.name}>{skill.name}</option>
                             ))}
                         </select>
-                        {errors.skillName && <p className="mt-1 text-sm text-red-600">{errors.skillName.message}</p>}
+                        {errors.skillName && <p className="mt-1 text-sm text-red-400">{errors.skillName.message}</p>}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -142,7 +142,7 @@ const AddSkill = () => {
                                 {...register('newSkillName', { required: isCreatingNew ? 'Skill name is required' : false })}
                                 placeholder="e.g. UI Design"
                             />
-                            {errors.newSkillName && <p className="mt-1 text-sm text-red-600">{errors.newSkillName.message}</p>}
+                            {errors.newSkillName && <p className="mt-1 text-sm text-red-400">{errors.newSkillName.message}</p>}
                         </div>
                         <div>
                             <Input
@@ -215,10 +215,10 @@ const AddSkill = () => {
                                 </div>
                             )}
                             {uploadStatus === 'success' && (
-                                <p className="text-xs text-green-600 mt-1 font-medium">Video uploaded successfully!</p>
+                                <p className="text-xs text-green-400 mt-1 font-medium">Video uploaded successfully!</p>
                             )}
                             {uploadStatus === 'error' && (
-                                <p className="text-xs text-red-600 mt-1 font-medium">Upload failed. Please try again.</p>
+                                <p className="text-xs text-red-400 mt-1 font-medium">Upload failed. Please try again.</p>
                             )}
                             {/* Local video preview before upload */}
                             {videoPreviewUrl && !uploadedVideoUrl && !isUploading && (
@@ -230,7 +230,7 @@ const AddSkill = () => {
                             {/* Uploaded video preview */}
                             {uploadedVideoUrl && !isUploading && (
                                 <div className="mt-2">
-                                    <p className="text-xs text-green-700 mb-1 font-medium">Uploaded video:</p>
+                                    <p className="text-xs text-green-400 mb-1 font-medium">Uploaded video:</p>
                                     <video src={uploadedVideoUrl} controls className="w-full max-h-48 rounded border" />
                                 </div>
                             )}
@@ -247,7 +247,7 @@ const AddSkill = () => {
                                 })}
                                 placeholder="Portfolio, GitHub, YouTube, etc."
                             />
-                            {errors.proofUrl && <p className="mt-1 text-sm text-red-600">{errors.proofUrl.message}</p>}
+                            {errors.proofUrl && <p className="mt-1 text-sm text-red-400">{errors.proofUrl.message}</p>}
                         </div>
                     </div>
                 )}

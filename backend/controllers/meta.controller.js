@@ -1,10 +1,10 @@
-import { 
-    getNotificationsService, 
-    markNotificationReadService, 
+import {
+    getNotificationsService,
+    markNotificationReadService,
     markNotificationUnreadService,
-    getDashboardStatsService, 
-    reportUserService, 
-    getCalendarEventsService, 
+    getDashboardStatsService,
+    reportUserService,
+    getCalendarEventsService,
     createCalendarEventService,
     getBadgesService,
     getMyBadgesService,
@@ -21,7 +21,14 @@ import {
     markAllNotificationsReadService,
     getUnreadCountService,
     getLeaderboardService,
-    getSkillCategoriesService
+    getSkillCategoriesService,
+    getNotificationPreferencesService,
+    updateNotificationPreferencesService,
+    savePushSubscriptionMetaService,
+    removePushSubscriptionMetaService,
+    getPushPublicKeyMetaService,
+    deleteNotificationMetaService,
+    clearNotificationHistoryMetaService
 } from '../services/meta.service.js';
 import { ValidationError } from '../errors/generic.errors.js';
 
@@ -32,7 +39,8 @@ export const getNotifications = async (req, res, next) => {
         const page = Number.parseInt(req.query.page, 10) || 1;
         const limit = Number.parseInt(req.query.limit, 10) || 20;
         const isRead = req.query.isRead;
-        const notifications = await getNotificationsService(userId, { page, limit, isRead });
+        const type = req.query.type;
+        const notifications = await getNotificationsService(userId, { page, limit, isRead, type });
         res.json(notifications);
     } catch (error) {
         next(error);
@@ -88,6 +96,80 @@ export const markAllNotificationsRead = async (req, res, next) => {
     }
 };
 
+export const deleteNotification = async (req, res, next) => {
+    try {
+        const id = Number.parseInt(req.params.id, 10);
+        const userId = req.user.userId;
+        if (!Number.isInteger(id)) {
+            throw new ValidationError('Invalid notification id', 'INVALID_NOTIFICATION_ID');
+        }
+        const result = await deleteNotificationMetaService(userId, id);
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const clearNotificationHistory = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const result = await clearNotificationHistoryMetaService(userId);
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getNotificationPreferences = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const preferences = await getNotificationPreferencesService(userId);
+        res.json(preferences);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateNotificationPreferences = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const preferences = await updateNotificationPreferencesService(userId, req.body);
+        res.json(preferences);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getPushPublicKey = async (_req, res, next) => {
+    try {
+        const payload = await getPushPublicKeyMetaService();
+        res.json(payload);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const savePushSubscription = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const subscription = await savePushSubscriptionMetaService(userId, req.body);
+        res.status(201).json(subscription);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const removePushSubscription = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const endpoint = req.body?.endpoint;
+        const result = await removePushSubscriptionMetaService(userId, endpoint);
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
 // Get Dashboard Stats (Rewards, Badges)
 export const getDashboardStats = async (req, res, next) => {
     try {
@@ -103,7 +185,8 @@ export const getDashboardStats = async (req, res, next) => {
 export const reportUser = async (req, res, next) => {
     try {
         const reporterId = req.user.userId;
-        const report = await reportUserService(reporterId, req.body);
+        const io = req.app.get('io');
+        const report = await reportUserService(reporterId, req.body, { io });
         res.status(201).json(report);
     } catch (error) {
         next(error);
@@ -225,7 +308,8 @@ export const moderateReportAction = async (req, res, next) => {
         if (!Number.isInteger(reportId)) {
             throw new ValidationError('Invalid report id', 'INVALID_REPORT_ID');
         }
-        const report = await moderateReportService(reportId, req.body);
+        const io = req.app.get('io');
+        const report = await moderateReportService(reportId, req.body, { io });
         res.json(report);
     } catch (error) {
         next(error);
@@ -235,7 +319,8 @@ export const moderateReportAction = async (req, res, next) => {
 // Penalties
 export const createPenalty = async (req, res, next) => {
     try {
-        const penalty = await createPenaltyService(req.body);
+        const io = req.app.get('io');
+        const penalty = await createPenaltyService(req.body, { io });
         res.status(201).json(penalty);
     } catch (error) {
         next(error);

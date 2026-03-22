@@ -123,6 +123,30 @@ const messageSchema = z.object({
     message: z.string().min(1).max(2000)
 });
 
+const structuredReviewSchema = z.object({
+    swapClassId: z.preprocess(toInt, z.number().int().positive()),
+    clarityRating: z.preprocess(toInt, z.number().int().min(1).max(5)),
+    punctualityRating: z.preprocess(toInt, z.number().int().min(1).max(5)),
+    communicationRating: z.preprocess(toInt, z.number().int().min(1).max(5)),
+    expertiseRating: z.preprocess(toInt, z.number().int().min(1).max(5)),
+    comment: z.string().max(2000).optional().nullable()
+});
+
+const pinnedResourceSchema = z.object({
+    title: z.string().trim().min(1).max(120),
+    url: z.string().trim().url().max(1000)
+});
+
+const codeSnippetSchema = z.object({
+    title: z.string().trim().min(1).max(120),
+    language: z.string().trim().min(1).max(40).optional(),
+    code: z.string().min(1).max(50000)
+});
+
+const sharedNoteSchema = z.object({
+    content: z.string().max(100000).optional().default('')
+});
+
 export const validateSwapRequestInput = validate(swapRequestSchema);
 export const validateSwapStatusInput = validate(swapStatusSchema);
 export const validateTodoInput = validate(todoSchema);
@@ -135,4 +159,8 @@ export const validateBadgeInput = validate(badgeSchema);
 export const validateAssignBadgeInput = validate(assignBadgeSchema);
 export const validatePenaltyInput = validate(penaltySchema);
 export const validateMessageInput = validate(messageSchema);
+export const validateStructuredReviewInput = validate(structuredReviewSchema);
 export const validatePaginationInput = validate(paginationSchema);
+export const validatePinnedResourceInput = validate(pinnedResourceSchema);
+export const validateCodeSnippetInput = validate(codeSnippetSchema);
+export const validateSharedNoteInput = validate(sharedNoteSchema);

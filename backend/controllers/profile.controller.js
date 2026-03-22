@@ -35,6 +35,30 @@ export const updateProfile = async (req, res, next) => {
                 data.availability = [];
             }
         }
+
+        if (typeof data.learningGoals === 'string') {
+            try {
+                data.learningGoals = JSON.parse(data.learningGoals);
+            } catch (_) {
+                data.learningGoals = [];
+            }
+        }
+
+        if (typeof data.profilePrivacy === 'string') {
+            try {
+                data.profilePrivacy = JSON.parse(data.profilePrivacy);
+            } catch (_) {
+                data.profilePrivacy = {};
+            }
+        }
+
+        if (typeof data.teachingStyles === 'string') {
+            try {
+                data.teachingStyles = JSON.parse(data.teachingStyles);
+            } catch (_) {
+                data.teachingStyles = [];
+            }
+        }
         
         if (req.file) {
             // req.file.path includes the subfolder (e.g. uploads/avatars/uuid-file.jpg)

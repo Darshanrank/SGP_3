@@ -170,7 +170,7 @@ const Home = () => {
                     <p className="mt-2 text-sm text-[#8DA0BF]">Explore teachers across programming, design, marketing, language, and business.</p>
                 </article>
                 <article className="section-card text-center">
-                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#22C55E]/20 text-[#22C55E]">
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/10 text-green-400">
                         <Users className="h-6 w-6" />
                     </div>
                     <h3 className="text-lg font-semibold text-[#DCE7F5]">Connect with Peers</h3>

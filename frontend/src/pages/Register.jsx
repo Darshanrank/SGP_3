@@ -76,7 +76,7 @@ const Register = () => {
                                     }}
                                     className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                 />
-                                {errors.username && <p className="mt-1 text-sm text-red-600">{errors.username.message}</p>}
+                                {errors.username && <p className="mt-1 text-sm text-red-400">{errors.username.message}</p>}
                                 {!errors.username && <p className="mt-1 text-xs text-gray-500">Allowed: a-z, 0-9, underscore (_)</p>}
                             </div>
                         </div>
@@ -98,7 +98,7 @@ const Register = () => {
                                     })}
                                     className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                 />
-                                {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+                                {errors.email && <p className="mt-1 text-sm text-red-400">{errors.email.message}</p>}
                             </div>
                         </div>
 
@@ -127,7 +127,7 @@ const Register = () => {
                                 >
                                     {showPassword ? 'Hide password' : 'Show password'}
                                 </button>
-                                {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>}
+                                {errors.password && <p className="mt-1 text-sm text-red-400">{errors.password.message}</p>}
                             </div>
                         </div>
 
@@ -152,7 +152,7 @@ const Register = () => {
                                 >
                                     {showConfirmPassword ? 'Hide password' : 'Show password'}
                                 </button>
-                                {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>}
+                                {errors.confirmPassword && <p className="mt-1 text-sm text-red-400">{errors.confirmPassword.message}</p>}
                             </div>
                         </div>
 

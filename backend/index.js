@@ -13,6 +13,7 @@ import swapRoute from './routes/swap.routes.js'
 import chatRoute from './routes/chat.routes.js'
 import metaRoute from './routes/meta.routes.js'
 import matchingRoute from './routes/matching.routes.js'
+import discoverRoute from './routes/discover.routes.js'
 import reviewRoute from './routes/review.routes.js'
 import blockRoute from './routes/block.routes.js'
 import reportRoute from './routes/report.routes.js'
@@ -22,6 +23,7 @@ import { verifyAccessToken } from './utils/jwt.js';
 import prisma from './prisma/client.js';
 import { markMessagesDeliveredService, markMessagesReadService } from './services/chat.service.js';
 import { areUsersBlocked } from './services/block.service.js';
+import { startClassReminderScheduler } from './services/classReminder.service.js';
 const app = express();
 const server = createServer(app);
 const frontendOrigin = conf.FRONTEND_URL || 'http://localhost:5173';
@@ -88,6 +90,7 @@ const emitChatPresence = async (classId, ioInstance) => {
 
 // Store io instance in app so controllers can access it
 app.set('io', io);
+startClassReminderScheduler(io);
 
 // Socket.io Connection Handler
 io.on('connection', (socket) => {
@@ -120,6 +123,11 @@ io.on('connection', (socket) => {
             const room = `chat_${classId}`;
             socket.join(room);
             logger.info(`Socket ${socket.id} joined room ${room}`);
+
+            socket.to(room).emit('user_online', {
+                classId: normalizedClassId,
+                userId
+            });
 
             const delivered = await markMessagesDeliveredService(userId, normalizedClassId);
             if (delivered.count > 0) {
@@ -199,6 +207,25 @@ io.on('connection', (socket) => {
             logger.warn('mark_read failed', { socketId: socket.id, err: err.message });
         }
     });
+
+    // Shared notes realtime collaboration relay
+    socket.on('shared_note_edit', async ({ classId, content }) => {
+        try {
+            const userId = socket.user?.userId;
+            const normalizedClassId = Number(classId);
+            const allowed = await isUserInClass(userId, normalizedClassId);
+            if (!allowed) return;
+
+            socket.to(`chat_${normalizedClassId}`).emit('shared_note_updated', {
+                classId: normalizedClassId,
+                content: typeof content === 'string' ? content : '',
+                updatedAt: new Date().toISOString(),
+                updatedBy: userId
+            });
+        } catch (err) {
+            logger.warn('shared_note_edit failed', { socketId: socket.id, err: err.message });
+        }
+    });
 });
 
 // Serve uploaded files BEFORE Helmet so Cross-Origin-Resource-Policy doesn't block them
@@ -266,6 +293,7 @@ app.use('/api/swaps', swapRoute);
 app.use('/api/chat', chatRoute);
 app.use('/api/meta', metaRoute);
 app.use('/api/matching', matchingRoute);
+app.use('/api/discover', discoverRoute);
 app.use('/api/reviews', reviewRoute);
 app.use('/api/blocks', blockRoute);
 app.use('/api/reports', reportRoute);

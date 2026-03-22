@@ -152,7 +152,7 @@ const Skills = () => {
 
     if (activeTab === 'explore' && loadingAll && page === 1) return <div className="section-card text-center">Loading skills...</div>;
     if (activeTab === 'my' && loadingMy) return <div className="section-card text-center">Loading your skills...</div>;
-    if (errorAll) return <div className="section-card text-center text-red-500">Error loading skills</div>;
+    if (errorAll) return <div className="section-card text-center text-red-400">Error loading skills</div>;
 
     return (
         <div className="page-shell">

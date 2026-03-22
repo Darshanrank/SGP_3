@@ -8,5 +8,21 @@
  */
 export const pushNotification = (io, userId, notification) => {
     if (!io || !userId) return;
-    io.to(`user_${userId}`).emit('new_notification', notification);
+    const room = `user_${userId}`;
+    io.to(room).emit('new_notification', notification);
+
+    const type = String(notification?.type || '').toUpperCase();
+    const eventByType = {
+        SWAP_REQUEST: 'swap_request',
+        ACCEPTED: 'swap_accepted',
+        CLASS_REMINDER: 'class_reminder',
+        CHAT_MESSAGE: 'new_message',
+        PARTNER_TYPING: 'user_typing',
+        PARTNER_ONLINE: 'user_online'
+    };
+
+    const mappedEvent = eventByType[type];
+    if (mappedEvent) {
+        io.to(room).emit(mappedEvent, notification);
+    }
 };

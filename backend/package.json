@@ -6,9 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "migrate": "prisma migrate dev",
-    "migrate:deploy": "prisma migrate deploy && prisma generate",
-    "prisma:generate": "prisma generate"
+    "migrate": "prisma migrate dev"
   },
   "author": "",
   "license": "ISC",
@@ -30,6 +28,7 @@
     "sanitize-html": "^2.17.1",
     "socket.io": "^4.8.3",
     "uuid": "^13.0.0",
+    "web-push": "^3.6.7",
     "winston": "^3.19.0",
     "zod": "^4.3.6"
   },

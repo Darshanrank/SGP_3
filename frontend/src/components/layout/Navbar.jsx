@@ -57,10 +57,13 @@ const Navbar = () => {
                                     <NavLink to="/dashboard" className={navLinkClass}>
                                         Dashboard
                                     </NavLink>
-                                    <NavLink to="/skills" className={navLinkClass}>
-                                        Skills
+                                    <NavLink to="/discover" className={navLinkClass}>
+                                        Discover
                                     </NavLink>
-                                     <NavLink to="/swaps" className={navLinkClass}>
+                                    <NavLink to="/skills" className={navLinkClass}>
+                                        My Skills
+                                    </NavLink>
+                                    <NavLink to="/swaps" className={navLinkClass}>
                                         Swaps
                                     </NavLink>
                                     <NavLink to="/calendar" className={navLinkClass}>
@@ -145,10 +148,16 @@ const Navbar = () => {
                                 <NavLink to="/dashboard" className={mobileLinkClass}>
                                     Dashboard
                                 </NavLink>
+                                <NavLink to="/discover" className={mobileLinkClass}>
+                                    Discover
+                                </NavLink>
+                                <NavLink to="/skills" className={mobileLinkClass}>
+                                    My Skills
+                                </NavLink>
                                 <NavLink to="/swaps" className={mobileLinkClass}>
                                     Swaps
                                 </NavLink>
-                                 <NavLink to="/calendar" className={mobileLinkClass}>
+                                <NavLink to="/calendar" className={mobileLinkClass}>
                                     Calendar
                                 </NavLink>
                                 <NavLink to="/notifications" className={mobileLinkClass}>

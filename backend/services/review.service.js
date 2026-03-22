@@ -1,15 +1,70 @@
 import prisma from '../prisma/client.js';
 import { NotFound, ValidationError, ForbiddenError } from '../errors/generic.errors.js';
 
-/**
- * Submit a review for a completed SwapClass
- */
-export const createReviewService = async (reviewerId, data) => {
-    const { swapClassId, rating, comment } = data;
+const RATING_FIELDS = [
+    'clarityRating',
+    'punctualityRating',
+    'communicationRating',
+    'expertiseRating'
+];
 
-    if (!rating || rating < 1 || rating > 5) {
-        throw new ValidationError('Rating must be between 1 and 5');
+const RECENT_REVIEW_WINDOW_DAYS = 14;
+
+const normalizeScore = (value, label) => {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
+        throw new ValidationError(`${label} must be between 1 and 5`);
     }
+    return parsed;
+};
+
+const calculateOverallRating = (ratings) => {
+    const total = ratings.reduce((sum, score) => sum + score, 0);
+    return Math.round(total / ratings.length);
+};
+
+const isRecentReview = (createdAt) => {
+    const created = new Date(createdAt).getTime();
+    const threshold = Date.now() - (RECENT_REVIEW_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    return created >= threshold;
+};
+
+const mapReviewForResponse = (review, currentUserId) => {
+    const completedClass = Boolean(
+        review?.swapClass?.completion?.completedByUser1 && review?.swapClass?.completion?.completedByUser2
+    );
+    const hasHelpfulVote = Array.isArray(review?.helpfulVoteRecords)
+        ? review.helpfulVoteRecords.some((vote) => vote.userId === currentUserId)
+        : false;
+
+    const { helpfulVoteRecords, ...rest } = review;
+
+    return {
+        ...rest,
+        completedClass,
+        recentReview: isRecentReview(review.createdAt),
+        hasHelpfulVote
+    };
+};
+
+export const createReviewService = async (reviewerId, data) => {
+    const swapClassId = Number.parseInt(data?.swapClassId, 10);
+    if (!Number.isInteger(swapClassId)) {
+        throw new ValidationError('Invalid swap class id');
+    }
+
+    const clarityRating = normalizeScore(data?.clarityRating, 'Clarity rating');
+    const punctualityRating = normalizeScore(data?.punctualityRating, 'Punctuality rating');
+    const communicationRating = normalizeScore(data?.communicationRating, 'Communication rating');
+    const expertiseRating = normalizeScore(data?.expertiseRating, 'Expertise rating');
+    const overallRating = calculateOverallRating([
+        clarityRating,
+        punctualityRating,
+        communicationRating,
+        expertiseRating
+    ]);
+
+    const comment = typeof data?.comment === 'string' ? data.comment.trim() : '';
 
     const swapClass = await prisma.swapClass.findUnique({
         where: { id: swapClassId },
@@ -41,42 +96,76 @@ export const createReviewService = async (reviewerId, data) => {
         throw new ValidationError('You have already reviewed this class');
     }
 
-    return await prisma.swapReview.create({
+    const created = await prisma.swapReview.create({
         data: {
             swapClassId,
             reviewerId,
             revieweeId,
-            rating: parseInt(rating),
-            comment: comment || null
+            clarityRating,
+            punctualityRating,
+            communicationRating,
+            expertiseRating,
+            overallRating,
+            comment: comment || null,
+            verifiedSwap: true
         },
         include: {
             reviewer: { select: { userId: true, username: true } },
-            reviewee: { select: { userId: true, username: true } }
+            reviewee: { select: { userId: true, username: true } },
+            swapClass: {
+                select: {
+                    completion: {
+                        select: {
+                            completedByUser1: true,
+                            completedByUser2: true
+                        }
+                    }
+                }
+            },
+            helpfulVoteRecords: {
+                where: { userId: reviewerId },
+                select: { userId: true }
+            }
         }
     });
+
+    return mapReviewForResponse(created, reviewerId);
 };
 
-/**
- * Get reviews for a specific swap class
- */
-export const getClassReviewsService = async (swapClassId) => {
-    return await prisma.swapReview.findMany({
+export const getClassReviewsService = async (swapClassId, currentUserId) => {
+    const reviews = await prisma.swapReview.findMany({
         where: { swapClassId },
         include: {
             reviewer: { select: { userId: true, username: true } },
-            reviewee: { select: { userId: true, username: true } }
+            reviewee: { select: { userId: true, username: true } },
+            swapClass: {
+                select: {
+                    completion: {
+                        select: {
+                            completedByUser1: true,
+                            completedByUser2: true
+                        }
+                    }
+                }
+            },
+            helpfulVoteRecords: {
+                where: currentUserId ? { userId: currentUserId } : undefined,
+                select: { userId: true }
+            }
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: [
+            { helpfulVotes: 'desc' },
+            { createdAt: 'desc' }
+        ]
     });
+
+    return reviews.map((review) => mapReviewForResponse(review, currentUserId));
 };
 
-/**
- * Get all reviews received by a user (for public profile)
- */
-export const getUserReviewsService = async (userId, { page = 1, limit = 10 } = {}) => {
+export const getUserReviewsService = async (userId, { page = 1, limit = 10, currentUserId } = {}) => {
     const skip = (page - 1) * limit;
 
-    const [reviews, total] = await Promise.all([
+    const [reviews, total, mostHelpfulReview] = await Promise.all([
         prisma.swapReview.findMany({
             where: { revieweeId: userId },
             include: {
@@ -85,6 +174,12 @@ export const getUserReviewsService = async (userId, { page = 1, limit = 10 } = {
                 },
                 swapClass: {
                     include: {
+                        completion: {
+                            select: {
+                                completedByUser1: true,
+                                completedByUser2: true
+                            }
+                        },
                         swapRequest: {
                             include: {
                                 teachSkill: { include: { skill: true } },
@@ -92,43 +187,175 @@ export const getUserReviewsService = async (userId, { page = 1, limit = 10 } = {
                             }
                         }
                     }
+                },
+                helpfulVoteRecords: {
+                    where: currentUserId ? { userId: currentUserId } : undefined,
+                    select: { userId: true }
                 }
             },
             orderBy: { createdAt: 'desc' },
             skip,
             take: limit
         }),
-        prisma.swapReview.count({ where: { revieweeId: userId } })
+        prisma.swapReview.count({ where: { revieweeId: userId } }),
+        prisma.swapReview.findFirst({
+            where: { revieweeId: userId },
+            include: {
+                reviewer: {
+                    select: { userId: true, username: true, profile: { select: { avatarUrl: true } } }
+                },
+                swapClass: {
+                    include: {
+                        completion: {
+                            select: {
+                                completedByUser1: true,
+                                completedByUser2: true
+                            }
+                        },
+                        swapRequest: {
+                            include: {
+                                teachSkill: { include: { skill: true } },
+                                learnSkill: { include: { skill: true } }
+                            }
+                        }
+                    }
+                },
+                helpfulVoteRecords: {
+                    where: currentUserId ? { userId: currentUserId } : undefined,
+                    select: { userId: true }
+                }
+            },
+            orderBy: [
+                { helpfulVotes: 'desc' },
+                { createdAt: 'desc' }
+            ]
+        })
     ]);
 
+    const mappedReviews = reviews.map((review) => mapReviewForResponse(review, currentUserId));
+    const mappedMostHelpful = mostHelpfulReview
+        ? mapReviewForResponse(mostHelpfulReview, currentUserId)
+        : null;
+
     return {
-        data: reviews,
+        data: mappedReviews,
+        mostHelpfulReview: mappedMostHelpful,
         meta: { total, page, limit, totalPages: Math.ceil(total / limit) }
     };
 };
 
-/**
- * Get aggregate rating stats for a user
- */
 export const getUserRatingService = async (userId) => {
     const result = await prisma.swapReview.aggregate({
         where: { revieweeId: userId },
-        _avg: { rating: true },
-        _count: { rating: true }
+        _avg: {
+            overallRating: true,
+            clarityRating: true,
+            punctualityRating: true,
+            communicationRating: true,
+            expertiseRating: true
+        },
+        _count: { overallRating: true }
     });
 
+    const overallRating = result._avg.overallRating ? Math.round(result._avg.overallRating * 10) / 10 : 0;
+
     return {
-        avgRating: result._avg.rating ? Math.round(result._avg.rating * 10) / 10 : 0,
-        reviewCount: result._count.rating
+        overallRating,
+        avgRating: overallRating,
+        reviewCount: result._count.overallRating,
+        clarityRating: result._avg.clarityRating ? Math.round(result._avg.clarityRating * 10) / 10 : 0,
+        punctualityRating: result._avg.punctualityRating ? Math.round(result._avg.punctualityRating * 10) / 10 : 0,
+        communicationRating: result._avg.communicationRating ? Math.round(result._avg.communicationRating * 10) / 10 : 0,
+        expertiseRating: result._avg.expertiseRating ? Math.round(result._avg.expertiseRating * 10) / 10 : 0
     };
 };
 
-/**
- * Check if the current user has already reviewed a class
- */
 export const hasReviewedClassService = async (userId, swapClassId) => {
     const review = await prisma.swapReview.findUnique({
-        where: { swapClassId_reviewerId: { swapClassId, reviewerId: userId } }
+        where: { swapClassId_reviewerId: { swapClassId, reviewerId: userId } },
+        include: {
+            swapClass: {
+                select: {
+                    completion: {
+                        select: {
+                            completedByUser1: true,
+                            completedByUser2: true
+                        }
+                    }
+                }
+            },
+            helpfulVoteRecords: {
+                where: { userId },
+                select: { userId: true }
+            }
+        }
     });
-    return { hasReviewed: !!review, review };
+
+    return {
+        hasReviewed: !!review,
+        review: review ? mapReviewForResponse(review, userId) : null
+    };
+};
+
+export const markReviewHelpfulService = async (userId, reviewId) => {
+    const normalizedReviewId = Number.parseInt(reviewId, 10);
+    if (!Number.isInteger(normalizedReviewId)) {
+        throw new ValidationError('Invalid review id');
+    }
+
+    const review = await prisma.swapReview.findUnique({
+        where: { id: normalizedReviewId },
+        select: { id: true, reviewerId: true, helpfulVotes: true }
+    });
+
+    if (!review) {
+        throw new NotFound('Review not found');
+    }
+
+    if (review.reviewerId === userId) {
+        throw new ValidationError('You cannot vote helpful on your own review');
+    }
+
+    const existingVote = await prisma.reviewHelpfulVote.findUnique({
+        where: {
+            reviewId_userId: {
+                reviewId: normalizedReviewId,
+                userId
+            }
+        }
+    });
+
+    if (existingVote) {
+        return {
+            reviewId: normalizedReviewId,
+            helpfulVotes: review.helpfulVotes,
+            alreadyVoted: true
+        };
+    }
+
+    const updatedReview = await prisma.$transaction(async (tx) => {
+        await tx.reviewHelpfulVote.create({
+            data: {
+                reviewId: normalizedReviewId,
+                userId
+            }
+        });
+
+        return tx.swapReview.update({
+            where: { id: normalizedReviewId },
+            data: {
+                helpfulVotes: { increment: 1 }
+            },
+            select: {
+                id: true,
+                helpfulVotes: true
+            }
+        });
+    });
+
+    return {
+        reviewId: updatedReview.id,
+        helpfulVotes: updatedReview.helpfulVotes,
+        alreadyVoted: false
+    };
 };

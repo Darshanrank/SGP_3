@@ -22,12 +22,27 @@ export const deleteAccountService = async (userId) => {
         // 2. Delete chat messages
         await tx.chatMessage.deleteMany({ where: { senderId: userId } });
 
-        // 3. Delete swap reviews (given and received)
+        // 3. Delete helpful votes authored by this user
+        await tx.reviewHelpfulVote.deleteMany({ where: { userId } });
+
+        // 4. Delete helpful votes linked to reviews this user authored/received
+        const reviewIds = await tx.swapReview.findMany({
+            where: { OR: [{ reviewerId: userId }, { revieweeId: userId }] },
+            select: { id: true }
+        }).then((rows) => rows.map((row) => row.id));
+
+        if (reviewIds.length > 0) {
+            await tx.reviewHelpfulVote.deleteMany({
+                where: { reviewId: { in: reviewIds } }
+            });
+        }
+
+        // 5. Delete swap reviews (given and received)
         await tx.swapReview.deleteMany({
             where: { OR: [{ reviewerId: userId }, { revieweeId: userId }] },
         });
 
-        // 4. Delete notifications
+        // 6. Delete notifications
         await tx.notification.deleteMany({ where: { userId } });
 
         // 5. Delete calendar events
@@ -88,6 +103,15 @@ export const deleteAccountService = async (userId) => {
                 await tx.swapCompletion.deleteMany({
                     where: { swapClassId: { in: classIds } },
                 });
+                const classReviewIds = await tx.swapReview.findMany({
+                    where: { swapClassId: { in: classIds } },
+                    select: { id: true }
+                }).then((rows) => rows.map((row) => row.id));
+                if (classReviewIds.length > 0) {
+                    await tx.reviewHelpfulVote.deleteMany({
+                        where: { reviewId: { in: classReviewIds } }
+                    });
+                }
                 await tx.swapReview.deleteMany({
                     where: { swapClassId: { in: classIds } },
                 });

@@ -7,6 +7,7 @@ import {
 import { ValidationError } from '../errors/generic.errors.js';
 import prisma from '../prisma/client.js';
 import { conf } from '../conf/conf.js';
+import { createNotificationForUserService } from '../services/notification.service.js';
 
 const normalizeClassId = (value) => {
     const classId = Number.parseInt(value, 10);
@@ -128,6 +129,28 @@ export const sendMessage = async (req, res, next) => {
                     senderName: messageWithStatus.sender?.username,
                     preview: message.substring(0, 80)
                 });
+
+                io.to(`user_${otherUserId}`).emit('new_message', {
+                    classId,
+                    senderId: userId,
+                    senderName: messageWithStatus.sender?.username,
+                    preview: message.substring(0, 80)
+                });
+            }
+
+            const recipientInRoom = io
+                ? (await getRecipientIdsInRoom(io, classId, userId)).includes(otherUserId)
+                : false;
+
+            if (!recipientInRoom) {
+                await createNotificationForUserService({
+                    userId: otherUserId,
+                    type: 'CHAT_MESSAGE',
+                    message: `New message from ${messageWithStatus.sender?.username || 'partner'}`,
+                    link: `/swaps/${classId}`,
+                    metadata: { classId, senderId: userId },
+                    io
+                });
             }
         }
 
@@ -171,17 +194,40 @@ export const sendAttachmentMessage = async (req, res, next) => {
             include: { swapRequest: { select: { fromUserId: true, toUserId: true } } }
         });
 
-        if (swapClass && io) {
+        if (swapClass) {
             const otherUserId = swapClass.swapRequest.fromUserId === userId
                 ? swapClass.swapRequest.toUserId
                 : swapClass.swapRequest.fromUserId;
 
-            io.to(`user_${otherUserId}`).emit('new_chat_message', {
-                classId,
-                senderId: userId,
-                senderName: messageWithStatus.sender?.username,
-                preview: `[Attachment] ${attachment.name}`
-            });
+            if (io) {
+                io.to(`user_${otherUserId}`).emit('new_chat_message', {
+                    classId,
+                    senderId: userId,
+                    senderName: messageWithStatus.sender?.username,
+                    preview: `[Attachment] ${attachment.name}`
+                });
+
+                io.to(`user_${otherUserId}`).emit('new_message', {
+                    classId,
+                    senderId: userId,
+                    senderName: messageWithStatus.sender?.username,
+                    preview: `[Attachment] ${attachment.name}`
+                });
+            }
+
+            const recipientInRoom = io
+                ? (await getRecipientIdsInRoom(io, classId, userId)).includes(otherUserId)
+                : false;
+            if (!recipientInRoom) {
+                await createNotificationForUserService({
+                    userId: otherUserId,
+                    type: 'CHAT_MESSAGE',
+                    message: `New message from ${messageWithStatus.sender?.username || 'partner'}`,
+                    link: `/swaps/${classId}`,
+                    metadata: { classId, senderId: userId, attachment: true },
+                    io
+                });
+            }
         }
 
         res.status(201).json(messageWithStatus);

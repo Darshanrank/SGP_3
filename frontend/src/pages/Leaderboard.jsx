@@ -36,7 +36,7 @@ const Leaderboard = () => {
             </div>
         );
     }
-    if (error) return <div className="section-card text-center text-red-500">Failed to load leaderboard</div>;
+    if (error) return <div className="section-card text-center text-red-400">Failed to load leaderboard</div>;
 
     return (
         <div className="page-shell">
@@ -60,7 +60,7 @@ const Leaderboard = () => {
                                     entry.rank === 1
                                         ? 'bg-[#0A4D9F]/14'
                                         : entry.rank === 2
-                                            ? 'bg-[#22C55E]/10'
+                                            ? 'bg-green-500/10'
                                             : entry.rank === 3
                                                 ? 'bg-[#7BB2FF]/10'
                                                 : ''
@@ -90,7 +90,7 @@ const Leaderboard = () => {
                                         </div>
                                     </div>
                                 </td>
-                                <td className="px-4 py-3 text-right text-sm font-bold text-[#22C55E]">{entry.points}</td>
+                                <td className="px-4 py-3 text-right text-sm font-bold text-green-400">{entry.points}</td>
                                 <td className="px-4 py-3 text-right text-sm text-[#8DA0BF]">{entry.totalSwaps}</td>
                             </tr>
                         ))}

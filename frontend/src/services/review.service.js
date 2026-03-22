@@ -1,8 +1,27 @@
 // src/services/review.service.js
 import api from './api';
 
-export const createReview = async ({ swapClassId, rating, comment }) => {
-    const response = await api.post('/reviews', { swapClassId, rating, comment });
+export const createReview = async ({
+    swapClassId,
+    clarityRating,
+    punctualityRating,
+    communicationRating,
+    expertiseRating,
+    comment
+}) => {
+    const response = await api.post('/reviews', {
+        swapClassId,
+        clarityRating,
+        punctualityRating,
+        communicationRating,
+        expertiseRating,
+        comment
+    });
+    return response.data;
+};
+
+export const markReviewHelpful = async (reviewId) => {
+    const response = await api.post(`/reviews/${reviewId}/helpful`);
     return response.data;
 };
 

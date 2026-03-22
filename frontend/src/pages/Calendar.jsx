@@ -92,7 +92,7 @@ const Calendar = () => {
                     <Input label="End" type="datetime-local" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
                 </div>
                 <Input label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-                {submitError ? <p className="text-sm text-red-300">{submitError}</p> : null}
+                {submitError ? <p className="text-sm text-red-400">{submitError}</p> : null}
                 <Button type="submit" disabled={saving}>Create Event</Button>
             </form>
 

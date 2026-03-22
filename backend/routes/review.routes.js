@@ -1,13 +1,24 @@
 import express from 'express';
-import { createReview, getClassReviews, getUserReviews, getUserRating, hasReviewedClass } from '../controllers/review.controller.js';
+import {
+	createReview,
+	getClassReviews,
+	getUserReviews,
+	getUserRating,
+	hasReviewedClass,
+	markReviewHelpful
+} from '../controllers/review.controller.js';
 import { validateTokenMiddleware } from '../middlewares/token.middleware.js';
+import { validateStructuredReviewInput } from '../middlewares/validation.middleware.js';
 
 const router = express.Router();
 
 router.use(validateTokenMiddleware);
 
 // Submit a review
-router.post('/', createReview);
+router.post('/', validateStructuredReviewInput, createReview);
+
+// Mark a review as helpful
+router.post('/:id/helpful', markReviewHelpful);
 
 // Get reviews for a class
 router.get('/class/:classId', getClassReviews);

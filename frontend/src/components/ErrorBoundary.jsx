@@ -45,7 +45,7 @@ class ErrorBoundary extends React.Component {
                         {process.env.NODE_ENV !== 'production' && this.state.error && (
                             <details className="mt-6 text-left">
                                 <summary className="text-xs text-gray-400 cursor-pointer">Error details</summary>
-                                <pre className="mt-2 text-xs text-red-600 bg-red-50 p-3 rounded overflow-auto max-h-40">
+                                <pre className="mt-2 text-xs text-red-400 bg-red-500/10 p-3 rounded overflow-auto max-h-40">
                                     {this.state.error.toString()}
                                 </pre>
                             </details>

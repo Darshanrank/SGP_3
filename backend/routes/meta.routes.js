@@ -22,7 +22,14 @@ import {
     getUnreadCount,
     markAllNotificationsRead,
     getLeaderboard,
-    getSkillCategories
+    getSkillCategories,
+    deleteNotification,
+    clearNotificationHistory,
+    getNotificationPreferences,
+    updateNotificationPreferences,
+    getPushPublicKey,
+    savePushSubscription,
+    removePushSubscription
 } from '../controllers/meta.controller.js';
 import { validateTokenMiddleware } from '../middlewares/token.middleware.js';
 import { requireAdmin } from '../middlewares/admin.middleware.js';
@@ -35,9 +42,16 @@ router.use(validateTokenMiddleware);
 // Notifications
 router.get('/notifications', getNotifications);
 router.get('/notifications/unread-count', getUnreadCount);
+router.get('/notifications/preferences', getNotificationPreferences);
+router.put('/notifications/preferences', updateNotificationPreferences);
+router.get('/notifications/push-public-key', getPushPublicKey);
+router.post('/notifications/push-subscriptions', savePushSubscription);
+router.delete('/notifications/push-subscriptions', removePushSubscription);
 router.put('/notifications/:id/read', markNotificationRead);
 router.put('/notifications/:id/unread', markNotificationUnread);
+router.delete('/notifications/:id', deleteNotification);
 router.put('/notifications/read-all', markAllNotificationsRead);
+router.delete('/notifications', clearNotificationHistory);
 
 // Dashboard / Gamification
 router.get('/dashboard', getDashboardStats);

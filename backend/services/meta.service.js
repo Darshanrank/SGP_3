@@ -1,6 +1,18 @@
 import prisma from '../prisma/client.js';
 import { NotFound, ValidationError } from '../errors/generic.errors.js';
 import { conf } from '../conf/conf.js';
+import {
+    createNotificationForUserService,
+    getNotificationPreferenceService,
+    updateNotificationPreferenceService,
+    deleteNotificationService,
+    deleteAllNotificationsService
+} from './notification.service.js';
+import {
+    savePushSubscriptionService,
+    removePushSubscriptionService,
+    getVapidPublicKeyService
+} from './webPush.service.js';
 
 const ALLOWED_REPORT_REASONS = new Set([
     'SPAM',
@@ -14,10 +26,13 @@ const MAX_REPORTS_PER_DAY = 5;
 
 const normalizeReportReason = (reason) => String(reason || '').trim().toUpperCase();
 
-export const getNotificationsService = async (userId, { page = 1, limit = 20, isRead } = {}) => {
+export const getNotificationsService = async (userId, { page = 1, limit = 20, isRead, type } = {}) => {
     const skip = (page - 1) * limit;
+    const normalizedType = String(type || '').trim().toUpperCase();
+    const notificationTypeFilter = normalizedType ? { type: normalizedType } : {};
     const where = {
         userId,
+        ...notificationTypeFilter,
         ...(isRead !== undefined ? { isRead: isRead === 'true' || isRead === true } : {})
     };
 
@@ -85,6 +100,34 @@ export const getUnreadCountService = async (userId) => {
     return { unread: count };
 };
 
+export const getNotificationPreferencesService = async (userId) => {
+    return getNotificationPreferenceService(userId);
+};
+
+export const updateNotificationPreferencesService = async (userId, payload) => {
+    return updateNotificationPreferenceService(userId, payload);
+};
+
+export const savePushSubscriptionMetaService = async (userId, payload) => {
+    return savePushSubscriptionService(userId, payload);
+};
+
+export const removePushSubscriptionMetaService = async (userId, endpoint) => {
+    return removePushSubscriptionService(userId, endpoint);
+};
+
+export const getPushPublicKeyMetaService = async () => {
+    return getVapidPublicKeyService();
+};
+
+export const deleteNotificationMetaService = async (userId, id) => {
+    return deleteNotificationService(userId, id);
+};
+
+export const clearNotificationHistoryMetaService = async (userId) => {
+    return deleteAllNotificationsService(userId);
+};
+
 export const getDashboardStatsService = async (userId) => {
     const [reward, badges, swapCount, teachCount, learnCount] = await Promise.all([
         prisma.userReward.findUnique({ where: { userId } }),
@@ -114,7 +157,7 @@ export const getDashboardStatsService = async (userId) => {
     };
 };
 
-export const reportUserService = async (reporterId, data) => {
+export const reportUserService = async (reporterId, data, { io } = {}) => {
     const reportedUserId = Number(data?.reportedUserId);
     const normalizedReason = normalizeReportReason(data?.reason);
     const description = typeof data?.description === 'string' ? data.description.trim() : '';
@@ -175,15 +218,17 @@ export const reportUserService = async (reporterId, data) => {
     });
 
     if (Array.isArray(conf.ADMIN_USER_IDS) && conf.ADMIN_USER_IDS.length > 0) {
-        const notifications = conf.ADMIN_USER_IDS
-            .filter((adminUserId) => Number.isInteger(adminUserId) && adminUserId !== reporterId)
-            .map((adminUserId) => ({
+        const adminIds = conf.ADMIN_USER_IDS
+            .filter((adminUserId) => Number.isInteger(adminUserId) && adminUserId !== reporterId);
+        for (const adminUserId of adminIds) {
+            await createNotificationForUserService({
                 userId: adminUserId,
                 type: 'ADMIN',
-                message: `New user report submitted (#${report.id}) against @${reportedUser.username}`
-            }));
-        if (notifications.length > 0) {
-            await prisma.notification.createMany({ data: notifications });
+                message: `New user report submitted (#${report.id}) against @${reportedUser.username}`,
+                link: '/admin/reports',
+                metadata: { reportId: report.id, reportedUserId },
+                io
+            });
         }
     }
 
@@ -344,7 +389,7 @@ export const updateReportStatusService = async (reportId, data) => {
     });
 };
 
-export const moderateReportService = async (reportId, data = {}) => {
+export const moderateReportService = async (reportId, data = {}, { io } = {}) => {
     const action = String(data?.action || '').trim().toUpperCase();
     const adminReason = typeof data?.reason === 'string' ? data.reason.trim() : '';
 
@@ -370,7 +415,7 @@ export const moderateReportService = async (reportId, data = {}) => {
     const penaltyType = action;
     const reason = adminReason || `Moderation action from report #${reportId}`;
 
-    return prisma.$transaction(async (tx) => {
+    const updatedReport = await prisma.$transaction(async (tx) => {
         await tx.adminPenalty.create({
             data: {
                 userId: report.reportedUserId,
@@ -379,23 +424,26 @@ export const moderateReportService = async (reportId, data = {}) => {
             }
         });
 
-        await tx.notification.create({
-            data: {
-                userId: report.reportedUserId,
-                type: 'SYSTEM',
-                message: `You received a ${penaltyType.toLowerCase()} from moderation. Reason: ${reason}`
-            }
-        });
-
         return tx.report.update({
             where: { id: reportId },
             data: { status: 'RESOLVED' }
         });
     });
+
+    await createNotificationForUserService({
+        userId: report.reportedUserId,
+        type: 'SYSTEM',
+        message: `You received a ${penaltyType.toLowerCase()} from moderation. Reason: ${reason}`,
+        link: '/notifications',
+        metadata: { reportId, action: penaltyType },
+        io
+    });
+
+    return updatedReport;
 };
 
 // Penalties
-export const createPenaltyService = async (data) => {
+export const createPenaltyService = async (data, { io } = {}) => {
     const { userId, reason, penaltyType } = data;
     const user = await prisma.users.findUnique({ where: { userId } });
     if (!user) throw new NotFound('User not found');
@@ -404,12 +452,13 @@ export const createPenaltyService = async (data) => {
         data: { userId, reason, penaltyType }
     });
 
-    await prisma.notification.create({
-        data: {
-            userId,
-            type: 'SYSTEM',
-            message: `Admin action: ${penaltyType.toLowerCase()}. Reason: ${reason}`
-        }
+    await createNotificationForUserService({
+        userId,
+        type: 'SYSTEM',
+        message: `Admin action: ${penaltyType.toLowerCase()}. Reason: ${reason}`,
+        link: '/notifications',
+        metadata: { penaltyId: penalty.id, penaltyType },
+        io
     });
 
     return penalty;

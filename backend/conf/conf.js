@@ -18,7 +18,10 @@ export const conf = {
     EMAIL_PASS:process.env.EMAIL_PASS,
     FRONTEND_URL:process.env.FRONTEND_URL,
     BACKEND_URL:process.env.BACKEND_URL,
-    ADMIN_USER_IDS: adminUserIds
+    ADMIN_USER_IDS: adminUserIds,
+    VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
+    VAPID_SUBJECT: process.env.VAPID_SUBJECT || 'mailto:admin@skillswap.local'
 }
 
 if (!conf.JWT_ACCESS_SECRET) {

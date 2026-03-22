@@ -26,6 +26,10 @@
 
     // Profile
     profile       UserProfile?
+    learningGoals LearningGoal[]
+    profilePrivacy ProfilePrivacy?
+    profileViewsReceived ProfileView[] @relation("ProfileViewsReceived")
+    profileViewsGiven    ProfileView[] @relation("ProfileViewsGiven")
 
     // Skills
     userSkills    UserSkill[]
@@ -37,14 +41,23 @@
     // Chat
     messages          ChatMessage[]
 
+    // Classroom productivity tools
+    pinnedResourcesCreated PinnedResource[] @relation("PinnedResourceCreator")
+    codeSnippetsCreated    CodeSnippet[]    @relation("CodeSnippetCreator")
+    classroomFilesUploaded ClassroomFile[]  @relation("ClassroomFileUploader")
+
     // Gamification
     rewards           UserReward?
     badges            UserBadge[]
 
     // Notifications & Calendar
     notifications     Notification[]
+    notificationPreference NotificationPreference?
+    pushSubscriptions PushSubscription[]
+    reminderLogs      CalendarReminderLog[]
     calendarEvents    CalendarEvent[]
     availability      UserAvailability[]
+    savedFilters      SavedFilter[]
 
     // Reviews
     reviewsGiven      SwapReview[]   @relation("ReviewsGiven")
@@ -56,6 +69,7 @@
     penalties         AdminPenalty[]
     blockedUsers      BlockedUser[]  @relation("Blocker")
     blockedByUsers    BlockedUser[]  @relation("BlockedUser")
+    helpfulReviewVotes ReviewHelpfulVote[] @relation("HelpfulVotesByUser")
 
     // Sessions
     refreshTokens    RefreshToken[]
@@ -79,8 +93,45 @@
     linkedinLink     String?
     portfolioLink    String?
     youtubeLink      String?
+    teachingStyle    String?  @db.Text
+    teachingStyles   Json?
 
     createdAt        DateTime @default(now())
+  }
+
+  model LearningGoal {
+    id        Int      @id @default(autoincrement())
+    userId    Int
+    user      Users    @relation(fields: [userId], references: [userId])
+    goalText  String
+    createdAt DateTime @default(now())
+
+    @@index([userId])
+    @@index([createdAt])
+  }
+
+  model ProfilePrivacy {
+    id               Int      @id @default(autoincrement())
+    userId           Int      @unique
+    user             Users    @relation(fields: [userId], references: [userId])
+    showAvailability Boolean  @default(true)
+    showPortfolio    Boolean  @default(true)
+    showSocialLinks  Boolean  @default(true)
+    updatedAt        DateTime @updatedAt
+  }
+
+  model ProfileView {
+    id        Int      @id @default(autoincrement())
+    userId    Int
+    user      Users    @relation("ProfileViewsReceived", fields: [userId], references: [userId])
+    viewerId  Int
+    viewer    Users    @relation("ProfileViewsGiven", fields: [viewerId], references: [userId])
+    viewedAt  DateTime @default(now())
+
+    @@index([userId])
+    @@index([viewerId])
+    @@index([viewedAt])
+    @@unique([userId, viewerId, viewedAt])
   }
 
   model UserAvailability {
@@ -95,6 +146,17 @@
 
     @@index([userId])
   }
+
+model SavedFilter {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      Users    @relation(fields: [userId], references: [userId])
+  name      String
+  filters   Json
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
 
 
   model Skill {
@@ -194,6 +256,10 @@
     endedAt        DateTime?
     
     todos          ClassTodo[]
+    pinnedResources PinnedResource[]
+    codeSnippets   CodeSnippet[]
+    classroomFiles ClassroomFile[]
+    sharedNote     SharedNote?
     chatRoom       ChatRoom?
     completion     SwapCompletion?
     reviews        SwapReview[]
@@ -208,6 +274,57 @@
     description  String?
     dueDate      DateTime?
     isCompleted  Boolean   @default(false)
+  }
+
+  model PinnedResource {
+    id          Int       @id @default(autoincrement())
+    swapClassId Int
+    swapClass   SwapClass @relation(fields: [swapClassId], references: [id])
+    title       String
+    url         String
+    createdBy   Int
+    creator     Users     @relation("PinnedResourceCreator", fields: [createdBy], references: [userId])
+    createdAt   DateTime  @default(now())
+
+    @@index([swapClassId])
+    @@index([createdBy])
+  }
+
+  model CodeSnippet {
+    id          Int       @id @default(autoincrement())
+    swapClassId Int
+    swapClass   SwapClass @relation(fields: [swapClassId], references: [id])
+    title       String
+    language    String
+    code        String    @db.Text
+    createdBy   Int
+    creator     Users     @relation("CodeSnippetCreator", fields: [createdBy], references: [userId])
+    createdAt   DateTime  @default(now())
+
+    @@index([swapClassId])
+    @@index([createdBy])
+  }
+
+  model ClassroomFile {
+    id          Int       @id @default(autoincrement())
+    swapClassId Int
+    swapClass   SwapClass @relation(fields: [swapClassId], references: [id])
+    fileName    String
+    fileUrl     String
+    uploadedBy  Int
+    uploader    Users     @relation("ClassroomFileUploader", fields: [uploadedBy], references: [userId])
+    createdAt   DateTime  @default(now())
+
+    @@index([swapClassId])
+    @@index([uploadedBy])
+  }
+
+  model SharedNote {
+    id          Int       @id @default(autoincrement())
+    swapClassId Int       @unique
+    swapClass   SwapClass @relation(fields: [swapClassId], references: [id])
+    content     String    @db.LongText
+    updatedAt   DateTime  @updatedAt
   }
 
   model ChatRoom {
@@ -264,11 +381,36 @@
     reviewer        Users     @relation("ReviewsGiven", fields: [reviewerId], references: [userId])
     revieweeId      Int
     reviewee        Users     @relation("ReviewsReceived", fields: [revieweeId], references: [userId])
-    rating          Int       // 1-5
+
+    clarityRating       Int
+    punctualityRating   Int
+    communicationRating Int
+    expertiseRating     Int
+    overallRating       Int
+
     comment         String?   @db.Text
+    helpfulVotes    Int       @default(0)
+    verifiedSwap    Boolean   @default(true)
     createdAt       DateTime  @default(now())
 
+    helpfulVoteRecords ReviewHelpfulVote[]
+
     @@unique([swapClassId, reviewerId])
+    @@index([revieweeId, helpfulVotes])
+    @@index([overallRating])
+  }
+
+  model ReviewHelpfulVote {
+    id        Int        @id @default(autoincrement())
+    reviewId  Int
+    review    SwapReview @relation(fields: [reviewId], references: [id])
+    userId    Int
+    user      Users      @relation("HelpfulVotesByUser", fields: [userId], references: [userId])
+    createdAt DateTime   @default(now())
+
+    @@unique([reviewId, userId])
+    @@index([reviewId])
+    @@index([userId])
   }
 
   model UserReward {
@@ -299,6 +441,9 @@
     SWAP_REQUEST
     ACCEPTED
     CLASS_REMINDER
+    CHAT_MESSAGE
+    PARTNER_TYPING
+    PARTNER_ONLINE
     SYSTEM
     ADMIN
   }
@@ -310,10 +455,53 @@
     type      NotificationType
     message   String
     isRead    Boolean          @default(false)
+    link      String?
+    metadata  String?          @db.Text
     createdAt DateTime         @default(now())
 
     @@index([userId])
     @@index([userId, isRead])
+    @@index([userId, type])
+    @@index([createdAt])
+  }
+
+  model NotificationPreference {
+    id             Int      @id @default(autoincrement())
+    userId         Int      @unique
+    user           Users    @relation(fields: [userId], references: [userId])
+    swapRequests   Boolean  @default(true)
+    classReminders Boolean  @default(true)
+    chatMessages   Boolean  @default(true)
+    partnerStatus  Boolean  @default(true)
+    systemAlerts   Boolean  @default(true)
+    updatedAt      DateTime @updatedAt
+  }
+
+  model PushSubscription {
+    id            Int      @id @default(autoincrement())
+    userId        Int
+    user          Users    @relation(fields: [userId], references: [userId])
+    endpoint      String   @db.Text
+    endpointHash  String   @unique
+    p256dh        String
+    auth          String
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    @@index([userId])
+  }
+
+  model CalendarReminderLog {
+    id            Int           @id @default(autoincrement())
+    userId        Int
+    user          Users         @relation(fields: [userId], references: [userId])
+    calendarEventId Int
+    calendarEvent CalendarEvent @relation(fields: [calendarEventId], references: [id])
+    minutesBefore Int
+    createdAt     DateTime      @default(now())
+
+    @@unique([userId, calendarEventId, minutesBefore])
+    @@index([calendarEventId])
   }
 
   model CalendarEvent {
@@ -325,6 +513,7 @@
     title       String
     eventDate   DateTime
     description String?
+    reminderLogs CalendarReminderLog[]
 
     @@index([userId])
     @@index([eventDate])

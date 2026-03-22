@@ -3,29 +3,43 @@ import {
     getClassReviewsService,
     getUserReviewsService,
     getUserRatingService,
-    hasReviewedClassService
+    hasReviewedClassService,
+    markReviewHelpfulService
 } from '../services/review.service.js';
 import { ValidationError } from '../errors/generic.errors.js';
-import { pushNotification } from '../utils/pushNotification.js';
-import prisma from '../prisma/client.js';
+import { createNotificationForUserService } from '../services/notification.service.js';
 
 export const createReview = async (req, res, next) => {
     try {
         const userId = req.user.userId;
+        const io = req.app.get('io');
         const review = await createReviewService(userId, req.body);
 
-        // Create a notification for the reviewee and push it in real-time
-        const notification = await prisma.notification.create({
-            data: {
-                userId: review.revieweeId,
-                type: 'SYSTEM',
-                message: `${review.reviewer.username} left you a ${review.rating}-star review!`
-            }
+        await createNotificationForUserService({
+            userId: review.revieweeId,
+            type: 'SYSTEM',
+            message: `${review.reviewer.username} left you a ${review.overallRating}-star review!`,
+            link: `/u/${review.reviewee?.username || ''}`,
+            metadata: { reviewId: review.id, swapClassId: review.swapClassId },
+            io
         });
-        const io = req.app.get('io');
-        pushNotification(io, review.revieweeId, notification);
 
         res.status(201).json(review);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const markReviewHelpful = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const reviewId = Number.parseInt(req.params.id, 10);
+        if (!Number.isInteger(reviewId)) {
+            throw new ValidationError('Invalid review id');
+        }
+
+        const result = await markReviewHelpfulService(userId, reviewId);
+        res.json(result);
     } catch (error) {
         next(error);
     }
@@ -37,7 +51,8 @@ export const getClassReviews = async (req, res, next) => {
         if (!Number.isInteger(classId)) {
             throw new ValidationError('Invalid class id');
         }
-        const reviews = await getClassReviewsService(classId);
+        const currentUserId = req.user?.userId;
+        const reviews = await getClassReviewsService(classId, currentUserId);
         res.json(reviews);
     } catch (error) {
         next(error);
@@ -52,7 +67,8 @@ export const getUserReviews = async (req, res, next) => {
         }
         const page = Number.parseInt(req.query.page, 10) || 1;
         const limit = Number.parseInt(req.query.limit, 10) || 10;
-        const reviews = await getUserReviewsService(userId, { page, limit });
+        const currentUserId = req.user?.userId;
+        const reviews = await getUserReviewsService(userId, { page, limit, currentUserId });
         res.json(reviews);
     } catch (error) {
         next(error);
