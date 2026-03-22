@@ -223,6 +223,7 @@ export const discoverUsersService = async (currentUserId, query = {}) => {
     const page = toPositiveInt(query.page, 1);
     const limit = toPositiveInt(query.limit, 12, 50);
     const skill = String(query.skill || '').trim();
+    const category = String(query.category || '').trim();
     const language = String(query.language || '').trim();
     const level = ['LOW', 'MEDIUM', 'HIGH'].includes(String(query.level || '').toUpperCase())
         ? String(query.level).toUpperCase()
@@ -267,11 +268,19 @@ export const discoverUsersService = async (currentUserId, query = {}) => {
 
     const andFilters = [{ userId: { notIn: [...new Set(excludedIds)] } }];
 
-    if (skill || level) {
+    if (skill || category || level) {
+        const skillFilter = {};
+        if (skill) {
+            skillFilter.name = { contains: skill };
+        }
+        if (category) {
+            skillFilter.category = { contains: category };
+        }
+
         andFilters.push({
             userSkills: {
                 some: {
-                    ...(skill ? { skill: { name: { contains: skill } } } : {}),
+                    ...(Object.keys(skillFilter).length ? { skill: skillFilter } : {}),
                     ...(level ? { level } : {})
                 }
             }

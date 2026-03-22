@@ -17,6 +17,7 @@ import discoverRoute from './routes/discover.routes.js'
 import reviewRoute from './routes/review.routes.js'
 import blockRoute from './routes/block.routes.js'
 import reportRoute from './routes/report.routes.js'
+import statsRoute from './routes/stats.routes.js'
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { verifyAccessToken } from './utils/jwt.js';
@@ -297,6 +298,7 @@ app.use('/api/discover', discoverRoute);
 app.use('/api/reviews', reviewRoute);
 app.use('/api/blocks', blockRoute);
 app.use('/api/reports', reportRoute);
+app.use('/api/stats', statsRoute);
 
 app.use((err, req, res, next) => {
     const statusCode = err.statusCode || 500;

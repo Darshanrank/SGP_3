@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, BookmarkPlus, RotateCcw, Trash2, Star, CalendarDays } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -63,6 +63,7 @@ const CATEGORY_ICONS = {
 
 const INITIAL_FILTERS = {
     skill: '',
+    category: '',
     level: '',
     language: '',
     rating: '',
@@ -72,6 +73,7 @@ const INITIAL_FILTERS = {
 
 const DiscoverSkillsPage = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const queryClient = useQueryClient();
 
     const [filters, setFilters] = useState(INITIAL_FILTERS);
@@ -143,12 +145,30 @@ const DiscoverSkillsPage = () => {
     const activeFilterCount = useMemo(() => {
         let count = 0;
         if (filters.skill.trim()) count += 1;
+        if (filters.category.trim()) count += 1;
         if (filters.level) count += 1;
         if (filters.language) count += 1;
         if (filters.rating) count += 1;
         if (filters.availableDays.length > 0) count += 1;
         return count;
     }, [filters]);
+
+    useEffect(() => {
+        const nextSkill = String(searchParams.get('skill') || '').trim();
+        const nextCategory = String(searchParams.get('category') || '').trim();
+
+        if (!nextSkill && !nextCategory) return;
+
+        const nextFilters = {
+            ...INITIAL_FILTERS,
+            skill: nextSkill,
+            category: nextCategory
+        };
+
+        setFilters((prev) => (prev.skill === nextSkill && prev.category === nextCategory ? prev : nextFilters));
+        setAppliedFilters((prev) => (prev.skill === nextSkill && prev.category === nextCategory ? prev : nextFilters));
+        setPage(1);
+    }, [searchParams]);
 
     const handleToggleDay = (dayKey) => {
         setFilters((prev) => {
