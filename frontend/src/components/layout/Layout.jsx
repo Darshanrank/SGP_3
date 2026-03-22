@@ -16,7 +16,7 @@ const Layout = ({ children }) => {
                 </div>
             </main>
             {!isLandingPage && (
-                <div className="mt-auto border-t border-white/5">
+                <div className="mt-20 border-t border-white/10">
                     <footer className="border-t border-white/10 bg-[#020617] px-6 py-4 md:px-12">
                         <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
                             <p className="text-sm font-semibold text-white">SkillSwap</p>

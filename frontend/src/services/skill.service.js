@@ -51,3 +51,13 @@ export const removeSkill = async (skillId) => {
     const response = await api.delete(`/skills/my/${skillId}`);
     return response.data;
 };
+
+export const updateUserSkill = async (skillId, payload) => {
+    const response = await api.put(`/skills/my/${skillId}`, payload);
+    return response.data;
+};
+
+export const reorderUserSkills = async (skillIds) => {
+    const response = await api.put('/skills/my/reorder', { skillIds });
+    return response.data;
+};

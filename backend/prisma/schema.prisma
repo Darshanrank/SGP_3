@@ -186,6 +186,7 @@ model SavedFilter {
     skill     Skill     @relation(fields: [skillId], references: [id])
     type      SkillType
     level     SkillLevel
+    displayOrder Int      @default(0)
     proofUrl  String?
     createdAt DateTime  @default(now())
 
@@ -196,6 +197,7 @@ model SavedFilter {
 
     @@unique([userId, skillId, type])
     @@index([userId])
+    @@index([userId, displayOrder])
     @@index([skillId])
   }
 

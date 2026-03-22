@@ -90,6 +90,16 @@ const userSkillSchema = z.object({
     }).optional().nullable()
 });
 
+const updateUserSkillSchema = z.object({
+    type: z.enum(['TEACH', 'LEARN']),
+    level: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+    category: z.string().trim().min(1).max(50)
+});
+
+const reorderUserSkillsSchema = z.object({
+    skillIds: z.array(z.preprocess(toInt, z.number().int().positive())).min(1)
+});
+
 const reportSchema = z.object({
     reportedUserId: z.preprocess(toInt, z.number().int().positive()),
     reason: z.enum(['SPAM', 'HARASSMENT', 'SCAM_OR_FRAUD', 'INAPPROPRIATE_CONTENT', 'IMPERSONATION', 'OTHER']),
@@ -153,6 +163,8 @@ export const validateTodoInput = validate(todoSchema);
 export const validateToggleTodoInput = validate(toggleTodoSchema);
 export const validateCreateSkillInput = validate(createSkillSchema);
 export const validateUserSkillInput = validate(userSkillSchema);
+export const validateUpdateUserSkillInput = validate(updateUserSkillSchema);
+export const validateReorderUserSkillsInput = validate(reorderUserSkillsSchema);
 export const validateReportInput = validate(reportSchema);
 export const validateCalendarEventInput = validate(calendarEventSchema);
 export const validateBadgeInput = validate(badgeSchema);

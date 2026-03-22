@@ -4,6 +4,8 @@ import {
     getUserSkillsService, 
     addUserSkillService, 
     removeUserSkillService,
+    updateUserSkillService,
+    reorderUserSkillsService,
     getUsersWithSkillService
 } from '../services/skill.service.js';
 import { conf } from '../conf/conf.js';
@@ -98,6 +100,31 @@ export const removeUserSkill = async (req, res, next) => {
             throw new ValidationError('Invalid user skill id', 'INVALID_USER_SKILL_ID');
         }
         const result = await removeUserSkillService(userId, skillId);
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateUserSkill = async (req, res, next) => {
+    try {
+        const userSkillId = parseInt(req.params.id);
+        const userId = req.user.userId;
+        if (!Number.isInteger(userSkillId)) {
+            throw new ValidationError('Invalid user skill id', 'INVALID_USER_SKILL_ID');
+        }
+
+        const skill = await updateUserSkillService(userId, userSkillId, req.body);
+        res.json(skill);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const reorderUserSkills = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const result = await reorderUserSkillsService(userId, req.body?.skillIds);
         res.json(result);
     } catch (error) {
         next(error);
