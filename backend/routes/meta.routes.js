@@ -12,6 +12,7 @@ import {
     createBadge,
     assignBadge,
     getMyRewards,
+    getRewardsHistory,
     getMyReports,
     getReports,
     updateReportStatus,
@@ -72,6 +73,7 @@ router.get('/badges/my', getMyBadges);
 router.post('/badges', requireAdmin, validateBadgeInput, createBadge);
 router.post('/badges/assign', requireAdmin, validateAssignBadgeInput, assignBadge);
 router.get('/rewards', getMyRewards);
+router.get('/rewards/history', getRewardsHistory);
 
 // Reports (admin)
 router.get('/reports/my', getMyReports);

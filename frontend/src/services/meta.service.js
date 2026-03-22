@@ -74,6 +74,11 @@ export const getRewards = async () => {
     return response.data;
 };
 
+export const getRewardsHistory = async (limit = 20) => {
+    const response = await api.get(`/meta/rewards/history?limit=${limit}`);
+    return response.data;
+};
+
 export const getBadges = async () => {
     const response = await api.get('/meta/badges');
     return response.data;

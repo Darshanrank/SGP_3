@@ -11,6 +11,7 @@ import {
     createBadgeService,
     assignBadgeService,
     getMyRewardsService,
+    getRewardsHistoryService,
     getMyReportsService,
     getReportsService,
     updateReportStatusService,
@@ -261,6 +262,17 @@ export const getMyRewards = async (req, res, next) => {
         const userId = req.user.userId;
         const rewards = await getMyRewardsService(userId);
         res.json(rewards);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getRewardsHistory = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const limit = Number.parseInt(req.query.limit, 10) || 20;
+        const payload = await getRewardsHistoryService(userId, { limit });
+        res.json(payload);
     } catch (error) {
         next(error);
     }

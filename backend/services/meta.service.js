@@ -337,6 +337,82 @@ export const getMyRewardsService = async (userId) => {
     return reward || { userId, points: 0, totalSwaps: 0 };
 };
 
+export const getRewardsHistoryService = async (userId, { limit = 20 } = {}) => {
+    const safeLimit = Math.max(1, Math.min(50, Number(limit) || 20));
+
+    const [reward, completedSwaps, positiveReviews, taughtSkills, allUserSkills] = await Promise.all([
+        prisma.userReward.findUnique({ where: { userId } }),
+        prisma.swapClass.findMany({
+            where: {
+                status: 'COMPLETED',
+                swapRequest: {
+                    OR: [{ fromUserId: userId }, { toUserId: userId }]
+                }
+            },
+            select: { id: true, endedAt: true, startedAt: true }
+        }),
+        prisma.swapReview.findMany({
+            where: {
+                revieweeId: userId,
+                overallRating: { gte: 4 }
+            },
+            select: { id: true, createdAt: true }
+        }),
+        prisma.userSkill.findMany({
+            where: { userId, type: 'TEACH' },
+            select: { skillId: true }
+        }),
+        prisma.userSkill.findMany({
+            where: { userId },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true, createdAt: true }
+        })
+    ]);
+
+    const events = [];
+
+    completedSwaps.forEach((swap) => {
+        events.push({
+            id: `swap-${swap.id}`,
+            action: 'Completed Swap',
+            points: 20,
+            createdAt: swap.endedAt || swap.startedAt || new Date().toISOString()
+        });
+    });
+
+    positiveReviews.forEach((review) => {
+        events.push({
+            id: `review-${review.id}`,
+            action: 'Received Positive Review',
+            points: 10,
+            createdAt: review.createdAt
+        });
+    });
+
+    if (allUserSkills.length > 0) {
+        events.push({
+            id: `skill-first-${allUserSkills[0].id}`,
+            action: 'First Skill Added',
+            points: 15,
+            createdAt: allUserSkills[0].createdAt
+        });
+    }
+
+    const history = events
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, safeLimit);
+
+    return {
+        data: history,
+        metrics: {
+            points: reward?.points || 0,
+            totalSwaps: reward?.totalSwaps || completedSwaps.length,
+            positiveReviews: positiveReviews.length,
+            taughtSkills: new Set(taughtSkills.map((item) => item.skillId)).size
+        }
+    };
+};
+
 // Reports
 export const getMyReportsService = async (userId) => {
     return await prisma.report.findMany({
