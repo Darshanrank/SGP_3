@@ -93,6 +93,11 @@ export const uploadClassroomFile = async (classId, file) => {
     return response.data;
 };
 
+export const deleteClassroomFile = async (classId, fileId) => {
+    const response = await api.delete(`/swaps/classes/${classId}/files/${fileId}`);
+    return response.data;
+};
+
 export const getSharedNote = async (classId) => {
     const response = await api.get(`/swaps/classes/${classId}/notes`);
     return response.data;

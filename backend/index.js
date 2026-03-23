@@ -185,6 +185,57 @@ io.on('connection', (socket) => {
     socket.on('typing_stop', relayTypingStop);
     socket.on('stopTyping', relayTypingStop);
 
+    // Message reactions relay
+    socket.on('message_reaction', async ({ classId, messageId, emoji, previousEmoji }) => {
+        try {
+            const userId = socket.user?.userId;
+            const normalizedClassId = Number(classId);
+            const normalizedMessageId = Number(messageId);
+            if (!Number.isInteger(normalizedClassId) || !Number.isInteger(normalizedMessageId)) return;
+
+            const allowed = await isUserInClass(userId, normalizedClassId);
+            if (!allowed) return;
+            const partnerId = await getPartnerIdInClass(userId, normalizedClassId);
+            if (partnerId && await areUsersBlocked(userId, partnerId)) return;
+
+            const nextEmoji = typeof emoji === 'string' ? emoji : null;
+            const prevEmoji = typeof previousEmoji === 'string' ? previousEmoji : null;
+            if (!nextEmoji && !prevEmoji) return;
+
+            socket.to(`chat_${normalizedClassId}`).emit('message_reaction', {
+                classId: normalizedClassId,
+                messageId: normalizedMessageId,
+                emoji: nextEmoji,
+                previousEmoji: prevEmoji,
+                userId
+            });
+        } catch (err) {
+            logger.warn('message_reaction relay failed', { socketId: socket.id, err: err.message });
+        }
+    });
+
+    // Shared whiteboard scene relay
+    socket.on('whiteboard_scene_update', async ({ classId, scene }) => {
+        try {
+            const userId = socket.user?.userId;
+            const normalizedClassId = Number(classId);
+            if (!Number.isInteger(normalizedClassId) || !scene) return;
+
+            const allowed = await isUserInClass(userId, normalizedClassId);
+            if (!allowed) return;
+            const partnerId = await getPartnerIdInClass(userId, normalizedClassId);
+            if (partnerId && await areUsersBlocked(userId, partnerId)) return;
+
+            socket.to(`chat_${normalizedClassId}`).emit('whiteboard_scene_updated', {
+                classId: normalizedClassId,
+                scene,
+                updatedBy: userId
+            });
+        } catch (err) {
+            logger.warn('whiteboard_scene_update relay failed', { socketId: socket.id, err: err.message });
+        }
+    });
+
     // Mark messages as read
     socket.on('mark_read', async (classId) => {
         try {

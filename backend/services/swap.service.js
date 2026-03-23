@@ -583,6 +583,18 @@ export const addClassroomFileService = async (userId, classId, data) => {
     });
 };
 
+export const deleteClassroomFileService = async (userId, classId, fileId) => {
+    await ensureClassOwnership(userId, classId);
+
+    const file = await prisma.classroomFile.findUnique({ where: { id: fileId } });
+    if (!file || file.swapClassId !== classId) {
+        throw new NotFound('Classroom file not found');
+    }
+
+    await prisma.classroomFile.delete({ where: { id: fileId } });
+    return { success: true };
+};
+
 export const getSharedNoteService = async (userId, classId) => {
     await ensureClassOwnership(userId, classId);
 

@@ -16,6 +16,7 @@ import {
     deleteCodeSnippet,
     getClassroomFiles,
     uploadClassroomFile,
+    deleteClassroomFile,
     getSharedNote,
     updateSharedNote
 } from '../controllers/swap.controller.js';
@@ -62,6 +63,7 @@ router.delete('/classes/:id/snippets/:snippetId', deleteCodeSnippet);
 
 router.get('/classes/:id/files', getClassroomFiles);
 router.post('/classes/:id/files', uploadClassroomFileMiddleware.single('classroomFile'), uploadClassroomFile);
+router.delete('/classes/:id/files/:fileId', deleteClassroomFile);
 
 router.get('/classes/:id/notes', getSharedNote);
 router.put('/classes/:id/notes', validateSharedNoteInput, updateSharedNote);

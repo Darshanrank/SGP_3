@@ -15,6 +15,7 @@ import {
     deleteCodeSnippetService,
     getClassroomFilesService,
     addClassroomFileService,
+    deleteClassroomFileService,
     getSharedNoteService,
     upsertSharedNoteService
 } from '../services/swap.service.js';
@@ -253,6 +254,18 @@ export const uploadClassroomFile = async (req, res, next) => {
         });
 
         res.status(201).json(saved);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const deleteClassroomFile = async (req, res, next) => {
+    try {
+        const classId = normalizeId(req.params.id, 'class id');
+        const fileId = normalizeId(req.params.fileId, 'file id');
+        const userId = req.user.userId;
+        const result = await deleteClassroomFileService(userId, classId, fileId);
+        res.json(result);
     } catch (error) {
         next(error);
     }
