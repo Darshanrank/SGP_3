@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { getMyProfile, sendUpcomingReminder, updateProfile, deleteAccount } from '../services/profile.service';
+import { getUserReviews } from '../services/review.service';
 import { addSkill, createSkill, getAllSkills, getUserSkills, removeSkill, uploadSkillDemo } from '../services/skill.service';
 import { Editor } from '@tinymce/tinymce-react';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -199,6 +200,11 @@ const parseTeachingStyles = (profile = {}) => {
 const profileContainerClass = 'max-w-6xl mx-auto px-6 py-8 space-y-6';
 const profileCardClass = 'bg-[#111721] border border-white/5 rounded-xl p-6 shadow-md';
 
+const renderStarRow = (score = 0) => {
+    const rounded = Math.max(0, Math.min(5, Math.round(Number(score) || 0)));
+    return '★'.repeat(rounded) || '☆';
+};
+
 const Profile = () => {
     const { refreshUser } = useAuth();
     const location = useLocation();
@@ -218,6 +224,12 @@ const Profile = () => {
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
     const [deleting, setDeleting] = useState(false);
     const [editorLoading, setEditorLoading] = useState(true);
+    const [profileRating, setProfileRating] = useState({ avgRating: 0, reviewCount: 0 });
+    const [earnedBadges, setEarnedBadges] = useState([]);
+    const [profileUserId, setProfileUserId] = useState(null);
+    const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
+    const [reviewsLoading, setReviewsLoading] = useState(false);
+    const [reviewItems, setReviewItems] = useState([]);
     const avatarInputRef = useRef(null);
 
     const [formData, setFormData] = useState({
@@ -279,6 +291,12 @@ const Profile = () => {
 
                 const profile = profileData.profile || {};
                 setAvatarPreview(profile.avatarUrl || '');
+                setProfileUserId(profileData.userId || null);
+                setProfileRating({
+                    avgRating: Number(profileData?.headerStats?.rating || profileData?.reputationMetrics?.averageRating || 0),
+                    reviewCount: Number(profileData?.headerStats?.reviewCount || profileData?.reputationMetrics?.reviewCount || 0)
+                });
+                setEarnedBadges(Array.isArray(profileData?.badges) ? profileData.badges : []);
                 const selectedTeachingStyles = parseTeachingStyles(profile);
                 const goals = Array.isArray(profileData.learningGoals) && profileData.learningGoals.length
                     ? profileData.learningGoals.map((goal) => String(goal.goalText || '').trim()).filter(Boolean)
@@ -693,6 +711,12 @@ const Profile = () => {
                 const [freshProfile, freshSkills] = await Promise.all([getMyProfile(), getUserSkills()]);
                 const profile = freshProfile.profile || {};
                 setAvatarPreview(profile.avatarUrl || '');
+                setProfileUserId(freshProfile.userId || null);
+                setProfileRating({
+                    avgRating: Number(freshProfile?.headerStats?.rating || freshProfile?.reputationMetrics?.averageRating || 0),
+                    reviewCount: Number(freshProfile?.headerStats?.reviewCount || freshProfile?.reputationMetrics?.reviewCount || 0)
+                });
+                setEarnedBadges(Array.isArray(freshProfile?.badges) ? freshProfile.badges : []);
 
                 const freshTeach = freshSkills
                     .filter((s) => s.type === 'TEACH')
@@ -750,6 +774,23 @@ const Profile = () => {
         }
     };
 
+    const handleOpenReviews = async () => {
+        if (!profileUserId || reviewsLoading) return;
+
+        setReviewsModalOpen(true);
+        if (reviewItems.length) return;
+
+        setReviewsLoading(true);
+        try {
+            const response = await getUserReviews(profileUserId, 1, 10);
+            setReviewItems(Array.isArray(response?.data) ? response.data : []);
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to load reviews');
+        } finally {
+            setReviewsLoading(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-[60vh] flex items-center justify-center">
@@ -760,37 +801,108 @@ const Profile = () => {
 
     return (
         <div className={profileContainerClass}>
-                <section className={`${profileCardClass} space-y-5`}>
-                    <h3 className="text-lg font-semibold text-[#DCE7F5]">Profile Preview</h3>
-                    <div className="rounded-2xl border border-white/10 bg-[#0E1620] p-4 text-center">
-                        {avatarPreview ? (
-                            <img src={avatarPreview} alt="Profile" className="mx-auto h-20 w-20 rounded-full object-cover" />
-                        ) : (
-                            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#0A4D9F]/25 text-xl font-bold text-[#DCE7F5]">
-                                {(formData.firstName || formData.username || 'U').charAt(0).toUpperCase()}
+                {reviewsModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => setReviewsModalOpen(false)}>
+                        <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#111721] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.5)]" onClick={(e) => e.stopPropagation()}>
+                            <div className="mb-4 flex items-center justify-between">
+                                <h4 className="text-lg font-semibold text-[#DCE7F5]">Reviews</h4>
+                                <button
+                                    type="button"
+                                    onClick={() => setReviewsModalOpen(false)}
+                                    className="rounded-md border border-white/10 px-2 py-1 text-xs text-[#8DA0BF] hover:bg-white/5"
+                                >
+                                    Close
+                                </button>
                             </div>
-                        )}
-                        <p className="mt-3 text-base font-semibold text-[#DCE7F5]">
-                            {composeFullName(formData.firstName, formData.lastName) || 'Your Name'}
-                        </p>
-                        <p className="text-sm text-[#8DA0BF]">@{formData.username || 'username'}</p>
+
+                            {reviewsLoading ? (
+                                <p className="text-sm text-[#8DA0BF]">Loading reviews...</p>
+                            ) : reviewItems.length ? (
+                                <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+                                    {reviewItems.map((review) => (
+                                        <div key={review.id} className="rounded-xl border border-white/10 bg-[#0E1620] p-3">
+                                            <p className="text-sm text-yellow-400">{renderStarRow(review.overallRating)} <span className="ml-1 text-[#8DA0BF]">{Number(review.overallRating || 0).toFixed(1)}</span></p>
+                                            <p className="mt-2 text-sm text-[#DCE7F5]">{review.comment?.trim() || 'No written feedback.'}</p>
+                                            <p className="mt-2 text-xs text-[#8DA0BF]">by @{review.reviewer?.username || 'user'}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-[#8DA0BF]">No reviews available yet.</p>
+                            )}
+                        </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 text-center sm:grid-cols-4 sm:gap-6">
-                        <div>
-                            <p className="text-xs uppercase tracking-wide text-[#8DA0BF]">Teaching Skills</p>
-                            <p className="mt-1 text-lg font-semibold text-[#DCE7F5]">{formData.teachSkills.filter((s) => s.skillName.trim()).length}</p>
+                )}
+
+                <section className="space-y-3">
+                    <h3 className="page-title">Profile Preview</h3>
+                    <div className="grid gap-4 rounded-2xl border border-white/10 bg-[#0E1620] p-4 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                        <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-[#0B1420] px-4 py-5 text-center">
+                            {avatarPreview ? (
+                                <img src={avatarPreview} alt="Profile" className="h-16 w-16 rounded-full object-cover" />
+                            ) : (
+                                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#0A4D9F]/25 text-lg font-bold text-[#DCE7F5]">
+                                    {(formData.firstName || formData.username || 'U').charAt(0).toUpperCase()}
+                                </div>
+                            )}
+                            <p className="mt-3 text-lg font-semibold text-[#DCE7F5] leading-tight">
+                                {composeFullName(formData.firstName, formData.lastName) || 'Your Name'}
+                            </p>
+                            <p className="mt-1 text-sm text-[#8DA0BF]">@{formData.username || 'username'}</p>
+                            <div className="mt-2 flex items-center gap-2 text-sm text-gray-300">
+                                <span className="text-yellow-400">⭐</span>
+                                <span>{profileRating.avgRating > 0 ? profileRating.avgRating.toFixed(1) : '0.0'}</span>
+                                <span className="text-gray-500">|</span>
+                                <button
+                                    type="button"
+                                    onClick={handleOpenReviews}
+                                    className="text-gray-300 underline-offset-2 hover:text-white hover:underline"
+                                >
+                                    {profileRating.reviewCount} Reviews
+                                </button>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-xs uppercase tracking-wide text-[#8DA0BF]">Learning Skills</p>
-                            <p className="mt-1 text-lg font-semibold text-[#DCE7F5]">{formData.learnSkills.filter((s) => s.skillName.trim()).length}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs uppercase tracking-wide text-[#8DA0BF]">Availability Slots</p>
-                            <p className="mt-1 text-lg font-semibold text-[#DCE7F5]">{formData.availability.length}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs uppercase tracking-wide text-[#8DA0BF]">Learning Goals</p>
-                            <p className="mt-1 text-lg font-semibold text-[#DCE7F5]">{formData.learningGoals.filter((goal) => String(goal || '').trim()).length}</p>
+
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
+                                    <p className="text-[11px] uppercase tracking-wide text-[#8DA0BF]">Teaching Skills</p>
+                                    <p className="mt-1 text-base font-semibold text-[#DCE7F5]">{formData.teachSkills.filter((s) => s.skillName.trim()).length}</p>
+                                </div>
+                                <div className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
+                                    <p className="text-[11px] uppercase tracking-wide text-[#8DA0BF]">Learning Skills</p>
+                                    <p className="mt-1 text-base font-semibold text-[#DCE7F5]">{formData.learnSkills.filter((s) => s.skillName.trim()).length}</p>
+                                </div>
+                                <div className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
+                                    <p className="text-[11px] uppercase tracking-wide text-[#8DA0BF]">Availability Slots</p>
+                                    <p className="mt-1 text-base font-semibold text-[#DCE7F5]">{formData.availability.length}</p>
+                                </div>
+                                <div className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
+                                    <p className="text-[11px] uppercase tracking-wide text-[#8DA0BF]">Learning Goals</p>
+                                    <p className="mt-1 text-base font-semibold text-[#DCE7F5]">{formData.learningGoals.filter((goal) => String(goal || '').trim()).length}</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="text-[11px] uppercase tracking-wide text-[#8DA0BF] text-center">Achievements</p>
+                                <div className="mt-2 flex flex-wrap justify-center gap-2">
+                                    {earnedBadges.length ? earnedBadges.map((badgeEntry) => (
+                                        <div
+                                            key={badgeEntry.id}
+                                            title={badgeEntry?.badge?.condition || ''}
+                                            className="flex items-center gap-1 rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-400"
+                                        >
+                                            <span>🏅</span>
+                                            <span>{badgeEntry?.badge?.name || 'Achievement'}</span>
+                                        </div>
+                                    )) : (
+                                        <div className="flex items-center gap-1 rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-400">
+                                            <span>🏅</span>
+                                            <span>No badges yet</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>

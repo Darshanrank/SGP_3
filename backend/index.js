@@ -89,6 +89,12 @@ const emitChatPresence = async (classId, ioInstance) => {
     ioInstance.to(room).emit('chat_presence', { classId: Number(classId), userIds });
 };
 
+const emitCallPresence = async (classId, ioInstance) => {
+    const room = `call_${classId}`;
+    const userIds = await getRoomUserIds(room, ioInstance);
+    ioInstance.to(room).emit('classroom_call_presence', { classId: Number(classId), userIds });
+};
+
 // Store io instance in app so controllers can access it
 app.set('io', io);
 startClassReminderScheduler(io);
@@ -146,12 +152,118 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('classroom_call_join', async (classId) => {
+        try {
+            const userId = socket.user?.userId;
+            const normalizedClassId = Number(classId);
+            const allowed = await isUserInClass(userId, normalizedClassId);
+            if (!allowed) {
+                return socket.emit('error', 'Not authorized for this class');
+            }
+
+            const partnerId = await getPartnerIdInClass(userId, normalizedClassId);
+            if (partnerId) {
+                const blocked = await areUsersBlocked(userId, partnerId);
+                if (blocked) {
+                    return socket.emit('error', 'Call unavailable because one user is blocked');
+                }
+            }
+
+            const room = `call_${normalizedClassId}`;
+            socket.join(room);
+            await emitCallPresence(normalizedClassId, io);
+        } catch (err) {
+            logger.warn('classroom_call_join failed', { socketId: socket.id, err: err.message });
+            socket.emit('error', 'Unable to join call room');
+        }
+    });
+
+    socket.on('classroom_call_leave', async (classId) => {
+        try {
+            const normalizedClassId = Number(classId);
+            if (!Number.isInteger(normalizedClassId)) return;
+            socket.leave(`call_${normalizedClassId}`);
+            await emitCallPresence(normalizedClassId, io);
+        } catch (err) {
+            logger.warn('classroom_call_leave failed', { socketId: socket.id, err: err.message });
+        }
+    });
+
+    socket.on('classroom_call_offer', async ({ classId, toUserId, sdp }) => {
+        try {
+            const fromUserId = socket.user?.userId;
+            const normalizedClassId = Number(classId);
+            const normalizedToUserId = Number(toUserId);
+            if (!Number.isInteger(normalizedClassId) || !Number.isInteger(normalizedToUserId) || !sdp) return;
+
+            const allowed = await isUserInClass(fromUserId, normalizedClassId);
+            if (!allowed) return;
+
+            io.to(`call_${normalizedClassId}`).emit('classroom_call_offer', {
+                classId: normalizedClassId,
+                fromUserId,
+                toUserId: normalizedToUserId,
+                sdp
+            });
+        } catch (err) {
+            logger.warn('classroom_call_offer relay failed', { socketId: socket.id, err: err.message });
+        }
+    });
+
+    socket.on('classroom_call_answer', async ({ classId, toUserId, sdp }) => {
+        try {
+            const fromUserId = socket.user?.userId;
+            const normalizedClassId = Number(classId);
+            const normalizedToUserId = Number(toUserId);
+            if (!Number.isInteger(normalizedClassId) || !Number.isInteger(normalizedToUserId) || !sdp) return;
+
+            const allowed = await isUserInClass(fromUserId, normalizedClassId);
+            if (!allowed) return;
+
+            io.to(`call_${normalizedClassId}`).emit('classroom_call_answer', {
+                classId: normalizedClassId,
+                fromUserId,
+                toUserId: normalizedToUserId,
+                sdp
+            });
+        } catch (err) {
+            logger.warn('classroom_call_answer relay failed', { socketId: socket.id, err: err.message });
+        }
+    });
+
+    socket.on('classroom_call_ice_candidate', async ({ classId, toUserId, candidate }) => {
+        try {
+            const fromUserId = socket.user?.userId;
+            const normalizedClassId = Number(classId);
+            const normalizedToUserId = Number(toUserId);
+            if (!Number.isInteger(normalizedClassId) || !Number.isInteger(normalizedToUserId) || !candidate) return;
+
+            const allowed = await isUserInClass(fromUserId, normalizedClassId);
+            if (!allowed) return;
+
+            io.to(`call_${normalizedClassId}`).emit('classroom_call_ice_candidate', {
+                classId: normalizedClassId,
+                fromUserId,
+                toUserId: normalizedToUserId,
+                candidate
+            });
+        } catch (err) {
+            logger.warn('classroom_call_ice_candidate relay failed', { socketId: socket.id, err: err.message });
+        }
+    });
+
     socket.on('disconnecting', async () => {
         logger.info('User disconnected from socket', { socketId: socket.id });
         const joinedClassRooms = Array.from(socket.rooms).filter((room) => room.startsWith('chat_'));
         for (const room of joinedClassRooms) {
             const classId = room.replace('chat_', '');
             await emitChatPresence(classId, io);
+        }
+
+        const joinedCallRooms = Array.from(socket.rooms).filter((room) => room.startsWith('call_'));
+        for (const room of joinedCallRooms) {
+            const classId = room.replace('call_', '');
+            await emitCallPresence(classId, io);
         }
     });
 
