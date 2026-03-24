@@ -1081,7 +1081,7 @@ const Swaps = () => {
                     <div className="p-4 flex gap-2 flex-wrap">
                         {(activeTab === 'classes'
                             ? ['ALL', 'ONGOING', 'COMPLETED', 'CANCELLED']
-                            : ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED', 'COMPLETED']
+                            : ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED']
                         ).map(status => {
                             const currentItems = activeTab === 'classes'
                                 ? activeClasses

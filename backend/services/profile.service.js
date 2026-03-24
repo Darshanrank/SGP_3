@@ -668,6 +668,7 @@ export const getPublicProfileService = async (userId, viewerId = null) => {
         where: { userId },
         select: {
             userId: true,
+            isVerified: true,
             username: true,
             createdAt: true,
             profile: true,
@@ -714,7 +715,7 @@ export const getPublicProfileService = async (userId, viewerId = null) => {
     const canShowPortfolio = isOwner || privacy.showPortfolio;
     const canShowSocialLinks = isOwner || privacy.showSocialLinks;
 
-    const [reviewsAggregate, completedSwaps, profileViewsResult, swapRequestsReceived, matchesFound, recentSwaps] = await Promise.all([
+    const [reviewsAggregate, completedSwaps, profileViewsResult, swapRequestsReceived, matchesFound, recentSwaps, penaltyCount] = await Promise.all([
         prisma.swapReview.aggregate({
             where: { revieweeId: user.userId },
             _avg: { overallRating: true },
@@ -780,13 +781,42 @@ export const getPublicProfileService = async (userId, viewerId = null) => {
             },
             orderBy: { id: 'desc' },
             take: 5
-        })
+        }),
+        prisma.adminPenalty.count({ where: { userId: user.userId } })
     ]);
 
     const completedDates = completedSwaps
         .filter((swapClass) => swapClass.status === 'COMPLETED')
         .map((swapClass) => swapClass.completion?.completedAt || swapClass.endedAt)
         .filter(Boolean);
+
+    const teachSessionCountByUserSkillId = {};
+    const learnSessionCountByUserSkillId = {};
+
+    completedSwaps
+        .filter((swapClass) => swapClass.status === 'COMPLETED')
+        .forEach((swapClass) => {
+            const req = swapClass.swapRequest;
+            if (!req) return;
+
+            let taughtUserSkillId = null;
+            let learnedUserSkillId = null;
+
+            if (req.fromUserId === user.userId) {
+                taughtUserSkillId = req.teachSkill?.id || null;
+                learnedUserSkillId = req.learnSkill?.id || null;
+            } else if (req.toUserId === user.userId) {
+                taughtUserSkillId = req.learnSkill?.id || null;
+                learnedUserSkillId = req.teachSkill?.id || null;
+            }
+
+            if (taughtUserSkillId) {
+                teachSessionCountByUserSkillId[taughtUserSkillId] = (teachSessionCountByUserSkillId[taughtUserSkillId] || 0) + 1;
+            }
+            if (learnedUserSkillId) {
+                learnSessionCountByUserSkillId[learnedUserSkillId] = (learnSessionCountByUserSkillId[learnedUserSkillId] || 0) + 1;
+            }
+        });
 
     const averageRating = reviewsAggregate._avg.overallRating ? Number(reviewsAggregate._avg.overallRating.toFixed(1)) : 0;
     const reviewCount = reviewsAggregate._count.overallRating || 0;
@@ -843,11 +873,19 @@ export const getPublicProfileService = async (userId, viewerId = null) => {
         const primarySkill = req?.fromUserId === user.userId
             ? req?.learnSkill?.skill?.name || req?.teachSkill?.skill?.name
             : req?.teachSkill?.skill?.name || req?.learnSkill?.skill?.name;
+        const taughtSkillName = req?.fromUserId === user.userId
+            ? req?.teachSkill?.skill?.name
+            : req?.learnSkill?.skill?.name;
+        const learnedSkillName = req?.fromUserId === user.userId
+            ? req?.learnSkill?.skill?.name
+            : req?.teachSkill?.skill?.name;
 
         return {
             classId: swapClass.id,
             status: swapClass.status,
             partner: partner || 'Partner',
+            taughtSkill: taughtSkillName || null,
+            learnedSkill: learnedSkillName || null,
             title: `${primarySkill || 'Skill'} session with ${partner || 'partner'}`,
             startedAt: swapClass.startedAt,
             endedAt: swapClass.endedAt
@@ -902,6 +940,16 @@ export const getPublicProfileService = async (userId, viewerId = null) => {
             profileViews,
             swapRequestsReceived,
             matchesFound
+        },
+        trustIndicators: {
+            verifiedEmail: Boolean(user.isVerified),
+            completedSwaps: totalSwaps,
+            penaltyCount,
+            hasPenalties: penaltyCount > 0
+        },
+        skillSessionStats: {
+            teachSessionCountByUserSkillId,
+            learnSessionCountByUserSkillId
         },
         publicProfileLink: `${conf.FRONTEND_URL || 'http://localhost:5173'}/u/${user.username}`,
         interactions: {
