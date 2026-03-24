@@ -230,7 +230,7 @@ const NewSwapRequest = () => {
                                 >
                                     <div className="flex items-center gap-4">
                                         {u.avatarUrl ? (
-                                            <img src={u.avatarUrl} alt={u.username} className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm" />
+                                            <img src={u.avatarUrl} alt={u.username} loading="lazy" className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm" />
                                         ) : (
                                             <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-lg">
                                                 {(u.username || 'U')[0].toUpperCase()}
@@ -282,7 +282,7 @@ const NewSwapRequest = () => {
                         <div className="bg-white rounded-xl border border-gray-100 p-5">
                             <div className="flex items-center gap-4">
                                 {targetProfile.profile?.avatarUrl ? (
-                                    <img src={targetProfile.profile.avatarUrl} alt={targetProfile.username} className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm" />
+                                    <img src={targetProfile.profile.avatarUrl} alt={targetProfile.username} loading="lazy" className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm" />
                                 ) : (
                                     <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xl">
                                         {(targetProfile.username || 'U')[0].toUpperCase()}

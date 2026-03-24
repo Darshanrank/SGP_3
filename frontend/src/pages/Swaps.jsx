@@ -252,19 +252,17 @@ const Swaps = () => {
     };
 
     const renderSwapDirectionBlock = ({ teachSkill, learnSkill, teachLabel = 'You teach', learnLabel = 'You learn' }) => (
-        <div className="mt-3 rounded-lg border border-white/10 bg-[#0E1620] p-3">
-            <div className="flex items-center justify-center gap-4">
-                <div className="w-28 rounded-lg border border-white/10 bg-[#0F172A] px-3 py-2 text-center">
-                    <p className="truncate text-sm font-medium text-[#DCE7F5]">{teachSkill || 'Not specified'}</p>
-                    <p className="mt-1 text-[11px] text-[#8DA0BF]">{teachLabel}</p>
-                </div>
+        <div className="mt-3 flex items-center justify-center gap-4">
+            <div className="w-28 rounded-lg border border-white/10 bg-[#0F172A] px-3 py-2 text-center">
+                <p className="truncate text-sm font-medium text-[#DCE7F5]">{teachSkill || 'Not specified'}</p>
+                <p className="mt-1 text-[11px] text-[#8DA0BF]">{teachLabel}</p>
+            </div>
 
-                <Repeat2 className="h-4 w-4 shrink-0 text-gray-400" />
+            <Repeat2 className="h-4 w-4 shrink-0 text-gray-400" />
 
-                <div className="w-28 rounded-lg border border-white/10 bg-[#0F172A] px-3 py-2 text-center">
-                    <p className="truncate text-sm font-medium text-[#DCE7F5]">{learnSkill || 'Not specified'}</p>
-                    <p className="mt-1 text-[11px] text-[#8DA0BF]">{learnLabel}</p>
-                </div>
+            <div className="w-28 rounded-lg border border-white/10 bg-[#0F172A] px-3 py-2 text-center">
+                <p className="truncate text-sm font-medium text-[#DCE7F5]">{learnSkill || 'Not specified'}</p>
+                <p className="mt-1 text-[11px] text-[#8DA0BF]">{learnLabel}</p>
             </div>
         </div>
     );
@@ -356,7 +354,7 @@ const Swaps = () => {
                     <>
                         <div className="flex items-center gap-2">
                             {profile?.profile?.avatarUrl ? (
-                                <img src={profile.profile.avatarUrl} alt={fullName} className="h-9 w-9 rounded-full object-cover" />
+                                <img src={profile.profile.avatarUrl} alt={fullName} loading="lazy" className="h-9 w-9 rounded-full object-cover" />
                             ) : (
                                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0A4D9F]/30 text-sm font-semibold text-[#DCE7F5]">
                                     {String(fullName)[0].toUpperCase()}

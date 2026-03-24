@@ -326,7 +326,7 @@ const Dashboard = () => {
                             <div key={m.userId} className="h-full rounded-2xl border border-white/10 bg-[#0E1620] p-4 transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
                                 <div className="mb-3 flex items-center gap-3">
                                     {m.avatarUrl ? (
-                                        <img src={m.avatarUrl} alt={m.username || 'User'} className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                                        <img src={m.avatarUrl} alt={m.username || 'User'} loading="lazy" className="w-10 h-10 rounded-full object-cover border border-white/10" />
                                     ) : (
                                         <div className="w-10 h-10 rounded-full bg-[#0A4D9F]/25 flex items-center justify-center text-[#DCE7F5] font-bold text-sm">
                                             {(m.username || 'U')[0].toUpperCase()}
@@ -495,7 +495,7 @@ const Dashboard = () => {
                                 <div className="flex items-center gap-3">
                                     <div className="relative h-8 w-8 rounded-full bg-gray-700">
                                         {person.avatarUrl ? (
-                                            <img src={person.avatarUrl} alt={person.username} className="h-8 w-8 rounded-full object-cover" />
+                                            <img src={person.avatarUrl} alt={person.username} loading="lazy" className="h-8 w-8 rounded-full object-cover" />
                                         ) : (
                                             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0A4D9F]/30 text-xs font-semibold text-white">
                                                 {(person.username || 'U')[0].toUpperCase()}

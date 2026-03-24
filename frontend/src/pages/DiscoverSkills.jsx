@@ -465,7 +465,7 @@ const DiscoverSkillsPage = () => {
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex min-w-0 items-center gap-3">
                                         {user.avatarUrl ? (
-                                            <img src={user.avatarUrl} alt={user.username} className="h-11 w-11 rounded-full object-cover" />
+                                            <img src={user.avatarUrl} alt={user.username} loading="lazy" className="h-11 w-11 rounded-full object-cover" />
                                         ) : (
                                             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#0A4D9F]/30 text-sm font-bold text-[#DCE7F5]">
                                                 {(user.username || 'U')[0].toUpperCase()}

@@ -1,7 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Excalidraw, exportToBlob } from '@excalidraw/excalidraw';
-import '@excalidraw/excalidraw/index.css';
 import {
     getClassDetails,
     addClassTodo,
@@ -157,6 +155,8 @@ const REVIEW_CATEGORY_CONFIG = [
     { key: 'communicationRating', label: 'Communication' },
     { key: 'expertiseRating', label: 'Expertise' }
 ];
+
+const WhiteboardModal = lazy(() => import('../components/classroom/WhiteboardModal'));
 
 const getEmptyCategoryRatings = () => ({
     clarityRating: 0,
@@ -1486,6 +1486,7 @@ const SwapClassroom = () => {
     const handleExportWhiteboard = async () => {
         if (!excalidrawApiRef.current) return;
         try {
+            const { exportToBlob } = await import('@excalidraw/excalidraw');
             const blob = await exportToBlob({
                 elements: excalidrawApiRef.current.getSceneElements(),
                 appState: {
@@ -2626,7 +2627,7 @@ const SwapClassroom = () => {
 
                                                 {msg.attachmentUrl && msg.messageType === 'IMAGE' && (
                                                     <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="mt-2 block">
-                                                        <img src={msg.attachmentUrl} alt={msg.attachmentName || 'attachment'} className="max-h-56 w-full rounded-xl border border-white/6 object-cover" />
+                                                        <img src={msg.attachmentUrl} alt={msg.attachmentName || 'attachment'} loading="lazy" className="max-h-56 w-full rounded-xl border border-white/6 object-cover" />
                                                     </a>
                                                 )}
 
@@ -2735,47 +2736,26 @@ const SwapClassroom = () => {
             </div>
 
             {whiteboardOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-                    <div className="flex h-[85vh] w-[90%] flex-col overflow-hidden rounded-lg bg-white">
-                        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                            <p className="text-sm font-semibold text-slate-800">Collaborative Whiteboard</p>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={handleClearWhiteboard}
-                                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100"
-                                >
-                                    Clear Board
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleExportWhiteboard}
-                                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100"
-                                >
-                                    Export Image
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setWhiteboardOpen(false)}
-                                    className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm text-white transition hover:bg-slate-700"
-                                >
-                                    Close
-                                </button>
+                <Suspense
+                    fallback={(
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+                            <div className="rounded-lg border border-white/10 bg-[#111721] px-4 py-3 text-sm text-[#8DA0BF]">
+                                Loading whiteboard...
                             </div>
                         </div>
-
-                        <div className="h-full w-full">
-                            <Excalidraw
-                                initialData={whiteboardSceneRef.current || undefined}
-                                excalidrawAPI={(api) => {
-                                    excalidrawApiRef.current = api;
-                                }}
-                                onChange={handleWhiteboardSceneChange}
-                                theme="light"
-                            />
-                        </div>
-                    </div>
-                </div>
+                    )}
+                >
+                    <WhiteboardModal
+                        initialData={whiteboardSceneRef.current}
+                        onApiReady={(api) => {
+                            excalidrawApiRef.current = api;
+                        }}
+                        onSceneChange={handleWhiteboardSceneChange}
+                        onClear={handleClearWhiteboard}
+                        onExport={handleExportWhiteboard}
+                        onClose={() => setWhiteboardOpen(false)}
+                    />
+                </Suspense>
             )}
         </div>
     );

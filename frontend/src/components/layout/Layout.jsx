@@ -2,6 +2,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
 import { Toaster } from 'react-hot-toast';
+import { prefetchHandlers } from '../../utils/routePrefetch';
 
 const Layout = ({ children }) => {
     const location = useLocation();
@@ -22,12 +23,12 @@ const Layout = ({ children }) => {
                             <p className="text-sm font-semibold text-white">SkillSwap</p>
 
                             <nav className="flex flex-wrap gap-5 text-sm">
-                                <Link to="/dashboard" className="text-gray-400 transition hover:text-white">Dashboard</Link>
-                                <Link to="/discover" className="text-gray-400 transition hover:text-white">Discover</Link>
-                                <Link to="/skills" className="text-gray-400 transition hover:text-white">My Skills</Link>
-                                <Link to="/swaps" className="text-gray-400 transition hover:text-white">Swaps</Link>
-                                <Link to="/calendar" className="text-gray-400 transition hover:text-white">Calendar</Link>
-                                <Link to="/notifications" className="text-gray-400 transition hover:text-white">Notifications</Link>
+                                <Link to="/dashboard" className="text-gray-400 transition hover:text-white" {...prefetchHandlers('/dashboard')}>Dashboard</Link>
+                                <Link to="/discover" className="text-gray-400 transition hover:text-white" {...prefetchHandlers('/discover')}>Discover</Link>
+                                <Link to="/skills" className="text-gray-400 transition hover:text-white" {...prefetchHandlers('/skills')}>My Skills</Link>
+                                <Link to="/swaps" className="text-gray-400 transition hover:text-white" {...prefetchHandlers('/swaps')}>Swaps</Link>
+                                <Link to="/calendar" className="text-gray-400 transition hover:text-white" {...prefetchHandlers('/calendar')}>Calendar</Link>
+                                <Link to="/notifications" className="text-gray-400 transition hover:text-white" {...prefetchHandlers('/notifications')}>Notifications</Link>
                             </nav>
 
                             <p className="text-sm text-gray-500">© {new Date().getFullYear()} SkillSwap Platform</p>

@@ -186,7 +186,7 @@ const Home = () => {
                                 <div className="flex items-center gap-3">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0A4D9F]/25 text-sm font-semibold text-[#DCE7F5] overflow-hidden">
                                         {teacher.avatarUrl ? (
-                                            <img src={teacher.avatarUrl} alt={teacher.fullName || teacher.username} className="h-full w-full object-cover" />
+                                            <img src={teacher.avatarUrl} alt={teacher.fullName || teacher.username} loading="lazy" className="h-full w-full object-cover" />
                                         ) : (
                                             getInitials(teacher.fullName, teacher.username)
                                         )}

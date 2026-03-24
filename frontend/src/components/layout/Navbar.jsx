@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { LogOut, User, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
+import { prefetchHandlers } from '../../utils/routePrefetch';
 
 const navLinkClass = ({ isActive }) =>
     clsx(
@@ -43,43 +44,43 @@ const Navbar = () => {
             <div className="app-container">
                 <div className="flex justify-between h-16">
                     <div className="flex">
-                        <Link to="/" className="shrink-0 flex items-center">
+                        <Link to="/" className="shrink-0 flex items-center" {...prefetchHandlers('/')}>
                             <span className="text-xl font-bold tracking-tight text-[#DCE7F5]">SkillSwap</span>
                         </Link>
                         <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
                             {!user && (
-                                <NavLink to="/" className={navLinkClass}>
+                                <NavLink to="/" className={navLinkClass} {...prefetchHandlers('/')}>
                                     Home
                                 </NavLink>
                             )}
                             {user && (
                                 <>
-                                    <NavLink to="/dashboard" className={navLinkClass}>
+                                    <NavLink to="/dashboard" className={navLinkClass} {...prefetchHandlers('/dashboard')}>
                                         Dashboard
                                     </NavLink>
-                                    <NavLink to="/discover" className={navLinkClass}>
+                                    <NavLink to="/discover" className={navLinkClass} {...prefetchHandlers('/discover')}>
                                         Discover
                                     </NavLink>
-                                    <NavLink to="/skills" className={navLinkClass}>
+                                    <NavLink to="/skills" className={navLinkClass} {...prefetchHandlers('/skills')}>
                                         My Skills
                                     </NavLink>
-                                    <NavLink to="/swaps" className={navLinkClass}>
+                                    <NavLink to="/swaps" className={navLinkClass} {...prefetchHandlers('/swaps')}>
                                         Swaps
                                     </NavLink>
-                                    <NavLink to="/calendar" className={navLinkClass}>
+                                    <NavLink to="/calendar" className={navLinkClass} {...prefetchHandlers('/calendar')}>
                                         Calendar
                                     </NavLink>
-                                    <NavLink to="/notifications" className={navLinkClass}>
+                                    <NavLink to="/notifications" className={navLinkClass} {...prefetchHandlers('/notifications')}>
                                         Notifications
                                     </NavLink>
-                                    <NavLink to="/rewards" className={navLinkClass}>
+                                    <NavLink to="/rewards" className={navLinkClass} {...prefetchHandlers('/rewards')}>
                                         Rewards
                                     </NavLink>
-                                    <NavLink to="/leaderboard" className={navLinkClass}>
+                                    <NavLink to="/leaderboard" className={navLinkClass} {...prefetchHandlers('/leaderboard')}>
                                         Leaderboard
                                     </NavLink>
                                     {isAdmin && (
-                                        <NavLink to="/admin/reports" className={navLinkClass}>
+                                        <NavLink to="/admin/reports" className={navLinkClass} {...prefetchHandlers('/admin/reports')}>
                                             Admin
                                         </NavLink>
                                     )}
@@ -97,9 +98,9 @@ const Navbar = () => {
                                 >
                                     <LogOut className="h-6 w-6" aria-hidden="true" />
                                 </button>
-                                <Link to="/profile" className="rounded-full p-1 text-[#8DA0BF] hover:text-[#DCE7F5] focus:outline-none focus:ring-2 focus:ring-[#0A4D9F]/70">
+                                <Link to="/profile" className="rounded-full p-1 text-[#8DA0BF] hover:text-[#DCE7F5] focus:outline-none focus:ring-2 focus:ring-[#0A4D9F]/70" {...prefetchHandlers('/profile')}>
                                    {user?.profile?.avatarUrl ? (
-                                       <img src={user.profile.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+                                       <img src={user.profile.avatarUrl} alt="" loading="lazy" className="h-7 w-7 rounded-full object-cover" />
                                    ) : (
                                        <User className="h-6 w-6" />
                                    )}
@@ -107,10 +108,10 @@ const Navbar = () => {
                             </div>
                         ) : (
                             <div className="flex space-x-4">
-                                <Link to="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-[#8DA0BF] hover:bg-[#151D27] hover:text-[#DCE7F5]">
+                                <Link to="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-[#8DA0BF] hover:bg-[#151D27] hover:text-[#DCE7F5]" {...prefetchHandlers('/login')}>
                                     Sign in
                                 </Link>
-                                <Link to="/register" className="rounded-lg bg-[#0A4D9F] px-4 py-2 text-sm font-medium text-white hover:bg-[#083A78]">
+                                <Link to="/register" className="rounded-lg bg-[#0A4D9F] px-4 py-2 text-sm font-medium text-white hover:bg-[#083A78]" {...prefetchHandlers('/register')}>
                                     Sign up
                                 </Link>
                             </div>
@@ -139,50 +140,50 @@ const Navbar = () => {
                 <div className="app-container">
                     <div className="pt-2 pb-3 space-y-1">
                         {!user && (
-                            <NavLink to="/" className={mobileLinkClass}>
+                            <NavLink to="/" className={mobileLinkClass} {...prefetchHandlers('/')}>
                                 Home
                             </NavLink>
                         )}
                         {user && (
                             <>
-                                <NavLink to="/dashboard" className={mobileLinkClass}>
+                                <NavLink to="/dashboard" className={mobileLinkClass} {...prefetchHandlers('/dashboard')}>
                                     Dashboard
                                 </NavLink>
-                                <NavLink to="/discover" className={mobileLinkClass}>
+                                <NavLink to="/discover" className={mobileLinkClass} {...prefetchHandlers('/discover')}>
                                     Discover
                                 </NavLink>
-                                <NavLink to="/skills" className={mobileLinkClass}>
+                                <NavLink to="/skills" className={mobileLinkClass} {...prefetchHandlers('/skills')}>
                                     My Skills
                                 </NavLink>
-                                <NavLink to="/swaps" className={mobileLinkClass}>
+                                <NavLink to="/swaps" className={mobileLinkClass} {...prefetchHandlers('/swaps')}>
                                     Swaps
                                 </NavLink>
-                                <NavLink to="/calendar" className={mobileLinkClass}>
+                                <NavLink to="/calendar" className={mobileLinkClass} {...prefetchHandlers('/calendar')}>
                                     Calendar
                                 </NavLink>
-                                <NavLink to="/notifications" className={mobileLinkClass}>
+                                <NavLink to="/notifications" className={mobileLinkClass} {...prefetchHandlers('/notifications')}>
                                     Notifications
                                 </NavLink>
-                                <NavLink to="/rewards" className={mobileLinkClass}>
+                                <NavLink to="/rewards" className={mobileLinkClass} {...prefetchHandlers('/rewards')}>
                                     Rewards
                                 </NavLink>
-                                <NavLink to="/leaderboard" className={mobileLinkClass}>
+                                <NavLink to="/leaderboard" className={mobileLinkClass} {...prefetchHandlers('/leaderboard')}>
                                     Leaderboard
                                 </NavLink>
                                 {isAdmin && (
                                     <>
-                                        <NavLink to="/admin/reports" className={mobileLinkClass}>
+                                        <NavLink to="/admin/reports" className={mobileLinkClass} {...prefetchHandlers('/admin/reports')}>
                                             Admin Reports
                                         </NavLink>
-                                        <NavLink to="/admin/badges" className={mobileLinkClass}>
+                                        <NavLink to="/admin/badges" className={mobileLinkClass} {...prefetchHandlers('/admin/badges')}>
                                             Admin Badges
                                         </NavLink>
-                                        <NavLink to="/admin/penalties" className={mobileLinkClass}>
+                                        <NavLink to="/admin/penalties" className={mobileLinkClass} {...prefetchHandlers('/admin/penalties')}>
                                             Admin Penalties
                                         </NavLink>
                                     </>
                                 )}
-                                <NavLink to="/profile" className={mobileLinkClass}>
+                                <NavLink to="/profile" className={mobileLinkClass} {...prefetchHandlers('/profile')}>
                                     Profile
                                 </NavLink>
                                  <button
@@ -201,7 +202,7 @@ const Navbar = () => {
                             <div className="flex items-center px-0">
                                 <div className="shrink-0">
                                     {user?.profile?.avatarUrl ? (
-                                        <img src={user.profile.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+                                        <img src={user.profile.avatarUrl} alt="" loading="lazy" className="h-10 w-10 rounded-full object-cover" />
                                     ) : (
                                         <User className="h-10 w-10 rounded-full bg-[#151D27] p-2 text-[#8DA0BF]" />
                                     )}
@@ -219,10 +220,10 @@ const Navbar = () => {
                             </div>
                         ) : (
                             <div className="mt-3 space-y-1 px-0">
-                                 <Link to="/login" className="block w-full rounded-lg border border-white/10 py-2 text-center text-sm font-medium text-[#DCE7F5] hover:bg-[#151D27]">
+                                 <Link to="/login" className="block w-full rounded-lg border border-white/10 py-2 text-center text-sm font-medium text-[#DCE7F5] hover:bg-[#151D27]" {...prefetchHandlers('/login')}>
                                     Sign in
                                 </Link>
-                                <Link to="/register" className="mt-2 block w-full rounded-lg border border-transparent bg-[#0A4D9F] py-2 text-center text-sm font-medium text-white hover:bg-[#083A78]">
+                                <Link to="/register" className="mt-2 block w-full rounded-lg border border-transparent bg-[#0A4D9F] py-2 text-center text-sm font-medium text-white hover:bg-[#083A78]" {...prefetchHandlers('/register')}>
                                     Sign up
                                 </Link>
                             </div>

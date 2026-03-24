@@ -11,7 +11,7 @@ import { toast } from 'react-hot-toast';
 import { Star, Github, Linkedin, Globe, Youtube, ExternalLink, ChevronDown, ChevronUp, Trophy, Award, Zap, ArrowRightLeft, Play, MessageCircle } from 'lucide-react';
 
 const levelLabel = { LOW: 'Beginner', MEDIUM: 'Intermediate', HIGH: 'Advanced' };
-const levelColor = { LOW: 'bg-blue-100 text-blue-700', MEDIUM: 'bg-yellow-100 text-yellow-700', HIGH: 'bg-green-100 text-green-700' };
+const levelColor = { LOW: 'bg-blue-500/15 text-blue-300', MEDIUM: 'bg-yellow-500/15 text-yellow-300', HIGH: 'bg-green-500/15 text-green-300' };
 const reportReasons = ['SPAM', 'HARASSMENT', 'SCAM_OR_FRAUD', 'INAPPROPRIATE_CONTENT', 'IMPERSONATION', 'OTHER'];
 const dayLabelMap = {
     MONDAY: 'Mon',
@@ -96,69 +96,69 @@ const SkillCard = ({ skill, sessionsCount = 0, mode = 'teach' }) => {
     const progressLabel = mode === 'teach' ? 'Teaching progress' : 'Learning progress';
 
     return (
-        <div className="border border-gray-200 rounded-lg overflow-hidden transition-shadow hover:shadow-md">
+        <div className="overflow-hidden rounded-lg border border-white/10 bg-[#0E1620] transition-colors hover:bg-[#151D27]">
             <button
                 type="button"
                 onClick={() => hasDetails && setExpanded(!expanded)}
-                className={`w-full flex items-center justify-between p-4 text-left ${hasDetails ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default'}`}
+                className={`w-full flex items-center justify-between p-4 text-left ${hasDetails ? 'cursor-pointer hover:bg-white/5' : 'cursor-default'}`}
             >
                 <div className="flex items-center gap-3">
-                    <span className="font-semibold text-gray-900">{skill.skill.name}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${levelColor[skill.level] || 'bg-gray-100 text-gray-600'}`}>
+                    <span className="font-semibold text-[#DCE7F5]">{skill.skill.name}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${levelColor[skill.level] || 'bg-white/10 text-[#8DA0BF]'}`}>
                         {levelLabel[skill.level] || skill.level}
                     </span>
                 </div>
                 {hasDetails && (
-                    <span className="flex items-center gap-1 text-xs text-blue-600">
+                    <span className="flex items-center gap-1 text-xs text-[#7BB2FF]">
                         {expanded ? <ChevronUp className="h-4 w-4" /> : <><Play className="h-3 w-3" /><ChevronDown className="h-4 w-4" /></>}
                     </span>
                 )}
             </button>
 
-            <div className="border-t border-gray-100 bg-white p-3 space-y-2">
-                <div className="flex items-center justify-between text-sm text-gray-600">
+            <div className="border-t border-white/10 bg-[#0E1620] p-3 space-y-2">
+                <div className="flex items-center justify-between text-sm text-[#8DA0BF]">
                     <span>Level</span>
-                    <span className="font-medium text-gray-800">{levelLabel[skill.level] || skill.level}</span>
+                    <span className="font-medium text-[#DCE7F5]">{levelLabel[skill.level] || skill.level}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm text-gray-600">
+                <div className="flex items-center justify-between text-sm text-[#8DA0BF]">
                     <span>Experience</span>
-                    <span className="font-medium text-gray-800">{formatExperienceLabel(skill.createdAt)}</span>
+                    <span className="font-medium text-[#DCE7F5]">{formatExperienceLabel(skill.createdAt)}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm text-gray-600">
+                <div className="flex items-center justify-between text-sm text-[#8DA0BF]">
                     <span>{mode === 'teach' ? 'Taught' : 'Learned'}</span>
-                    <span className="font-medium text-gray-800">{sessionsCount} session{sessionsCount === 1 ? '' : 's'}</span>
+                    <span className="font-medium text-[#DCE7F5]">{sessionsCount} session{sessionsCount === 1 ? '' : 's'}</span>
                 </div>
                 <div>
-                    <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
+                    <div className="mb-1 flex items-center justify-between text-xs text-[#8DA0BF]">
                         <span>{progressLabel}</span>
                         <span>{progressPercent}%</span>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-gray-200">
+                    <div className="h-2 w-full rounded-full bg-[#243244]">
                         <div className="h-2 rounded-full bg-blue-500" style={{ width: `${progressPercent}%` }} />
                     </div>
                 </div>
             </div>
 
             {expanded && hasDetails && (
-                <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-3">
+                <div className="border-t border-white/10 bg-[#111721] p-4 space-y-3">
                     {skill.preview?.videoUrl && (
                         <div>
-                            <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Video Demo</p>
+                            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Video Demo</p>
                             <video
                                 src={skill.preview.videoUrl}
                                 controls
-                                className="w-full rounded-lg border border-gray-200 max-h-64"
+                                className="max-h-64 w-full rounded-lg border border-white/10"
                             />
                         </div>
                     )}
                     {skill.proofUrl && (
                         <div>
-                            <p className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Proof Link</p>
+                            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Proof Link</p>
                             <a
                                 href={skill.proofUrl.startsWith('http') ? skill.proofUrl : `https://${skill.proofUrl}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#7BB2FF] hover:text-[#9FC8FF] hover:underline"
                             >
                                 <ExternalLink className="h-3.5 w-3.5" />
                                 {skill.proofUrl}
@@ -391,10 +391,10 @@ const PublicProfile = () => {
     const profileCompletionPercent = Math.max(0, Math.min(100, Number(profileCompletion.percentage || 0)));
 
     const socialLinks = [
-        { href: p.githubLink, icon: Github, label: 'GitHub', color: 'bg-gray-100 text-gray-800 hover:bg-gray-200' },
-        { href: p.linkedinLink, icon: Linkedin, label: 'LinkedIn', color: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
-        { href: p.portfolioLink, icon: Globe, label: 'Portfolio', color: 'bg-purple-50 text-purple-700 hover:bg-purple-100' },
-        { href: p.youtubeLink, icon: Youtube, label: 'YouTube', color: 'bg-red-50 text-red-700 hover:bg-red-100' },
+        { href: p.githubLink, icon: Github, label: 'GitHub', color: 'border border-white/10 bg-[#0E1620] text-[#DCE7F5] hover:bg-[#151D27]' },
+        { href: p.linkedinLink, icon: Linkedin, label: 'LinkedIn', color: 'border border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20' },
+        { href: p.portfolioLink, icon: Globe, label: 'Portfolio', color: 'border border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20' },
+        { href: p.youtubeLink, icon: Youtube, label: 'YouTube', color: 'border border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20' },
     ].filter(l => l.href);
 
     const detailedReviews = useMemo(() => {
@@ -652,13 +652,13 @@ const PublicProfile = () => {
             )}
 
             {/* ───── Profile Header ───── */}
-            <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
+            <div className="rounded-xl border border-white/10 bg-[#111721] p-8 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
                 <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
                     {p.avatarUrl ? (
                         <img
                             src={p.avatarUrl}
                             alt={displayName}
-                            className="w-28 h-28 rounded-full object-cover border-4 border-white shadow-md"
+                            className="h-28 w-28 rounded-full border-4 border-white/10 object-cover shadow-md"
                         />
                     ) : (
                         <div className="w-28 h-28 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center text-4xl font-bold text-white shadow-md">
@@ -667,11 +667,11 @@ const PublicProfile = () => {
                     )}
 
                     <div className="flex-1 text-center md:text-left">
-                        <h1 className="text-3xl font-bold text-gray-900">{displayName}</h1>
+                        <h1 className="text-3xl font-bold text-[#DCE7F5]">{displayName}</h1>
                         {profile.profile?.fullName && profile.username && (
-                            <p className="text-gray-500 text-sm">@{profile.username}</p>
+                            <p className="text-sm text-[#8DA0BF]">@{profile.username}</p>
                         )}
-                        <p className="text-gray-400 text-sm mt-1">Member since {new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+                        <p className="mt-1 text-sm text-[#8DA0BF]">Member since {new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
 
                         {/* Rating */}
                         {rating.reviewCount > 0 && (
@@ -680,12 +680,12 @@ const PublicProfile = () => {
                                     {[1, 2, 3, 4, 5].map((s) => (
                                         <Star
                                             key={s}
-                                            className={`h-4 w-4 ${s <= Math.round(rating.avgRating) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                                            className={`h-4 w-4 ${s <= Math.round(rating.avgRating) ? 'text-yellow-400 fill-yellow-400' : 'text-[#3E4D63]'}`}
                                         />
                                     ))}
                                 </div>
-                                <span className="text-sm font-semibold text-gray-700">{Number(rating.avgRating).toFixed(1)}</span>
-                                <span className="text-sm text-gray-500">({rating.reviewCount} review{rating.reviewCount !== 1 ? 's' : ''})</span>
+                                <span className="text-sm font-semibold text-[#DCE7F5]">{Number(rating.avgRating).toFixed(1)}</span>
+                                <span className="text-sm text-[#8DA0BF]">({rating.reviewCount} review{rating.reviewCount !== 1 ? 's' : ''})</span>
                             </div>
                         )}
 
@@ -701,9 +701,9 @@ const PublicProfile = () => {
                         {/* Bio */}
                         <div className="mt-5">
                             {p.bio ? (
-                                <div className="text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: p.bio }} />
+                                <div className="prose prose-sm max-w-none text-[#DCE7F5]" dangerouslySetInnerHTML={{ __html: p.bio }} />
                             ) : (
-                                <p className="text-gray-400 italic">No bio yet.</p>
+                                <p className="italic text-[#8DA0BF]">No bio yet.</p>
                             )}
                         </div>
 
@@ -736,7 +736,7 @@ const PublicProfile = () => {
 
                         {p.learningLanguage && (
                             <div className="mt-4">
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                                <span className="inline-flex items-center rounded-full bg-purple-500/15 px-3 py-1 text-sm font-medium text-purple-300">
                                     🌐 Learning: {p.learningLanguage}
                                 </span>
                             </div>
@@ -862,10 +862,10 @@ const PublicProfile = () => {
             {/* ───── Skills ───── */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Teaching Skills */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
                     <h2 className="text-lg font-bold text-green-700 flex items-center gap-2 mb-4">
                         <span className="w-2 h-2 bg-green-500 rounded-full" /> Can Teach
-                        <span className="ml-auto text-sm font-normal text-gray-400">{teachSkills.length}</span>
+                        <span className="ml-auto text-sm font-normal text-[#8DA0BF]">{teachSkills.length}</span>
                     </h2>
                     {teachSkills.length > 0 ? (
                         <div className="space-y-3">
@@ -879,15 +879,15 @@ const PublicProfile = () => {
                             ))}
                         </div>
                     ) : (
-                        <p className="text-gray-400 text-sm italic">No teaching skills listed yet.</p>
+                        <p className="text-sm italic text-[#8DA0BF]">No teaching skills listed yet.</p>
                     )}
                 </div>
 
                 {/* Learning Skills */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
                     <h2 className="text-lg font-bold text-blue-700 flex items-center gap-2 mb-4">
                         <span className="w-2 h-2 bg-blue-500 rounded-full" /> Wants to Learn
-                        <span className="ml-auto text-sm font-normal text-gray-400">{learnSkills.length}</span>
+                        <span className="ml-auto text-sm font-normal text-[#8DA0BF]">{learnSkills.length}</span>
                     </h2>
                     {learnSkills.length > 0 ? (
                         <div className="space-y-3">
@@ -901,7 +901,7 @@ const PublicProfile = () => {
                             ))}
                         </div>
                     ) : (
-                        <p className="text-gray-400 text-sm italic">No learning goals listed yet.</p>
+                        <p className="text-sm italic text-[#8DA0BF]">No learning goals listed yet.</p>
                     )}
                 </div>
             </div>
@@ -923,43 +923,43 @@ const PublicProfile = () => {
             </div>
 
             {/* ───── Reviews ───── */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-4">Reviews</h2>
-                <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-                    <p className="text-sm font-semibold text-gray-800">⭐ {Number(rating.avgRating || 0).toFixed(1)} average rating</p>
-                    <p className="text-xs text-gray-500">{rating.reviewCount || 0} total review{(rating.reviewCount || 0) === 1 ? '' : 's'}</p>
+            <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
+                <h2 className="mb-4 text-lg font-bold text-[#DCE7F5]">Reviews</h2>
+                <div className="mb-4 rounded-lg border border-white/10 bg-[#0E1620] px-4 py-3">
+                    <p className="text-sm font-semibold text-[#DCE7F5]">⭐ {Number(rating.avgRating || 0).toFixed(1)} average rating</p>
+                    <p className="text-xs text-[#8DA0BF]">{rating.reviewCount || 0} total review{(rating.reviewCount || 0) === 1 ? '' : 's'}</p>
                 </div>
 
                 {detailedReviews.length > 0 ? (
                     <div className="space-y-4">
                         {detailedReviews.map((review) => (
-                            <div key={review.id} className="border border-gray-200 rounded-lg p-4">
+                            <div key={review.id} className="rounded-lg border border-white/10 bg-[#0E1620] p-4">
                                 <div className="flex items-start justify-between gap-3">
                                     <div>
-                                        <p className="font-semibold text-sm text-gray-900">{review.reviewerName}</p>
-                                        <p className="text-xs text-gray-500">{review.reviewDate}</p>
+                                        <p className="text-sm font-semibold text-[#DCE7F5]">{review.reviewerName}</p>
+                                        <p className="text-xs text-[#8DA0BF]">{review.reviewDate}</p>
                                     </div>
                                     <div className="flex items-center gap-0.5">
                                         {[1, 2, 3, 4, 5].map((s) => (
                                             <Star
                                                 key={s}
-                                                className={`h-4 w-4 ${s <= review.ratingValue ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                                                className={`h-4 w-4 ${s <= review.ratingValue ? 'text-yellow-400 fill-yellow-400' : 'text-[#3E4D63]'}`}
                                             />
                                         ))}
                                     </div>
                                 </div>
 
-                                <div className="mt-3 space-y-1 text-sm text-gray-600">
-                                    <p><span className="font-medium text-gray-700">Learned:</span> {review.skillLearned}</p>
-                                    <p><span className="font-medium text-gray-700">Session:</span> {review.sessionType}</p>
+                                <div className="mt-3 space-y-1 text-sm text-[#8DA0BF]">
+                                    <p><span className="font-medium text-[#DCE7F5]">Learned:</span> {review.skillLearned}</p>
+                                    <p><span className="font-medium text-[#DCE7F5]">Session:</span> {review.sessionType}</p>
                                 </div>
 
-                                <p className="mt-3 text-sm italic text-gray-600">{review.commentText ? `"${review.commentText}"` : 'No comment provided.'}</p>
+                                <p className="mt-3 text-sm italic text-[#8DA0BF]">{review.commentText ? `"${review.commentText}"` : 'No comment provided.'}</p>
                             </div>
                         ))}
                     </div>
                 ) : (
-                    <p className="text-sm text-gray-400">No reviews yet.</p>
+                    <p className="text-sm text-[#8DA0BF]">No reviews yet.</p>
                 )}
             </div>
         </div>
