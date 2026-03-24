@@ -507,18 +507,26 @@ model SavedFilter {
   }
 
   model CalendarEvent {
-    id          Int        @id @default(autoincrement())
+    id          Int               @id @default(autoincrement())
     userId      Int
-    user        Users      @relation(fields: [userId], references: [userId])
+    user        Users             @relation(fields: [userId], references: [userId])
     swapClassId Int?
-    swapClass   SwapClass? @relation(fields: [swapClassId], references: [id])
+    swapClass   SwapClass?        @relation(fields: [swapClassId], references: [id])
     title       String
     eventDate   DateTime
     description String?
+    type        SessionType       @default(personal)
     reminderLogs CalendarReminderLog[]
 
     @@index([userId])
     @@index([eventDate])
+  }
+
+  enum SessionType {
+    teaching
+    learning
+    swap
+    personal
   }
 
   enum ReportStatus {

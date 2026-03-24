@@ -7,6 +7,8 @@ import {
     reportUser, 
     getCalendarEvents, 
     createCalendarEvent,
+    updateCalendarEvent,
+    deleteCalendarEvent,
     getBadges,
     getMyBadges,
     createBadge,
@@ -30,11 +32,15 @@ import {
     updateNotificationPreferences,
     getPushPublicKey,
     savePushSubscription,
-    removePushSubscription
+    removePushSubscription,
+    getMyAvailability,
+    createAvailabilitySlot,
+    updateAvailabilitySlot,
+    deleteAvailabilitySlot
 } from '../controllers/meta.controller.js';
 import { validateTokenMiddleware } from '../middlewares/token.middleware.js';
 import { requireAdmin } from '../middlewares/admin.middleware.js';
-import { validateReportInput, validateCalendarEventInput, validateBadgeInput, validateAssignBadgeInput, validatePenaltyInput } from '../middlewares/validation.middleware.js';
+import { validateReportInput, validateCalendarEventInput, validateCalendarEventUpdateInput, validateBadgeInput, validateAssignBadgeInput, validatePenaltyInput, validateAvailabilitySlotInput } from '../middlewares/validation.middleware.js';
 
 const router = express.Router();
 
@@ -63,6 +69,14 @@ router.get('/skill-categories', getSkillCategories);
 // Calendar
 router.get('/calendar', getCalendarEvents);
 router.post('/calendar', validateCalendarEventInput, createCalendarEvent);
+router.put('/calendar/:id', validateCalendarEventUpdateInput, updateCalendarEvent);
+router.delete('/calendar/:id', deleteCalendarEvent);
+
+// Availability
+router.get('/availability', getMyAvailability);
+router.post('/availability', validateAvailabilitySlotInput, createAvailabilitySlot);
+router.put('/availability/:slotId', validateAvailabilitySlotInput, updateAvailabilitySlot);
+router.delete('/availability/:slotId', deleteAvailabilitySlot);
 
 // Reports
 router.post('/report', validateReportInput, reportUser);

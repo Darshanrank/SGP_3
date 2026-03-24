@@ -68,6 +68,34 @@ const uniqueSkills = (skills = [], type) => {
     return result;
 };
 
+const parseTimeToMinutes = (hhmm) => {
+    if (!hhmm || typeof hhmm !== 'string' || !/^\d{2}:\d{2}$/.test(hhmm)) return null;
+    const [hour, minute] = hhmm.split(':').map(Number);
+    return hour * 60 + minute;
+};
+
+const computeAvailabilityOverlap = (referenceSlots = [], candidateSlots = []) => {
+    let overlapMinutes = 0;
+
+    for (const ref of referenceSlots) {
+        const refStart = parseTimeToMinutes(ref.startTime);
+        const refEnd = parseTimeToMinutes(ref.endTime);
+        if (refStart === null || refEnd === null) continue;
+
+        for (const candidate of candidateSlots) {
+            if (candidate.dayOfWeek !== ref.dayOfWeek) continue;
+            const candStart = parseTimeToMinutes(candidate.startTime);
+            const candEnd = parseTimeToMinutes(candidate.endTime);
+            if (candStart === null || candEnd === null) continue;
+
+            const overlap = Math.max(0, Math.min(refEnd, candEnd) - Math.max(refStart, candStart));
+            overlapMinutes += overlap;
+        }
+    }
+
+    return overlapMinutes;
+};
+
 /**
  * Smart Skill-Matching Algorithm
  * Finds users where:
@@ -353,7 +381,9 @@ export const discoverUsersService = async (currentUserId, query = {}) => {
                 },
                 availability: {
                     select: {
-                        dayOfWeek: true
+                        dayOfWeek: true,
+                        startTime: true,
+                        endTime: true
                     }
                 },
                 reviewsReceived: {
@@ -379,7 +409,7 @@ export const discoverUsersService = async (currentUserId, query = {}) => {
         }),
         prisma.userAvailability.findMany({
             where: { userId: currentUserId },
-            select: { dayOfWeek: true }
+            select: { dayOfWeek: true, startTime: true, endTime: true }
         })
     ]);
 
@@ -424,14 +454,27 @@ export const discoverUsersService = async (currentUserId, query = {}) => {
         ? availabilityDays
         : normalizeDaysInput(currentUserAvailability.map((row) => row.dayOfWeek));
     const referenceDaySet = new Set(referenceDays);
+    const referenceSlots = currentUserAvailability
+        .map((slot) => ({
+            dayOfWeek: DAY_ALIAS_MAP[String(slot.dayOfWeek || '').toUpperCase()],
+            startTime: slot.startTime,
+            endTime: slot.endTime
+        }))
+        .filter((slot) => Boolean(slot.dayOfWeek));
     const searchSkillLower = skill.toLowerCase();
 
     const mapped = users.map((user) => {
         const teaches = uniqueSkills(user.userSkills, 'TEACH');
         const learns = uniqueSkills(user.userSkills, 'LEARN');
         const avgRating = computeAverageRating(user.reviewsReceived || []);
-        const availability = normalizeDaysInput((user.availability || []).map((item) => item.dayOfWeek));
+        const availabilitySlots = (user.availability || []).map((slot) => ({
+            dayOfWeek: DAY_ALIAS_MAP[String(slot.dayOfWeek || '').toUpperCase()],
+            startTime: slot.startTime,
+            endTime: slot.endTime
+        })).filter((slot) => Boolean(slot.dayOfWeek));
+        const availability = normalizeDaysInput(availabilitySlots.map((item) => item.dayOfWeek));
         const availabilityMatch = availability.filter((day) => referenceDaySet.has(day)).length;
+        const availabilityOverlapMinutes = computeAvailabilityOverlap(referenceSlots, availabilitySlots);
 
         const primaryTeachSkill = skill
             ? teaches.find((teachSkill) => teachSkill.name.toLowerCase().includes(searchSkillLower)) || teaches[0]
@@ -450,6 +493,7 @@ export const discoverUsersService = async (currentUserId, query = {}) => {
             learns,
             availability,
             availabilityMatch,
+            availabilityOverlapMinutes,
             swapsCompleted: completedClassCounts.get(user.userId) || 0,
             acceptedSwaps: (user.sentRequests?.length || 0) + (user.receivedRequests?.length || 0),
             totalSwaps: (user._count?.sentRequests || 0) + (user._count?.receivedRequests || 0),
@@ -466,6 +510,10 @@ export const discoverUsersService = async (currentUserId, query = {}) => {
             if (b.swapsCompleted !== a.swapsCompleted) return b.swapsCompleted - a.swapsCompleted;
             if (b.acceptedSwaps !== a.acceptedSwaps) return b.acceptedSwaps - a.acceptedSwaps;
             return b.avgRating - a.avgRating;
+        }
+
+        if (sort === 'best-match' && b.availabilityOverlapMinutes !== a.availabilityOverlapMinutes) {
+            return b.availabilityOverlapMinutes - a.availabilityOverlapMinutes;
         }
 
         if (sort === 'highest-rated') {

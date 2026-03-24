@@ -182,3 +182,112 @@
 .hover\:bg-gray-100:hover {
   background-color: var(--surface-hover) !important;
 }
+
+/* SkillSwap dark theme overrides for react-big-calendar */
+.skillswap-calendar .rbc-calendar {
+  background: #0f172a;
+  border-radius: 12px;
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 8px;
+}
+
+.skillswap-calendar .rbc-header {
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+  font-weight: 500;
+  color: #9ca3af;
+  padding: 10px;
+}
+
+.skillswap-calendar .rbc-day-bg {
+  background: transparent;
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.skillswap-calendar .rbc-today {
+  background: rgba(59, 130, 246, 0.15);
+  border-radius: 8px;
+}
+
+.skillswap-calendar .rbc-date-cell {
+  color: #9ca3af;
+  font-size: 12px;
+  padding: 6px;
+}
+
+.skillswap-calendar .rbc-event {
+  background: #facc15;
+  color: #000;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+}
+
+.skillswap-calendar .rbc-event:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+}
+
+.skillswap-calendar .rbc-toolbar button {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.skillswap-calendar .rbc-toolbar button:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.skillswap-calendar .rbc-btn-group button.rbc-active {
+  background: #2563eb;
+  color: #fff;
+}
+
+/* Additional dark polish to blend with dashboard shell */
+.skillswap-calendar .rbc-toolbar {
+  margin-bottom: 14px;
+}
+
+.skillswap-calendar .rbc-toolbar .rbc-toolbar-label {
+  color: #dce7f5;
+  font-weight: 600;
+}
+
+.skillswap-calendar .rbc-time-view,
+.skillswap-calendar .rbc-month-view,
+.skillswap-calendar .rbc-agenda-view,
+.skillswap-calendar .rbc-time-header-content,
+.skillswap-calendar .rbc-time-content,
+.skillswap-calendar .rbc-timeslot-group,
+.skillswap-calendar .rbc-time-header,
+.skillswap-calendar .rbc-time-gutter,
+.skillswap-calendar .rbc-time-slot,
+.skillswap-calendar .rbc-time-content > * + * > * {
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.skillswap-calendar .rbc-off-range-bg,
+.skillswap-calendar .rbc-month-row,
+.skillswap-calendar .rbc-row-bg,
+.skillswap-calendar .rbc-day-slot,
+.skillswap-calendar .rbc-time-view {
+  background: transparent;
+}
+
+.skillswap-calendar .rbc-current-time-indicator {
+  background: #3b82f6;
+}
+
+.skillswap-calendar .rbc-time-gutter .rbc-timeslot-group,
+.skillswap-calendar .rbc-time-gutter .rbc-time-slot {
+  color: #8da0bf;
+  font-size: 11px;
+}

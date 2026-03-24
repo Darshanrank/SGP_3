@@ -26,6 +26,127 @@ const MAX_REPORTS_PER_DAY = 5;
 
 const normalizeReportReason = (reason) => String(reason || '').trim().toUpperCase();
 
+const isUnknownCalendarTypeArgError = (error) => {
+    const message = String(error?.message || '');
+    return message.includes('Unknown argument `type`');
+};
+
+const MAX_CALENDAR_DESCRIPTION_LENGTH = 191;
+
+const parseCalendarDescription = (description) => {
+    if (typeof description !== 'string' || !description.trim()) {
+        return { descriptionText: '', startTime: null, endTime: null, location: '', reminderMinutes: 10, status: 'scheduled', type: 'personal' };
+    }
+
+    try {
+        const parsed = JSON.parse(description);
+        if (parsed && typeof parsed === 'object' && parsed.m === 1) {
+            return {
+                descriptionText: String(parsed.d || '').trim(),
+                startTime: Number.isFinite(Number(parsed.s)) ? new Date(Number(parsed.s)) : null,
+                endTime: Number.isFinite(Number(parsed.e)) ? new Date(Number(parsed.e)) : null,
+                location: String(parsed.l || '').trim(),
+                reminderMinutes: Number.isInteger(Number(parsed.r)) ? Number(parsed.r) : 10,
+                type: ['teaching', 'learning', 'swap', 'personal'].includes(String(parsed.t || ''))
+                    ? String(parsed.t)
+                    : 'personal',
+                status: ['scheduled', 'completed', 'cancelled'].includes(String(parsed.st || ''))
+                    ? String(parsed.st)
+                    : 'scheduled'
+            };
+        }
+
+        if (parsed && typeof parsed === 'object' && parsed.__calendarMeta === true) {
+            return {
+                descriptionText: String(parsed.descriptionText || '').trim(),
+                startTime: parsed.startTime ? new Date(parsed.startTime) : null,
+                endTime: parsed.endTime ? new Date(parsed.endTime) : null,
+                location: String(parsed.location || '').trim(),
+                reminderMinutes: Number.isInteger(Number(parsed.reminderMinutes)) ? Number(parsed.reminderMinutes) : 10,
+                type: ['teaching', 'learning', 'swap', 'personal'].includes(String(parsed.type || ''))
+                    ? String(parsed.type)
+                    : 'personal',
+                status: ['scheduled', 'completed', 'cancelled'].includes(String(parsed.status || ''))
+                    ? String(parsed.status)
+                    : 'scheduled'
+            };
+        }
+    } catch (_) {
+        // Fallback to plain text description
+    }
+
+    return { descriptionText: description.trim(), startTime: null, endTime: null, location: '', reminderMinutes: 10, status: 'scheduled', type: 'personal' };
+};
+
+const serializeCalendarDescription = ({ descriptionText = '', startTime = null, endTime = null, location = '', reminderMinutes = 10, status = 'scheduled', type = 'personal' } = {}) => {
+    const normalized = {
+        m: 1,
+        d: String(descriptionText || '').trim(),
+        s: startTime ? new Date(startTime).getTime() : null,
+        e: endTime ? new Date(endTime).getTime() : null,
+        l: String(location || '').trim(),
+        r: Number(reminderMinutes) || 10,
+        t: ['teaching', 'learning', 'swap', 'personal'].includes(String(type || '')) ? String(type) : 'personal',
+        st: ['scheduled', 'completed', 'cancelled'].includes(String(status || '')) ? String(status) : 'scheduled'
+    };
+
+    let serialized = JSON.stringify(normalized);
+    if (serialized.length <= MAX_CALENDAR_DESCRIPTION_LENGTH) return serialized;
+
+    // Keep essential scheduling metadata first; shorten optional text fields.
+    if (normalized.d.length > 48) {
+        normalized.d = normalized.d.slice(0, 48);
+        serialized = JSON.stringify(normalized);
+    }
+    if (serialized.length <= MAX_CALENDAR_DESCRIPTION_LENGTH) return serialized;
+
+    if (normalized.l.length > 32) {
+        normalized.l = normalized.l.slice(0, 32);
+        serialized = JSON.stringify(normalized);
+    }
+    if (serialized.length <= MAX_CALENDAR_DESCRIPTION_LENGTH) return serialized;
+
+    normalized.d = '';
+    serialized = JSON.stringify(normalized);
+    if (serialized.length <= MAX_CALENDAR_DESCRIPTION_LENGTH) return serialized;
+
+    normalized.l = '';
+    serialized = JSON.stringify(normalized);
+    if (serialized.length <= MAX_CALENDAR_DESCRIPTION_LENGTH) return serialized;
+
+    const minimal = {
+        m: 1,
+        s: normalized.s,
+        e: normalized.e,
+        r: normalized.r,
+        t: normalized.t,
+        st: normalized.st
+    };
+    return JSON.stringify(minimal);
+};
+
+const mapCalendarEventForClient = (event) => {
+    const meta = parseCalendarDescription(event.description);
+    const resolvedEnd = meta.endTime;
+    const now = new Date();
+    let status = meta.status || 'scheduled';
+    if (status !== 'cancelled' && resolvedEnd && now > resolvedEnd) {
+        status = 'completed';
+    }
+
+    return {
+        ...event,
+        eventDate: meta.startTime || event.eventDate,
+        startTime: meta.startTime || event.eventDate,
+        endTime: resolvedEnd,
+        type: event.type || meta.type || 'personal',
+        location: meta.location,
+        description: meta.descriptionText,
+        reminderMinutes: meta.reminderMinutes,
+        status
+    };
+};
+
 export const getNotificationsService = async (userId, { page = 1, limit = 20, isRead, type } = {}) => {
     const skip = (page - 1) * limit;
     const normalizedType = String(type || '').trim().toUpperCase();
@@ -257,7 +378,7 @@ export const getCalendarEventsService = async (userId, { page = 1, limit = 20, f
     ]);
 
     return {
-        data: events,
+        data: events.map(mapCalendarEventForClient),
         meta: {
             total,
             page,
@@ -268,7 +389,16 @@ export const getCalendarEventsService = async (userId, { page = 1, limit = 20, f
 };
 
 export const createCalendarEventService = async (userId, data) => {
-    const { title, eventDate, description, swapClassId } = data;
+    const { title, eventDate, startTime, endTime, description, location, reminderMinutes, status, swapClassId, type } = data;
+    const startAt = startTime || eventDate;
+
+    if (!startAt) {
+        throw new ValidationError('Event start time is required');
+    }
+
+    if (endTime && new Date(endTime).getTime() <= new Date(startAt).getTime()) {
+        throw new ValidationError('End time must be after start time');
+    }
 
     if (swapClassId) {
         const swapClass = await prisma.swapClass.findUnique({
@@ -280,15 +410,103 @@ export const createCalendarEventService = async (userId, data) => {
         if (!isMember) throw new ValidationError('Swap class does not belong to user');
     }
 
-    return await prisma.calendarEvent.create({
-        data: {
-            userId,
-            title,
-            eventDate,
-            description,
-            swapClassId
-        }
-    });
+    const calendarPayload = {
+        userId,
+        title,
+        eventDate: startAt,
+        type: type || 'personal',
+        description: serializeCalendarDescription({
+            descriptionText: description,
+            startTime: startAt,
+            endTime,
+            location,
+            reminderMinutes,
+            status,
+            type: type || 'personal'
+        }),
+        swapClassId
+    };
+
+    let created;
+    try {
+        created = await prisma.calendarEvent.create({ data: calendarPayload });
+    } catch (error) {
+        if (!isUnknownCalendarTypeArgError(error)) throw error;
+
+        // Backward compatibility: database/client may not yet include CalendarEvent.type
+        const { type: _ignoredType, ...legacyPayload } = calendarPayload;
+        created = await prisma.calendarEvent.create({ data: legacyPayload });
+    }
+
+    return mapCalendarEventForClient(created);
+};
+
+export const updateCalendarEventService = async (userId, eventId, data) => {
+    const event = await prisma.calendarEvent.findFirst({ where: { id: eventId, userId } });
+    if (!event) {
+        throw new NotFound('Calendar event not found');
+    }
+
+    const currentMeta = parseCalendarDescription(event.description);
+    const nextTitle = typeof data.title === 'string' ? data.title : event.title;
+    const nextStart = data.startTime || data.eventDate || currentMeta.startTime || event.eventDate;
+    const nextEnd = data.endTime !== undefined ? data.endTime : currentMeta.endTime;
+    const nextLocation = data.location !== undefined ? data.location : currentMeta.location;
+    const nextDescription = data.description !== undefined ? data.description : currentMeta.descriptionText;
+    const nextReminderMinutes = data.reminderMinutes !== undefined ? data.reminderMinutes : currentMeta.reminderMinutes;
+    const nextStatus = data.status !== undefined ? data.status : currentMeta.status;
+    const nextType = data.type !== undefined ? data.type : (event.type || currentMeta.type || 'personal');
+
+    if (!nextStart) {
+        throw new ValidationError('Event start time is required');
+    }
+    if (nextEnd && new Date(nextEnd).getTime() <= new Date(nextStart).getTime()) {
+        throw new ValidationError('End time must be after start time');
+    }
+
+    const updatePayload = {
+        title: nextTitle,
+        eventDate: nextStart,
+        type: nextType,
+        description: serializeCalendarDescription({
+            descriptionText: nextDescription,
+            startTime: nextStart,
+            endTime: nextEnd,
+            location: nextLocation,
+            reminderMinutes: nextReminderMinutes,
+            status: nextStatus,
+            type: nextType
+        })
+    };
+
+    let updated;
+    try {
+        updated = await prisma.calendarEvent.update({
+            where: { id: eventId },
+            data: updatePayload
+        });
+    } catch (error) {
+        if (!isUnknownCalendarTypeArgError(error)) throw error;
+
+        // Backward compatibility: database/client may not yet include CalendarEvent.type
+        const { type: _ignoredType, ...legacyPayload } = updatePayload;
+        updated = await prisma.calendarEvent.update({
+            where: { id: eventId },
+            data: legacyPayload
+        });
+    }
+
+    return mapCalendarEventForClient(updated);
+};
+
+export const deleteCalendarEventService = async (userId, eventId) => {
+    const event = await prisma.calendarEvent.findFirst({ where: { id: eventId, userId } });
+    if (!event) {
+        throw new NotFound('Calendar event not found');
+    }
+
+    await prisma.calendarEvent.delete({ where: { id: eventId } });
+    return { success: true };
 };
 
 // Badges & Rewards
@@ -618,4 +836,111 @@ export const getSkillCategoriesService = async () => {
         orderBy: { category: 'asc' }
     });
     return skills.map(s => s.category);
+};
+
+// Availability Slots
+export const getUserAvailabilityService = async (userId) => {
+    return await prisma.userAvailability.findMany({
+        where: { userId },
+        orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }]
+    });
+};
+
+export const createAvailabilitySlotService = async (userId, data) => {
+    const { dayOfWeek, startTime, endTime, timezone } = data;
+
+    // Validate time format (HH:MM)
+    if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) {
+        throw new ValidationError('Time must be in HH:MM format');
+    }
+
+    // Validate end time is after start time
+    if (startTime >= endTime) {
+        throw new ValidationError('End time must be after start time');
+    }
+
+    // Check for overlapping slots on same day
+    const existing = await prisma.userAvailability.findMany({
+        where: { userId, dayOfWeek }
+    });
+
+    const hasOverlap = existing.some(slot => {
+        return (startTime < slot.endTime && endTime > slot.startTime);
+    });
+
+    if (hasOverlap) {
+        throw new ValidationError('This time slot overlaps with an existing availability');
+    }
+
+    return await prisma.userAvailability.create({
+        data: {
+            userId,
+            dayOfWeek,
+            startTime,
+            endTime,
+            timezone: timezone || 'UTC'
+        }
+    });
+};
+
+export const updateAvailabilitySlotService = async (userId, slotId, data) => {
+    const { dayOfWeek, startTime, endTime, timezone } = data;
+
+    const slot = await prisma.userAvailability.findFirst({
+        where: { id: slotId, userId }
+    });
+
+    if (!slot) {
+        throw new NotFound('Availability slot not found');
+    }
+
+    // Validate time format (HH:MM)
+    if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) {
+        throw new ValidationError('Time must be in HH:MM format');
+    }
+
+    // Validate end time is after start time
+    if (startTime >= endTime) {
+        throw new ValidationError('End time must be after start time');
+    }
+
+    // Check overlaps on same day excluding current slot
+    const existing = await prisma.userAvailability.findMany({
+        where: {
+            userId,
+            dayOfWeek,
+            id: { not: slotId }
+        }
+    });
+
+    const hasOverlap = existing.some((row) => startTime < row.endTime && endTime > row.startTime);
+    if (hasOverlap) {
+        throw new ValidationError('This time slot overlaps with an existing availability');
+    }
+
+    return await prisma.userAvailability.update({
+        where: { id: slotId },
+        data: {
+            dayOfWeek,
+            startTime,
+            endTime,
+            timezone: timezone || 'UTC'
+        }
+    });
+};
+
+export const deleteAvailabilitySlotService = async (userId, slotId) => {
+    const slot = await prisma.userAvailability.findFirst({
+        where: { id: slotId, userId }
+    });
+
+    if (!slot) {
+        throw new NotFound('Availability slot not found');
+    }
+
+    await prisma.userAvailability.delete({
+        where: { id: slotId }
+    });
+
+    return { success: true };
 };

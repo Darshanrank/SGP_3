@@ -108,9 +108,30 @@ const reportSchema = z.object({
 
 const calendarEventSchema = z.object({
     title: z.string().min(2).max(100),
-    eventDate: z.preprocess(toDate, z.date()),
+    eventDate: z.preprocess(toDate, z.date()).optional(),
+    startTime: z.preprocess(toDate, z.date()).optional(),
+    endTime: z.preprocess((v) => (v ? toDate(v) : undefined), z.date()).optional(),
+    reminderMinutes: z.preprocess(toInt, z.number().int().min(10).max(60)).optional().default(10),
+    status: z.enum(['scheduled', 'completed', 'cancelled']).optional().default('scheduled'),
+    location: z.string().max(200).optional().nullable(),
     description: z.string().max(1000).optional().nullable(),
+    type: z.enum(['teaching', 'learning', 'swap', 'personal']).optional().default('personal'),
     swapClassId: z.preprocess(toInt, z.number().int().positive()).optional().nullable()
+}).refine((value) => value.eventDate || value.startTime, {
+    message: 'Either eventDate or startTime is required',
+    path: ['startTime']
+});
+
+const calendarEventUpdateSchema = z.object({
+    title: z.string().min(2).max(100).optional(),
+    eventDate: z.preprocess((v) => (v ? toDate(v) : undefined), z.date()).optional(),
+    startTime: z.preprocess((v) => (v ? toDate(v) : undefined), z.date()).optional(),
+    endTime: z.preprocess((v) => (v ? toDate(v) : undefined), z.date()).optional(),
+    reminderMinutes: z.preprocess(toInt, z.number().int().min(10).max(60)).optional(),
+    status: z.enum(['scheduled', 'completed', 'cancelled']).optional(),
+    location: z.string().max(200).optional().nullable(),
+    description: z.string().max(1000).optional().nullable(),
+    type: z.enum(['teaching', 'learning', 'swap', 'personal']).optional()
 });
 
 const badgeSchema = z.object({
@@ -157,6 +178,16 @@ const sharedNoteSchema = z.object({
     content: z.string().max(100000).optional().default('')
 });
 
+const availabilitySlotSchema = z.object({
+    dayOfWeek: z.enum(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Time must be in HH:MM format'),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Time must be in HH:MM format'),
+    timezone: z.string().optional().default('UTC')
+}).refine((data) => data.startTime < data.endTime, {
+    message: 'End time must be after start time',
+    path: ['endTime']
+});
+
 export const validateSwapRequestInput = validate(swapRequestSchema);
 export const validateSwapStatusInput = validate(swapStatusSchema);
 export const validateTodoInput = validate(todoSchema);
@@ -167,6 +198,7 @@ export const validateUpdateUserSkillInput = validate(updateUserSkillSchema);
 export const validateReorderUserSkillsInput = validate(reorderUserSkillsSchema);
 export const validateReportInput = validate(reportSchema);
 export const validateCalendarEventInput = validate(calendarEventSchema);
+export const validateCalendarEventUpdateInput = validate(calendarEventUpdateSchema);
 export const validateBadgeInput = validate(badgeSchema);
 export const validateAssignBadgeInput = validate(assignBadgeSchema);
 export const validatePenaltyInput = validate(penaltySchema);
@@ -176,3 +208,4 @@ export const validatePaginationInput = validate(paginationSchema);
 export const validatePinnedResourceInput = validate(pinnedResourceSchema);
 export const validateCodeSnippetInput = validate(codeSnippetSchema);
 export const validateSharedNoteInput = validate(sharedNoteSchema);
+export const validateAvailabilitySlotInput = validate(availabilitySlotSchema);

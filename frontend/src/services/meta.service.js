@@ -134,6 +134,16 @@ export const createCalendarEvent = async (data) => {
     return response.data;
 };
 
+export const updateCalendarEvent = async (id, data) => {
+    const response = await api.put(`/meta/calendar/${id}`, data);
+    return response.data;
+};
+
+export const deleteCalendarEvent = async (id) => {
+    const response = await api.delete(`/meta/calendar/${id}`);
+    return response.data;
+};
+
 export const getPenalties = async (page = 1, limit = 20) => {
     const params = new URLSearchParams({ page, limit });
     const response = await api.get(`/meta/penalties?${params.toString()}`);
@@ -157,5 +167,25 @@ export const getLeaderboard = async (page = 1, limit = 20) => {
 
 export const getSkillCategories = async () => {
     const response = await api.get('/meta/skill-categories');
+    return response.data;
+};
+
+export const getUserAvailability = async () => {
+    const response = await api.get('/meta/availability');
+    return response.data;
+};
+
+export const createAvailabilitySlot = async (data) => {
+    const response = await api.post('/meta/availability', data);
+    return response.data;
+};
+
+export const updateAvailabilitySlot = async (slotId, data) => {
+    const response = await api.put(`/meta/availability/${slotId}`, data);
+    return response.data;
+};
+
+export const deleteAvailabilitySlot = async (slotId) => {
+    const response = await api.delete(`/meta/availability/${slotId}`);
     return response.data;
 };

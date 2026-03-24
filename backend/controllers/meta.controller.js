@@ -6,6 +6,8 @@ import {
     reportUserService,
     getCalendarEventsService,
     createCalendarEventService,
+    updateCalendarEventService,
+    deleteCalendarEventService,
     getBadgesService,
     getMyBadgesService,
     createBadgeService,
@@ -29,7 +31,11 @@ import {
     removePushSubscriptionMetaService,
     getPushPublicKeyMetaService,
     deleteNotificationMetaService,
-    clearNotificationHistoryMetaService
+    clearNotificationHistoryMetaService,
+    getUserAvailabilityService,
+    createAvailabilitySlotService,
+    updateAvailabilitySlotService,
+    deleteAvailabilitySlotService
 } from '../services/meta.service.js';
 import { ValidationError } from '../errors/generic.errors.js';
 
@@ -219,6 +225,34 @@ export const createCalendarEvent = async (req, res, next) => {
     }
 };
 
+export const updateCalendarEvent = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const eventId = Number.parseInt(req.params.id, 10);
+        if (!Number.isInteger(eventId)) {
+            throw new ValidationError('Invalid event id', 'INVALID_EVENT_ID');
+        }
+        const event = await updateCalendarEventService(userId, eventId, req.body);
+        res.json(event);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const deleteCalendarEvent = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const eventId = Number.parseInt(req.params.id, 10);
+        if (!Number.isInteger(eventId)) {
+            throw new ValidationError('Invalid event id', 'INVALID_EVENT_ID');
+        }
+        const result = await deleteCalendarEventService(userId, eventId);
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
 // Badges
 export const getBadges = async (_req, res, next) => {
     try {
@@ -377,6 +411,55 @@ export const getSkillCategories = async (_req, res, next) => {
     try {
         const categories = await getSkillCategoriesService();
         res.json(categories);
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Availability Slots
+export const getMyAvailability = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const availability = await getUserAvailabilityService(userId);
+        res.json(availability);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const createAvailabilitySlot = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const slot = await createAvailabilitySlotService(userId, req.body);
+        res.status(201).json(slot);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateAvailabilitySlot = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const slotId = Number.parseInt(req.params.slotId, 10);
+        if (!Number.isInteger(slotId)) {
+            throw new ValidationError('Invalid slot id');
+        }
+        const slot = await updateAvailabilitySlotService(userId, slotId, req.body);
+        res.json(slot);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const deleteAvailabilitySlot = async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const slotId = Number.parseInt(req.params.slotId, 10);
+        if (!Number.isInteger(slotId)) {
+            throw new ValidationError('Invalid slot id');
+        }
+        const result = await deleteAvailabilitySlotService(userId, slotId);
+        res.json(result);
     } catch (error) {
         next(error);
     }

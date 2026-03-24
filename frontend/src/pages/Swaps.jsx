@@ -444,7 +444,10 @@ const Swaps = () => {
 
     const pendingReceivedCount = receivedRequests.filter(r => r.status === 'PENDING').length;
     const pendingSentCount = sentRequests.filter(r => r.status === 'PENDING').length;
-    const ongoingClassCount = activeClasses.filter(c => c.status === 'ONGOING').length;
+    const ongoingClasses = activeClasses.filter((c) => c.status !== 'COMPLETED');
+    const completedClasses = activeClasses.filter((c) => c.status === 'COMPLETED');
+    const ongoingClassCount = ongoingClasses.length;
+    const completedClassCount = completedClasses.length;
 
     const tabs = [
         { key: 'received', label: 'Received', icon: Inbox, badge: pendingReceivedCount },
@@ -453,9 +456,9 @@ const Swaps = () => {
     ];
 
     const blockedUsersCount = blockedUsers.length;
-    const activeSwapsCount = activeClasses.filter((c) => c.status === 'ONGOING').length;
+    const activeSwapsCount = ongoingClasses.filter((c) => c.status === 'ONGOING').length;
     const pendingRequestsCount = [...receivedRequests, ...sentRequests].filter((r) => r.status === 'PENDING').length;
-    const completedSwapsCount = activeClasses.filter((c) => c.status === 'COMPLETED').length;
+    const completedSwapsCount = completedClasses.length;
 
     const renderRequestCard = (req, type) => {
         const isReceived = type === 'received';
@@ -948,7 +951,7 @@ const Swaps = () => {
                             )}
                             onClick={() => {
                                 setActiveTab(tab.key);
-                                setStatusFilter('ALL');
+                                setStatusFilter(tab.key === 'classes' ? 'ONGOING' : 'ALL');
                                 setBlockMenuOpen(false);
                                 setActionMenuKey(null);
                             }}
@@ -1074,11 +1077,16 @@ const Swaps = () => {
                 </div>
 
                 {/* Status filter (for request tabs only) */}
-                {(activeTab === 'received' || activeTab === 'sent') && (
+                {(activeTab === 'received' || activeTab === 'sent' || activeTab === 'classes') && (
                     <div className="p-4 flex gap-2 flex-wrap">
-                        {['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED', 'COMPLETED'].map(status => {
-                            const currentRequests = activeTab === 'received' ? receivedRequests : sentRequests;
-                            const count = status === 'ALL' ? currentRequests.length : currentRequests.filter(r => r.status === status).length;
+                        {(activeTab === 'classes'
+                            ? ['ALL', 'ONGOING', 'COMPLETED', 'CANCELLED']
+                            : ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED', 'COMPLETED']
+                        ).map(status => {
+                            const currentItems = activeTab === 'classes'
+                                ? activeClasses
+                                : (activeTab === 'received' ? receivedRequests : sentRequests);
+                            const count = status === 'ALL' ? currentItems.length : currentItems.filter(r => r.status === status).length;
                             return (
                                 <button
                                     key={status}
@@ -1141,13 +1149,27 @@ const Swaps = () => {
                 {activeTab === 'classes' && (
                     <div className="space-y-5">
                         {loadingClasses ? <ListItemSkeleton count={3} /> : (
-                            activeClasses.length === 0 ? (
-                                renderTabEmptyState('No completed swaps yet.', 'Find users and start a new skill exchange.')
-                            ) : (
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                    {activeClasses.map(cls => renderClassCard(cls))}
-                                </div>
-                            )
+                            (() => {
+                                const filteredClasses = statusFilter === 'ALL'
+                                    ? activeClasses
+                                    : activeClasses.filter((cls) => cls.status === statusFilter);
+
+                                if (filteredClasses.length === 0) {
+                                    if (statusFilter === 'COMPLETED') {
+                                        return renderTabEmptyState('No completed classes yet.', 'Completed swap classes will appear here.');
+                                    }
+                                    if (statusFilter === 'CANCELLED') {
+                                        return renderTabEmptyState('No cancelled classes.', 'Cancelled swap classes will appear here.');
+                                    }
+                                    return renderTabEmptyState('No active classes yet.', 'Accepted swaps and ongoing classes will appear here.');
+                                }
+
+                                return (
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                        {filteredClasses.map((cls) => renderClassCard(cls))}
+                                    </div>
+                                );
+                            })()
                         )}
                     </div>
                 )}
