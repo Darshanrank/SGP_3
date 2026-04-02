@@ -12,165 +12,65 @@ import {
     uploadClassroomFile as uploadClassroomFileApi,
     deleteClassroomFile as deleteClassroomFileApi,
     getSharedNote as getSharedNoteApi,
-    updateSharedNote as updateSharedNoteApi
-} from '../services/swap.service';
-import { getMessages, sendMessage, sendAttachmentMessage, searchMessages } from '../services/chat.service';
-import { createReview, getClassReviews, hasReviewedClass, markReviewHelpful } from '../services/review.service';
+    updateSharedNote as updateSharedNoteApi,
+    getMessages,
+    sendMessage,
+    sendAttachmentMessage,
+    searchMessages,
+    createReview,
+    getClassReviews,
+    hasReviewedClass,
+    markReviewHelpful
+} from '../services/classroom.service';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { Button } from '../components/ui/Button';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { toast } from 'react-hot-toast';
 import {
-    Star,
-    ThumbsUp,
-    Paperclip,
-    Search,
-    X,
-    ChevronUp,
+    ClassroomLoadingState,
+    ClassroomNotFoundState,
+    PanelSection,
+    ClassroomCallOverlay,
+    ClassroomFilePreviewModal,
+    ClassroomChatDrawer,
+    ClassroomTasksPanel,
+    ClassroomNotesPanel,
+    getNotesPanelStatusText,
+    ClassroomSnippetsPanel,
+    ClassroomFilesPanel,
+    ClassroomResourcesPanel,
+    ClassroomReviewsPanel
+} from '../components/classroom';
+import { useClassroomDerivedState } from '../hooks/useClassroomDerivedState';
+import {
+    codeBlockClass,
+    chatReactionEmojiOptions,
+    rtcConfiguration,
+    renderHighlightedCodeLine,
+    toDateTime,
+    getFileType,
+    isPreviewableFile,
+    getFileIcon,
+    REVIEW_CATEGORY_CONFIG,
+    getEmptyCategoryRatings,
+    computeOverallFromCategories
+} from '../components/classroom/classroomUtils';
+import {
     Pin,
     Code2,
     FileText,
     StickyNote,
-    Upload,
-    Trash2,
-    Copy,
-    SendHorizontal,
-    ChevronDown,
-    ChevronRight,
-    ExternalLink,
+    Star,
     ListChecks,
     CalendarDays,
     CheckCircle2,
     NotebookText,
     FolderOpen,
-    Eye,
-    Download,
-    FileCode2,
-    Image as ImageIcon,
-    File,
     MessageCircle,
-    Video,
-    VideoOff,
-    Mic,
-    MicOff,
-    MonitorUp,
-    PhoneOff
 } from 'lucide-react';
 
-const panelCardClass = 'rounded-xl border border-white/10 bg-[#111721] p-4 shadow-md transition duration-200 hover:border-blue-500 hover:shadow-lg';
-const panelTitleClass = 'text-sm font-medium text-[#DCE7F5]';
-const codeBlockClass = 'rounded-lg border border-white/5 bg-[#0A0F14] p-4 font-mono text-sm text-[#E6EEF8]';
-const chatReactionEmojiOptions = ['👍', '❤️', '🔥', '😂'];
-const rtcConfiguration = {
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-};
-
-const keywordByLanguage = {
-    javascript: [
-        'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'class', 'new', 'import',
-        'export', 'await', 'async', 'try', 'catch', 'throw', 'true', 'false', 'null', 'undefined'
-    ],
-    typescript: [
-        'type', 'interface', 'extends', 'implements', 'enum', 'public', 'private', 'protected', 'readonly',
-        'const', 'let', 'function', 'return', 'if', 'else', 'async', 'await'
-    ],
-    java: [
-        'public', 'private', 'protected', 'class', 'interface', 'extends', 'implements', 'static', 'void',
-        'new', 'return', 'if', 'else', 'for', 'while', 'try', 'catch', 'throw', 'final', 'this', 'super'
-    ],
-    python: [
-        'def', 'class', 'return', 'if', 'elif', 'else', 'for', 'while', 'try', 'except', 'finally', 'with',
-        'import', 'from', 'as', 'True', 'False', 'None', 'lambda'
-    ],
-    c: [
-        'int', 'float', 'double', 'char', 'void', 'if', 'else', 'for', 'while', 'return', 'struct', 'typedef',
-        'switch', 'case', 'break', 'continue'
-    ],
-    cpp: [
-        'int', 'float', 'double', 'char', 'void', 'if', 'else', 'for', 'while', 'return', 'class', 'public',
-        'private', 'protected', 'namespace', 'using', 'std', 'template', 'auto', 'const'
-    ]
-};
-
-const normalizeLanguage = (value) => String(value || 'text').trim().toLowerCase();
-
-const renderHighlightedCodeLine = (line, language) => {
-    const keywords = keywordByLanguage[normalizeLanguage(language)] || [];
-    if (!keywords.length || !line) return line || ' ';
-
-    const regex = new RegExp(`\\b(${keywords.join('|')})\\b`, 'g');
-    const parts = line.split(regex);
-
-    return parts.map((part, index) => {
-        if (keywords.includes(part)) {
-            return (
-                <span key={`${part}-${index}`} className="text-[#7BB2FF]">
-                    {part}
-                </span>
-            );
-        }
-        return <span key={`${part}-${index}`}>{part || (index === parts.length - 1 ? ' ' : '')}</span>;
-    });
-};
-
-const toDateTime = (value) => {
-    if (!value) return 'just now';
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return 'just now';
-    return parsed.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-};
-
-const getFileExtension = (fileName) => {
-    const normalized = String(fileName || '').toLowerCase();
-    const parts = normalized.split('.');
-    return parts.length > 1 ? parts.pop() : '';
-};
-
-const getFileType = (fileName) => {
-    const extension = getFileExtension(fileName);
-    if (['pdf'].includes(extension)) return 'pdf';
-    if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extension)) return 'image';
-    if (['cpp', 'c', 'h', 'hpp', 'js', 'jsx', 'ts', 'tsx', 'py', 'java', 'json'].includes(extension)) return 'code';
-    if (['txt', 'md'].includes(extension)) return 'text';
-    return 'file';
-};
-
-const isPreviewableFile = (fileName) => {
-    const type = getFileType(fileName);
-    return type === 'pdf' || type === 'image' || type === 'text' || type === 'code';
-};
-
-const getFileIcon = (fileName) => {
-    const type = getFileType(fileName);
-    if (type === 'pdf') return FileText;
-    if (type === 'image') return ImageIcon;
-    if (type === 'code') return FileCode2;
-    return File;
-};
-
-const REVIEW_CATEGORY_CONFIG = [
-    { key: 'clarityRating', label: 'Clarity' },
-    { key: 'punctualityRating', label: 'Punctuality' },
-    { key: 'communicationRating', label: 'Communication' },
-    { key: 'expertiseRating', label: 'Expertise' }
-];
-
 const WhiteboardModal = lazy(() => import('../components/classroom/WhiteboardModal'));
-
-const getEmptyCategoryRatings = () => ({
-    clarityRating: 0,
-    punctualityRating: 0,
-    communicationRating: 0,
-    expertiseRating: 0
-});
-
-const computeOverallFromCategories = (ratings) => {
-    const values = REVIEW_CATEGORY_CONFIG.map((item) => Number(ratings[item.key] || 0));
-    if (values.some((value) => value <= 0)) return 0;
-    const total = values.reduce((sum, value) => sum + value, 0);
-    return Math.round(total / values.length);
-};
 
 const SwapClassroom = () => {
     const navigate = useNavigate();
@@ -1508,15 +1408,9 @@ const SwapClassroom = () => {
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-[#DCE7F5]">Loading classroom...</div>;
-    if (!swapClass) return <div className="p-8 text-center text-[#DCE7F5]">Class not found.</div>;
-
-    const isFinished = swapClass.status === 'COMPLETED';
-    const fromUser = swapClass.swapRequest?.fromUser;
-    const toUser = swapClass.swapRequest?.toUser;
+    const fromUser = swapClass?.swapRequest?.fromUser;
+    const toUser = swapClass?.swapRequest?.toUser;
     const partner = fromUser?.userId === user?.userId ? toUser : fromUser;
-    const teachSkillName = swapClass.swapRequest.teachSkill?.skill.name || 'TBD';
-    const learnSkillName = swapClass.swapRequest.learnSkill?.skill.name || 'TBD';
     const classParticipants = [fromUser, toUser].filter(Boolean);
     const bothUsersOnline = classParticipants.length === 2
         && classParticipants.every((participant) => onlineParticipantIds.includes(Number(participant.userId)));
@@ -1524,66 +1418,57 @@ const SwapClassroom = () => {
         acc[participant.userId] = participant.username;
         return acc;
     }, {});
-    const totalTasks = (swapClass.todos || []).length;
-    const completedTasks = (swapClass.todos || []).filter((todo) => Boolean(todo.isCompleted)).length;
-    const taskProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-    const sessionCount = Number(
-        swapClass.sessionCount
-        || swapClass.totalSessions
-        || (Array.isArray(swapClass.sessions) ? swapClass.sessions.length : 1)
+    const {
+        totalTasks,
+        completedTasks,
+        taskProgress,
+        sessionCount,
+        notesEditCount,
+        filesSharedCount,
+        partnerInitial,
+        chatStatusText,
+        waitingForPartnerInCall,
+        nextSessionText,
+        sessionDurationText,
+        draftOverallRating,
+        mostHelpfulReview,
+        previewFileType
+    } = useClassroomDerivedState({
+        swapClass,
+        noteVersionHistory,
+        classroomFiles,
+        partner,
+        partnerTyping,
+        partnerOnline,
+        isInCall,
+        callParticipantIds,
+        getPartnerUserId,
+        reviewRatings,
+        classReviews,
+        previewFile,
+        getFileType
+    });
+
+    if (loading) return <ClassroomLoadingState />;
+    if (!swapClass) return <ClassroomNotFoundState />;
+
+    const isFinished = swapClass.status === 'COMPLETED';
+    const teachSkillName = swapClass.swapRequest.teachSkill?.skill.name || 'TBD';
+    const learnSkillName = swapClass.swapRequest.learnSkill?.skill.name || 'TBD';
+
+    const Panel = ({ panelKey, title, icon, iconClass = 'text-[#7BB2FF]', actions, children }) => (
+        <PanelSection
+            panelKey={panelKey}
+            collapsed={collapsedPanels[panelKey]}
+            onToggle={togglePanel}
+            title={title}
+            icon={icon}
+            iconClass={iconClass}
+            actions={actions}
+        >
+            {children}
+        </PanelSection>
     );
-    const notesEditCount = noteVersionHistory.length;
-    const filesSharedCount = classroomFiles.length;
-    const partnerInitial = (partner?.username || 'U').charAt(0).toUpperCase();
-    const chatStatusText = partnerTyping ? 'Typing...' : partnerOnline ? 'Online' : 'Offline';
-    const waitingForPartnerInCall = isInCall && !callParticipantIds.includes(Number(getPartnerUserId()));
-    const nextSessionDate = swapClass.startedAt ? new Date(swapClass.startedAt) : null;
-    const hasValidNextSession = Boolean(nextSessionDate && !Number.isNaN(nextSessionDate.getTime()));
-    const nextSessionText = hasValidNextSession
-        ? nextSessionDate.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', ' •')
-        : 'Not scheduled';
-    const classDurationMs = swapClass.startedAt && swapClass.endedAt
-        ? new Date(swapClass.endedAt).getTime() - new Date(swapClass.startedAt).getTime()
-        : NaN;
-    const durationMinutes = Number.isFinite(classDurationMs) && classDurationMs > 0
-        ? Math.round(classDurationMs / 60000)
-        : 45;
-    const sessionDurationText = `${durationMinutes} minutes`;
-    const draftOverallRating = computeOverallFromCategories(reviewRatings);
-    const mostHelpfulReview = classReviews.length > 0
-        ? [...classReviews].sort((a, b) => {
-            if ((b.helpfulVotes || 0) !== (a.helpfulVotes || 0)) return (b.helpfulVotes || 0) - (a.helpfulVotes || 0);
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        })[0]
-        : null;
-    const previewFileType = previewFile ? getFileType(previewFile.fileName) : null;
-
-    const Panel = ({ panelKey, title, icon: Icon, iconClass = 'text-[#7BB2FF]', actions, children }) => {
-        const collapsed = collapsedPanels[panelKey];
-
-        return (
-            <section className={panelCardClass}>
-                <div className="mb-4 flex items-center justify-between gap-3">
-                    <button
-                        type="button"
-                        onClick={() => togglePanel(panelKey)}
-                        className="inline-flex items-center gap-2 text-left text-sm font-medium"
-                    >
-                        {collapsed ? (
-                            <ChevronRight className="h-4 w-4 text-[#8DA0BF]" />
-                        ) : (
-                            <ChevronDown className="h-4 w-4 text-[#8DA0BF]" />
-                        )}
-                        <Icon className={`h-4 w-4 ${iconClass}`} />
-                        <h2 className={panelTitleClass}>{title}</h2>
-                    </button>
-                    {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
-                </div>
-
-                {!collapsed ? children : null}
-            </section>
-        );
-    };
 
     return (
         <div className="bg-[#0A0F14]">
@@ -1596,121 +1481,27 @@ const SwapClassroom = () => {
                 onCancel={() => setCompleteDialogOpen(false)}
             />
 
-            {isInCall && (
-                <div className="fixed inset-0 z-50 bg-black/85 p-4">
-                    <div className="mx-auto flex h-full w-full max-w-6xl flex-col rounded-2xl border border-white/10 bg-[#0A0F14] p-4">
-                        <div className="mb-3 flex items-center justify-between">
-                            <div>
-                                <p className="text-base font-semibold text-[#E6EEF8]">Classroom #{swapClass.id}</p>
-                                <p className="text-xs text-[#8DA0BF]">{sessionDurationText}</p>
-                            </div>
-                            <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs text-blue-300">Live Call</span>
-                        </div>
+            <ClassroomCallOverlay
+                isInCall={isInCall}
+                swapClassId={swapClass.id}
+                sessionDurationText={sessionDurationText}
+                remoteVideoRef={remoteVideoRef}
+                waitingForPartnerInCall={waitingForPartnerInCall}
+                partnerUsername={partner?.username}
+                localVideoRef={localVideoRef}
+                cameraEnabled={cameraEnabled}
+                micEnabled={micEnabled}
+                onToggleCamera={toggleCamera}
+                onToggleMic={toggleMic}
+                onToggleScreenShare={toggleScreenShare}
+                onEndCall={handleEndCall}
+            />
 
-                        <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
-                            <div className="relative overflow-hidden rounded-xl border border-white/10 bg-[#111721]">
-                                <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
-                                {waitingForPartnerInCall && (
-                                    <div className="absolute inset-0 flex items-center justify-center bg-[#0A0F14]/80 px-4 text-center">
-                                        <p className="text-sm text-[#DCE7F5]">Waiting for {partner?.username || 'partner'} to join...</p>
-                                    </div>
-                                )}
-                                <p className="absolute left-3 top-3 rounded bg-black/60 px-2 py-1 text-xs text-white">{partner?.username || 'Partner'}</p>
-                            </div>
-
-                            <div className="relative overflow-hidden rounded-xl border border-white/10 bg-[#111721]">
-                                <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
-                                <p className="absolute left-3 top-3 rounded bg-black/60 px-2 py-1 text-xs text-white">You</p>
-                            </div>
-                        </div>
-
-                        <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-                            <button
-                                type="button"
-                                onClick={toggleCamera}
-                                className="rounded-full border border-white/15 bg-[#111721] p-3 text-[#E6EEF8] hover:bg-[#1A2430]"
-                                title="Toggle camera"
-                            >
-                                {cameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={toggleMic}
-                                className="rounded-full border border-white/15 bg-[#111721] p-3 text-[#E6EEF8] hover:bg-[#1A2430]"
-                                title="Toggle microphone"
-                            >
-                                {micEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={toggleScreenShare}
-                                className="rounded-full border border-white/15 bg-[#111721] p-3 text-[#E6EEF8] hover:bg-[#1A2430]"
-                                title="Screen share"
-                            >
-                                <MonitorUp className="h-5 w-5" />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleEndCall}
-                                className="rounded-full bg-red-500 p-3 text-white hover:bg-red-600"
-                                title="End call"
-                            >
-                                <PhoneOff className="h-5 w-5" />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {previewFile && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-                    <div className="w-full max-w-4xl rounded-xl border border-white/10 bg-[#111721] p-4 shadow-xl">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                            <div>
-                                <p className="text-sm font-semibold text-[#E6EEF8]">Preview</p>
-                                <p className="text-xs text-[#8DA0BF]">{previewFile.fileName}</p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setPreviewFile(null)}
-                                className="rounded-md border border-white/20 p-1.5 text-[#8DA0BF] transition hover:bg-white/5"
-                                aria-label="Close preview"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        </div>
-
-                        <div className="h-[65vh] overflow-hidden rounded-lg border border-white/10 bg-[#0A0F14]">
-                            {previewFileType === 'image' && (
-                                <img
-                                    src={previewFile.fileUrl}
-                                    alt={previewFile.fileName}
-                                    className="h-full w-full object-contain"
-                                />
-                            )}
-                            {previewFileType === 'pdf' && (
-                                <iframe
-                                    title={previewFile.fileName}
-                                    src={previewFile.fileUrl}
-                                    className="h-full w-full"
-                                />
-                            )}
-                            {(previewFileType === 'text' || previewFileType === 'code') && (
-                                <iframe
-                                    title={previewFile.fileName}
-                                    src={previewFile.fileUrl}
-                                    className="h-full w-full"
-                                />
-                            )}
-                            {!previewFileType && (
-                                <div className="flex h-full items-center justify-center text-sm text-[#8DA0BF]">
-                                    Preview is not available for this file type.
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ClassroomFilePreviewModal
+                previewFile={previewFile}
+                previewFileType={previewFileType}
+                onClose={() => setPreviewFile(null)}
+            />
 
             <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
                     <Panel
@@ -1859,98 +1650,27 @@ const SwapClassroom = () => {
                             </button>
                         ) : null}
                     >
-                        <div className="mb-4 rounded-lg border border-white/10 bg-slate-900 p-4">
-                            <div className="mb-2 flex items-center justify-between">
-                                <p className="text-sm font-semibold text-[#DCE7F5]">Tasks Progress</p>
-                                <p className="text-sm text-[#8DA0BF]">{completedTasks} / {totalTasks} Completed</p>
-                            </div>
-                            <div className="h-2 w-full rounded-full bg-slate-700">
-                                <div
-                                    className="h-full rounded-full bg-green-500 transition-all"
-                                    style={{ width: `${taskProgress}%` }}
-                                />
-                            </div>
-                        </div>
-
-                        {showTaskForm && !isFinished && (
-                            <form onSubmit={handleAddTodo} className="mb-4 rounded-lg border border-white/10 bg-slate-900 p-4">
-                                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                    <input
-                                        type="text"
-                                        value={taskTitle}
-                                        onChange={(event) => setTaskTitle(event.target.value)}
-                                        placeholder="Task title"
-                                        className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-sm text-[#E6EEF8] placeholder:text-[#6F83A3] focus:border-[#0A4D9F] focus:outline-none"
-                                    />
-                                    <select
-                                        value={taskAssignedTo}
-                                        onChange={(event) => setTaskAssignedTo(event.target.value)}
-                                        className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-sm text-[#E6EEF8] focus:border-[#0A4D9F] focus:outline-none"
-                                    >
-                                        <option value="">Assign user</option>
-                                        {classParticipants.map((participant) => (
-                                            <option key={participant.userId} value={participant.userId}>
-                                                {participant.username}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <input
-                                        type="date"
-                                        value={taskDueDate}
-                                        onChange={(event) => setTaskDueDate(event.target.value)}
-                                        className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-sm text-[#E6EEF8] focus:border-[#0A4D9F] focus:outline-none"
-                                    />
-                                </div>
-                                <div className="mt-3 flex items-center gap-2">
-                                    <button
-                                        type="submit"
-                                        disabled={savingTask}
-                                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
-                                    >
-                                        {savingTask ? 'Adding...' : 'Add Action Item'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowTaskForm(false)}
-                                        className="rounded-lg border border-white/20 px-4 py-2 text-sm text-[#DCE7F5] transition hover:bg-white/5"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </form>
-                        )}
-
-                        {(!swapClass.todos || swapClass.todos.length === 0) && (
-                            <p className="text-sm text-[#8DA0BF]">No tasks yet.</p>
-                        )}
-                        <ul>
-                            {(swapClass.todos || []).map((todo) => (
-                                <li
-                                    key={todo.id}
-                                    className={`mb-2 flex items-center justify-between rounded-lg border border-white/10 bg-slate-800 px-4 py-3 ${todo.isCompleted ? 'opacity-60 line-through' : ''}`}
-                                >
-                                    <div>
-                                        <p className="text-sm font-medium text-[#E6EEF8]">{todo.title}</p>
-                                        <p className="mt-1 text-xs text-[#8DA0BF]">
-                                            Assigned to: {participantNameById[parseTaskAssignedUserId(todo.description)] || 'Unassigned'}
-                                        </p>
-                                        <p className="text-xs text-[#8DA0BF]">
-                                            Due: {todo.dueDate ? new Date(todo.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'No due date'}
-                                        </p>
-                                    </div>
-                                    <label className="flex items-center gap-2 text-xs text-[#DCE7F5]">
-                                        <input
-                                            type="checkbox"
-                                            checked={todo.isCompleted}
-                                            onChange={() => handleToggleTodo(todo.id, todo.isCompleted)}
-                                            className="h-4 w-4 rounded"
-                                            disabled={isFinished}
-                                        />
-                                        Mark Complete
-                                    </label>
-                                </li>
-                            ))}
-                        </ul>
+                        <ClassroomTasksPanel
+                            isFinished={isFinished}
+                            completedTasks={completedTasks}
+                            totalTasks={totalTasks}
+                            taskProgress={taskProgress}
+                            showTaskForm={showTaskForm}
+                            setShowTaskForm={setShowTaskForm}
+                            handleAddTodo={handleAddTodo}
+                            taskTitle={taskTitle}
+                            setTaskTitle={setTaskTitle}
+                            taskAssignedTo={taskAssignedTo}
+                            setTaskAssignedTo={setTaskAssignedTo}
+                            taskDueDate={taskDueDate}
+                            setTaskDueDate={setTaskDueDate}
+                            savingTask={savingTask}
+                            classParticipants={classParticipants}
+                            todos={swapClass.todos || []}
+                            participantNameById={participantNameById}
+                            parseTaskAssignedUserId={parseTaskAssignedUserId}
+                            handleToggleTodo={handleToggleTodo}
+                        />
                     </Panel>
 
                     <Panel
@@ -1960,255 +1680,61 @@ const SwapClassroom = () => {
                         iconClass="text-blue-400"
                         actions={
                             <span className="text-xs text-[#8DA0BF]">
-                                {savingSharedNote ? 'Saving...' : sharedNoteDirty ? 'Unsaved changes' : `Updated ${toDateTime(sharedNoteUpdatedAt)}`}
+                                {getNotesPanelStatusText({
+                                    savingSharedNote,
+                                    sharedNoteDirty,
+                                    sharedNoteUpdatedAt,
+                                    toDateTime
+                                })}
                             </span>
                         }
                     >
-                        <p className="mb-3 text-xs text-[#8DA0BF]">
-                            Collaborative markdown notes. Changes sync live and autosave in a few seconds.
-                        </p>
-
-                        {/* Markdown Toolbar */}
-                        <div className="mb-3 flex flex-wrap gap-2">
-                            <button
-                                type="button"
-                                onClick={() => applyMarkdownFormat('bold')}
-                                className="rounded-md border border-white/10 bg-slate-800 px-2 py-1 text-xs font-semibold text-[#E6EEF8] hover:bg-slate-700 hover:border-white/20 transition"
-                                title="Bold (Ctrl+B)"
-                            >
-                                <strong>B</strong>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => applyMarkdownFormat('code')}
-                                className="rounded-md border border-white/10 bg-slate-800 px-2 py-1 text-xs font-mono text-[#E6EEF8] hover:bg-slate-700 hover:border-white/20 transition"
-                                title="Inline Code"
-                            >
-                                &lt;/&gt;
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => applyMarkdownFormat('heading')}
-                                className="rounded-md border border-white/10 bg-slate-800 px-2 py-1 text-xs font-bold text-[#E6EEF8] hover:bg-slate-700 hover:border-white/20 transition"
-                                title="Heading"
-                            >
-                                H1
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => applyMarkdownFormat('list')}
-                                className="rounded-md border border-white/10 bg-slate-800 px-2 py-1 text-xs text-[#E6EEF8] hover:bg-slate-700 hover:border-white/20 transition"
-                                title="List"
-                            >
-                                • List
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => applyMarkdownFormat('codeblock')}
-                                className="rounded-md border border-white/10 bg-slate-800 px-2 py-1 text-xs font-mono text-[#E6EEF8] hover:bg-slate-700 hover:border-white/20 transition"
-                                title="Code Block"
-                            >
-                                {'{}'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    saveNoteVersion(sharedNote);
-                                    setShowVersionHistory(!showVersionHistory);
-                                }}
-                                className="ml-auto rounded-md border border-white/10 bg-slate-800 px-2 py-1 text-xs text-[#7BB2FF] hover:bg-slate-700 hover:border-white/20 transition"
-                                title="Version History"
-                            >
-                                ⏱ History
-                            </button>
-                        </div>
-
-                        {/* Version History */}
-                        {showVersionHistory && noteVersionHistory.length > 0 && (
-                            <div className="mb-3 rounded-lg bg-slate-900 border border-white/10 p-3 max-h-40 overflow-y-auto">
-                                <h4 className="text-xs font-semibold text-[#DCE7F5] mb-2">Version History</h4>
-                                <div className="space-y-1">
-                                    {noteVersionHistory.map((version) => (
-                                        <div key={version.id} className="text-xs">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[#8DA0BF]">
-                                                    {version.editedBy} edited {toDateTime(version.timestamp)}
-                                                </span>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRestoreVersion(version)}
-                                                    className="px-2 py-0.5 rounded text-[#7BB2FF] hover:bg-slate-700 transition"
-                                                >
-                                                    Restore
-                                                </button>
-                                            </div>
-                                            <p className="text-[#6F83A3] truncate">{version.content?.substring(0, 80)}...</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        <textarea
-                            id="shared-note-textarea"
-                            value={sharedNote}
-                            onChange={handleSharedNoteChange}
-                            onBlur={handleSharedNoteBlur}
-                            rows={10}
-                            placeholder="Write shared notes for this session..."
-                            className="w-full rounded-lg border border-white/5 bg-[#0A0F14] px-3 py-2 text-sm text-[#E6EEF8] placeholder:text-[#6F83A3] focus:border-[#0A4D9F] focus:outline-none"
+                        <ClassroomNotesPanel
+                            savingSharedNote={savingSharedNote}
+                            sharedNoteDirty={sharedNoteDirty}
+                            sharedNoteUpdatedAt={sharedNoteUpdatedAt}
+                            toDateTime={toDateTime}
+                            applyMarkdownFormat={applyMarkdownFormat}
+                            saveNoteVersion={saveNoteVersion}
+                            sharedNote={sharedNote}
+                            setShowVersionHistory={setShowVersionHistory}
+                            showVersionHistory={showVersionHistory}
+                            noteVersionHistory={noteVersionHistory}
+                            handleRestoreVersion={handleRestoreVersion}
+                            handleSharedNoteChange={handleSharedNoteChange}
+                            handleSharedNoteBlur={handleSharedNoteBlur}
                         />
                     </Panel>
 
                     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                         <Panel panelKey="snippets" title="Code Snippets" icon={Code2} iconClass="text-indigo-400">
-                            {/* Snippet Edit Modal */}
-                            {editingSnippetId && (
-                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                                    <div className="rounded-xl bg-[#111721] border border-white/5 p-6 max-w-2xl w-full max-h-96 overflow-y-auto">
-                                        <h2 className="text-lg font-semibold text-[#DCE7F5] mb-4">Edit Snippet</h2>
-                                        <div className="space-y-3">
-                                            <input
-                                                type="text"
-                                                value={editSnippetTitle}
-                                                onChange={(e) => setEditSnippetTitle(e.target.value)}
-                                                placeholder="Snippet title"
-                                                className="w-full rounded-lg border border-white/5 bg-[#0A0F14] px-3 py-2 text-sm text-[#E6EEF8] placeholder:text-[#6F83A3] focus:border-[#0A4D9F] focus:outline-none"
-                                            />
-                                            <select
-                                                value={editSnippetLanguage}
-                                                onChange={(e) => setEditSnippetLanguage(e.target.value)}
-                                                className="w-full rounded-lg border border-white/5 bg-[#0A0F14] px-3 py-2 text-sm text-[#E6EEF8] focus:border-[#0A4D9F] focus:outline-none"
-                                            >
-                                                <option value="javascript">JavaScript</option>
-                                                <option value="typescript">TypeScript</option>
-                                                <option value="java">Java</option>
-                                                <option value="python">Python</option>
-                                                <option value="c">C</option>
-                                                <option value="cpp">C++</option>
-                                                <option value="text">Text</option>
-                                            </select>
-                                            <textarea
-                                                rows={8}
-                                                value={editSnippetCode}
-                                                onChange={(e) => setEditSnippetCode(e.target.value)}
-                                                placeholder="Paste code here..."
-                                                className="w-full rounded-lg border border-white/5 bg-[#0A0F14] px-3 py-2 font-mono text-sm text-[#E6EEF8] placeholder:text-[#6F83A3] focus:border-[#0A4D9F] focus:outline-none"
-                                            />
-                                            <div className="flex gap-2 justify-end">
-                                                <button
-                                                    type="button"
-                                                    onClick={handleCancelEditSnippet}
-                                                    className="px-4 py-2 rounded-lg border border-white/10 text-[#8DA0BF] hover:bg-[#1A2430] transition"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <Button
-                                                    type="button"
-                                                    onClick={handleSaveEditedSnippet}
-                                                    disabled={savingSnippetEdit}
-                                                >
-                                                    {savingSnippetEdit ? 'Saving...' : 'Save Changes'}
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            <form onSubmit={handleAddSnippet} className="space-y-3">
-                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                    <input
-                                        type="text"
-                                        value={snippetTitle}
-                                        onChange={(e) => setSnippetTitle(e.target.value)}
-                                        placeholder="Snippet title"
-                                        className="rounded-lg border border-white/5 bg-[#0A0F14] px-3 py-2 text-sm text-[#E6EEF8] placeholder:text-[#6F83A3] focus:border-[#0A4D9F] focus:outline-none"
-                                    />
-                                    <select
-                                        value={snippetLanguage}
-                                        onChange={(e) => setSnippetLanguage(e.target.value)}
-                                        className="rounded-lg border border-white/5 bg-[#0A0F14] px-3 py-2 text-sm text-[#E6EEF8] focus:border-[#0A4D9F] focus:outline-none"
-                                    >
-                                        <option value="javascript">JavaScript</option>
-                                        <option value="typescript">TypeScript</option>
-                                        <option value="java">Java</option>
-                                        <option value="python">Python</option>
-                                        <option value="c">C</option>
-                                        <option value="cpp">C++</option>
-                                        <option value="text">Text</option>
-                                    </select>
-                                </div>
-                                <textarea
-                                    rows={6}
-                                    value={snippetCode}
-                                    onChange={(e) => setSnippetCode(e.target.value)}
-                                    placeholder="Paste code here..."
-                                    className="w-full rounded-lg border border-white/5 bg-[#0A0F14] px-3 py-2 font-mono text-sm text-[#E6EEF8] placeholder:text-[#6F83A3] focus:border-[#0A4D9F] focus:outline-none"
-                                />
-                                <Button type="submit" size="sm" disabled={savingSnippet}>
-                                    {savingSnippet ? 'Saving...' : 'Save Snippet'}
-                                </Button>
-                            </form>
-
-                            <div className="mt-4 space-y-3">
-                                {snippets.length === 0 && (
-                                    <p className="text-sm text-[#8DA0BF]">No snippets yet.</p>
-                                )}
-                                {snippets.map((snippet) => (
-                                    <article key={snippet.id} className="rounded-lg border border-white/5 bg-[#151D27] p-3">
-                                        <div className="mb-2 flex items-center justify-between gap-2">
-                                            <div className="min-w-0">
-                                                <p className="truncate text-sm font-semibold text-[#E6EEF8]">{snippet.title}</p>
-                                                <p className="text-xs text-[#8DA0BF]">
-                                                    {snippet.language} • by {snippet.creator?.username || 'User'}
-                                                </p>
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleCopySnippet(snippet)}
-                                                    className="rounded-md p-1.5 text-[#8DA0BF] hover:bg-[#1A2430] hover:text-[#E6EEF8]"
-                                                    title="Copy code"
-                                                >
-                                                    <Copy className="h-3.5 w-3.5" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleEditSnippet(snippet)}
-                                                    className="rounded-md p-1.5 text-[#7BB2FF] hover:bg-[#1A2430] hover:text-[#E6EEF8]"
-                                                    title="Edit snippet"
-                                                >
-                                                    ✏️
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleShareSnippetInChat(snippet)}
-                                                    className="rounded-md p-1.5 text-[#8DA0BF] hover:bg-[#1A2430] hover:text-[#E6EEF8]"
-                                                    title="Share in chat"
-                                                >
-                                                    <SendHorizontal className="h-3.5 w-3.5" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDeleteSnippet(snippet.id)}
-                                                    className="rounded-md p-1.5 text-[#FCA5A5] hover:bg-[#1A2430]"
-                                                    title="Delete snippet"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <pre className={`${codeBlockClass} overflow-x-auto`}>
-                                            {String(snippet.code || '').split('\n').map((line, lineIndex) => (
-                                                <div key={`${snippet.id}-${lineIndex}`}>
-                                                    {renderHighlightedCodeLine(line, snippet.language)}
-                                                </div>
-                                            ))}
-                                        </pre>
-                                    </article>
-                                ))}
-                            </div>
+                            <ClassroomSnippetsPanel
+                                editingSnippetId={editingSnippetId}
+                                editSnippetTitle={editSnippetTitle}
+                                setEditSnippetTitle={setEditSnippetTitle}
+                                editSnippetLanguage={editSnippetLanguage}
+                                setEditSnippetLanguage={setEditSnippetLanguage}
+                                editSnippetCode={editSnippetCode}
+                                setEditSnippetCode={setEditSnippetCode}
+                                handleCancelEditSnippet={handleCancelEditSnippet}
+                                handleSaveEditedSnippet={handleSaveEditedSnippet}
+                                savingSnippetEdit={savingSnippetEdit}
+                                handleAddSnippet={handleAddSnippet}
+                                snippetTitle={snippetTitle}
+                                setSnippetTitle={setSnippetTitle}
+                                snippetLanguage={snippetLanguage}
+                                setSnippetLanguage={setSnippetLanguage}
+                                snippetCode={snippetCode}
+                                setSnippetCode={setSnippetCode}
+                                savingSnippet={savingSnippet}
+                                snippets={snippets}
+                                handleCopySnippet={handleCopySnippet}
+                                handleEditSnippet={handleEditSnippet}
+                                handleShareSnippetInChat={handleShareSnippetInChat}
+                                handleDeleteSnippet={handleDeleteSnippet}
+                                codeBlockClass={codeBlockClass}
+                                renderHighlightedCodeLine={renderHighlightedCodeLine}
+                            />
                         </Panel>
 
                         <Panel
@@ -2216,524 +1742,99 @@ const SwapClassroom = () => {
                             title="File History"
                             icon={FileText}
                             iconClass="text-purple-400"
-                            actions={
-                                <>
-                                    <input
-                                        ref={classroomFileInputRef}
-                                        type="file"
-                                        className="hidden"
-                                        accept="image/*,.pdf,.txt,.md,.json,.js,.jsx,.ts,.tsx,.py,.java,.c,.cpp,.h,.hpp,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                                        onChange={handleUploadClassroomFile}
-                                    />
-                                    <button
-                                        type="button"
-                                        disabled={uploadingClassroomFile}
-                                        onClick={() => classroomFileInputRef.current?.click()}
-                                        className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm text-[#E6EEF8] transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        <Upload className="h-4 w-4" />
-                                        {uploadingClassroomFile ? 'Uploading...' : 'Upload File'}
-                                    </button>
-                                </>
-                            }
                         >
-                            <div className="space-y-2">
-                                {classroomFiles.length === 0 && (
-                                    <p className="text-sm text-[#8DA0BF]">No files shared yet.</p>
-                                )}
-                                {classroomFiles.map((file) => {
-                                    const FileIcon = getFileIcon(file.fileName);
-                                    const canPreview = isPreviewableFile(file.fileName);
-
-                                    return (
-                                        <div
-                                            key={file.id}
-                                            className="mb-2 flex items-center justify-between rounded-lg border border-white/10 bg-slate-900 px-4 py-3 transition hover:border-blue-500"
-                                        >
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center gap-2">
-                                                    <FileIcon className="h-4 w-4 shrink-0 text-[#7BB2FF]" />
-                                                    <p className="truncate text-sm font-medium text-[#E6EEF8]">{file.fileName}</p>
-                                                </div>
-                                                <p className="mt-1 text-xs text-[#8DA0BF]">
-                                                    Uploaded {toDateTime(file.createdAt)} by {file.uploader?.username || 'User'}
-                                                </p>
-                                            </div>
-
-                                            <div className="ml-3 flex shrink-0 items-center gap-2">
-                                                <a
-                                                    href={file.fileUrl}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2 py-1 text-xs text-[#E6EEF8] transition hover:bg-white/5"
-                                                >
-                                                    <Download className="h-3 w-3" />
-                                                    Download
-                                                </a>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handlePreviewClassroomFile(file)}
-                                                    disabled={!canPreview}
-                                                    className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2 py-1 text-xs text-[#E6EEF8] transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                                                >
-                                                    <Eye className="h-3 w-3" />
-                                                    Preview
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDeleteClassroomFile(file.id)}
-                                                    className="rounded-md border border-red-500/40 px-2 py-1 text-xs text-red-300 transition hover:bg-red-500/10"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                            <ClassroomFilesPanel
+                                classroomFileInputRef={classroomFileInputRef}
+                                handleUploadClassroomFile={handleUploadClassroomFile}
+                                uploadingClassroomFile={uploadingClassroomFile}
+                                classroomFiles={classroomFiles}
+                                getFileIcon={getFileIcon}
+                                isPreviewableFile={isPreviewableFile}
+                                toDateTime={toDateTime}
+                                handlePreviewClassroomFile={handlePreviewClassroomFile}
+                                handleDeleteClassroomFile={handleDeleteClassroomFile}
+                            />
                         </Panel>
                     </div>
 
                     <Panel panelKey="resources" title="Pinned Resources" icon={Pin} iconClass="text-cyan-400">
-                        <form onSubmit={handleAddResource} className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                            <input
-                                type="text"
-                                value={resourceTitle}
-                                onChange={(e) => setResourceTitle(e.target.value)}
-                                placeholder="Resource title"
-                                className="rounded-lg border border-white/5 bg-[#0A0F14] px-3 py-2 text-sm text-[#E6EEF8] placeholder:text-[#6F83A3] focus:border-[#0A4D9F] focus:outline-none"
-                            />
-                            <input
-                                type="url"
-                                value={resourceUrl}
-                                onChange={(e) => setResourceUrl(e.target.value)}
-                                placeholder="https://example.com"
-                                className="rounded-lg border border-white/5 bg-[#0A0F14] px-3 py-2 text-sm text-[#E6EEF8] placeholder:text-[#6F83A3] focus:border-[#0A4D9F] focus:outline-none md:col-span-2"
-                            />
-                            <div className="md:col-span-3">
-                                <Button type="submit" size="sm" disabled={savingResource}>
-                                    {savingResource ? 'Saving...' : 'Pin Resource'}
-                                </Button>
-                            </div>
-                        </form>
-
-                        <div className="mt-4 space-y-2">
-                            {resources.length === 0 && (
-                                <p className="text-sm text-[#8DA0BF]">No pinned resources yet.</p>
-                            )}
-                            {resources.map((resource) => (
-                                <div key={resource.id} className="flex items-center justify-between rounded-lg bg-[#151D27] p-3">
-                                    <div className="min-w-0">
-                                        <a
-                                            href={resource.url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-flex items-center gap-1 truncate text-sm text-[#E6EEF8] hover:text-[#7BB2FF]"
-                                        >
-                                            <ExternalLink className="h-3.5 w-3.5" />
-                                            {resource.title}
-                                        </a>
-                                        <p className="text-xs text-[#8DA0BF]">Added by {resource.creator?.username || 'User'}</p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleDeleteResource(resource.id)}
-                                        className="shrink-0 rounded-md p-1.5 text-[#FCA5A5] hover:bg-[#1A2430]"
-                                        title="Remove resource"
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
+                        <ClassroomResourcesPanel
+                            handleAddResource={handleAddResource}
+                            resourceTitle={resourceTitle}
+                            setResourceTitle={setResourceTitle}
+                            resourceUrl={resourceUrl}
+                            setResourceUrl={setResourceUrl}
+                            savingResource={savingResource}
+                            resources={resources}
+                            handleDeleteResource={handleDeleteResource}
+                        />
                     </Panel>
 
                     {isFinished && (
                         <Panel panelKey="reviews" title="Reviews" icon={Star} iconClass="text-yellow-400">
-                            {!myReviewStatus.hasReviewed ? (
-                                <div className="mb-6 rounded-lg border border-[#4A3913] bg-[#2B220F] p-4">
-                                    <p className="mb-4 text-sm font-medium text-[#FCD34D]">
-                                        Rate your experience across all categories.
-                                    </p>
-
-                                    <div className="space-y-3">
-                                        {REVIEW_CATEGORY_CONFIG.map((category) => {
-                                            const selected = Number(reviewRatings[category.key] || 0);
-                                            const hovered = Number(reviewHoverMap[category.key] || 0);
-                                            const current = hovered || selected;
-
-                                            return (
-                                                <div key={category.key} className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2">
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <span className="text-sm text-[#E6EEF8]">{category.label}</span>
-                                                        <div className="flex items-center gap-0.5">
-                                                            {[1, 2, 3, 4, 5].map((star) => (
-                                                                <button
-                                                                    key={`${category.key}_${star}`}
-                                                                    type="button"
-                                                                    onClick={() => setReviewRatings((prev) => ({ ...prev, [category.key]: star }))}
-                                                                    onMouseEnter={() => setReviewHoverMap((prev) => ({ ...prev, [category.key]: star }))}
-                                                                    onMouseLeave={() => setReviewHoverMap((prev) => ({ ...prev, [category.key]: 0 }))}
-                                                                    className="focus:outline-none"
-                                                                >
-                                                                    <Star
-                                                                        className={`h-6 w-6 transition-colors ${
-                                                                            star <= current ? 'fill-yellow-400 text-yellow-400' : 'text-gray-500'
-                                                                        }`}
-                                                                    />
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <p className="mt-3 text-xs text-[#DCE7F5]">
-                                        Overall rating: {draftOverallRating > 0 ? `${draftOverallRating}/5` : 'rate all categories'}
-                                    </p>
-
-                                    <textarea
-                                        value={reviewComment}
-                                        onChange={(e) => setReviewComment(e.target.value)}
-                                        placeholder="Write your feedback (optional)..."
-                                        className="mb-3 mt-3 w-full rounded-md border border-white/10 bg-[#111721] px-3 py-2 text-sm text-[#E6EEF8] placeholder:text-[#6F83A3] focus:outline-none"
-                                        rows={3}
-                                    />
-                                    <Button
-                                        size="sm"
-                                        onClick={handleSubmitReview}
-                                        disabled={reviewSubmitting || draftOverallRating === 0}
-                                    >
-                                        {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="mb-4 rounded-lg border border-[#1C3E2A] bg-[#0E2319] p-3 text-sm text-[#86EFAC]">
-                                    You've already reviewed this class ({myReviewStatus.review?.overallRating}/5 stars).
-                                </div>
-                            )}
-
-                            {classReviews.length > 0 ? (
-                                <div className="space-y-3">
-                                    {mostHelpfulReview && (
-                                        <div className="rounded-xl border border-white/10 bg-[#111721] p-4">
-                                            <p className="text-xs font-semibold uppercase tracking-wide text-[#FCD34D]">Most Helpful Review</p>
-                                            {mostHelpfulReview.comment ? (
-                                                <p className="mt-2 text-sm text-[#DCE7F5]">"{mostHelpfulReview.comment}"</p>
-                                            ) : (
-                                                <p className="mt-2 text-sm text-[#8DA0BF]">No written feedback.</p>
-                                            )}
-                                            <p className="mt-2 text-xs text-[#8DA0BF]">Helpful votes: {mostHelpfulReview.helpfulVotes || 0}</p>
-                                        </div>
-                                    )}
-
-                                    {classReviews.map((review) => (
-                                        <div key={review.id} className="bg-[#111721] border border-white/10 rounded-xl p-4 shadow-md transition duration-200 hover:border-blue-500 hover:shadow-lg">
-                                            <div className="mb-1 flex items-center justify-between">
-                                                <span className="text-sm font-semibold text-[#E6EEF8]">
-                                                    {review.reviewer?.username}
-                                                </span>
-                                                <div className="flex items-center gap-0.5">
-                                                    {[1, 2, 3, 4, 5].map((score) => (
-                                                        <Star
-                                                            key={score}
-                                                            className={`h-4 w-4 ${score <= review.overallRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-600'}`}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-[#8DA0BF]">
-                                                <span>Clarity: {review.clarityRating}/5</span>
-                                                <span>Punctuality: {review.punctualityRating}/5</span>
-                                                <span>Communication: {review.communicationRating}/5</span>
-                                                <span>Expertise: {review.expertiseRating}/5</span>
-                                            </div>
-
-                                            {review.comment && <p className="text-sm text-[#C4D4EC]">{review.comment}</p>}
-
-                                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                                                {review.verifiedSwap && (
-                                                    <span className="bg-green-500/10 text-green-400 px-2 py-1 rounded-full text-xs">Verified Swap</span>
-                                                )}
-                                                {review.recentReview && (
-                                                    <span className="bg-[#0A4D9F]/30 text-[#9FC8FF] px-2 py-1 rounded-full text-xs">Recent Session</span>
-                                                )}
-                                                {review.completedClass && (
-                                                    <span className="bg-[#7C3AED]/30 text-[#C4B5FD] px-2 py-1 rounded-full text-xs">Completed Class</span>
-                                                )}
-                                            </div>
-
-                                            <div className="mt-3 flex items-center justify-between">
-                                                <p className="text-xs text-[#8DA0BF]">{new Date(review.createdAt).toLocaleDateString()}</p>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleHelpfulVote(review.id)}
-                                                    disabled={Boolean(review.hasHelpfulVote)}
-                                                    className={`inline-flex items-center gap-1 rounded-lg px-3 py-1 text-xs ${review.hasHelpfulVote ? 'bg-[#1A2430] text-[#8DA0BF]' : 'bg-[#0A4D9F] text-white hover:bg-[#083A78]'}`}
-                                                >
-                                                    <ThumbsUp className="h-3.5 w-3.5" />
-                                                    Helpful ({review.helpfulVotes || 0})
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-sm text-[#8DA0BF]">No reviews yet.</p>
-                            )}
+                            <ClassroomReviewsPanel
+                                myReviewStatus={myReviewStatus}
+                                REVIEW_CATEGORY_CONFIG={REVIEW_CATEGORY_CONFIG}
+                                reviewRatings={reviewRatings}
+                                setReviewRatings={setReviewRatings}
+                                reviewHoverMap={reviewHoverMap}
+                                setReviewHoverMap={setReviewHoverMap}
+                                draftOverallRating={draftOverallRating}
+                                reviewComment={reviewComment}
+                                setReviewComment={setReviewComment}
+                                handleSubmitReview={handleSubmitReview}
+                                reviewSubmitting={reviewSubmitting}
+                                classReviews={classReviews}
+                                mostHelpfulReview={mostHelpfulReview}
+                                handleHelpfulVote={handleHelpfulVote}
+                            />
                         </Panel>
                     )}
             </div>
 
-            {isChatDrawerOpen && (
-                <button
-                    type="button"
-                    aria-label="Close chat drawer overlay"
-                    onClick={() => setIsChatDrawerOpen(false)}
-                    className="fixed inset-0 z-40 bg-black/50"
-                />
-            )}
-
-            <div
-                className={`fixed top-0 right-0 z-50 flex h-full w-full flex-col border-l border-white/10 bg-slate-900 shadow-2xl transition-transform duration-300 sm:w-95 ${isChatDrawerOpen ? 'translate-x-0' : 'translate-x-full'} ${isChatDrawerOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
-            >
-                <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-[#0A4D9F]/30 text-sm font-semibold text-[#DCE7F5]">
-                            {partnerInitial}
-                        </div>
-                        <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[#DCE7F5]">{partner?.username || 'Partner'}</p>
-                            <p className={`text-xs ${partnerOnline ? 'text-green-400' : 'text-gray-400'}`}>
-                                {partnerOnline ? '🟢 Online' : '⚫ Offline'}
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => setIsChatDrawerOpen(false)}
-                        className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-[#DCE7F5] transition hover:bg-slate-800"
-                    >
-                        Close
-                    </button>
-                </div>
-
-                <div className="border-b border-white/10 px-4 py-3">
-                    <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6F83A3]" />
-                            <input
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleSearch();
-                                    }
-                                }}
-                                placeholder="Search messages"
-                                className="h-9 w-full rounded-lg border border-white/10 bg-[#111721] pl-8 pr-3 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3] focus:border-[#0A4D9F] focus:outline-none"
-                            />
-                        </div>
-                        <Button size="sm" variant="secondary" onClick={handleSearch} disabled={searching}>
-                            {searching ? '...' : 'Find'}
-                        </Button>
-                    </div>
-                    {searchResults.length > 0 && (
-                        <div className="mt-2 flex justify-end">
-                            <Button size="sm" variant="ghost" onClick={() => jumpToSearchResult(activeSearchIndex + 1)}>
-                                {activeSearchIndex + 1}/{searchResults.length}
-                            </Button>
-                        </div>
-                    )}
-                </div>
-
-                <div
-                    ref={messageListRef}
-                    onScroll={handleChatScroll}
-                    className="flex-1 space-y-3 overflow-y-auto p-4"
-                >
-                    {loadingMessages ? (
-                        <p className="py-4 text-center text-sm text-[#8DA0BF]">Loading messages...</p>
-                    ) : (
-                        <>
-                            {messagesMeta.hasMore && (
-                                <div className="mb-3 flex justify-center">
-                                    <button
-                                        type="button"
-                                        onClick={handleLoadOlder}
-                                        disabled={loadingOlder}
-                                        className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-[#111721] px-3 py-1 text-xs text-[#8DA0BF] hover:text-[#DCE7F5] disabled:opacity-60"
-                                    >
-                                        <ChevronUp className="h-3.5 w-3.5" />
-                                        {loadingOlder ? 'Loading...' : 'Load older'}
-                                    </button>
-                                </div>
-                            )}
-
-                            {messages.map((msg, index) => {
-                                const isMe = msg.senderId === user.userId;
-                                const grouped = isGroupedWithPrevious(index);
-                                const hidePlaceholderText = msg.messageType !== 'TEXT' && String(msg.message || '').startsWith('[Attachment]');
-
-                                return (
-                                    <div
-                                        key={msg.id}
-                                        ref={(el) => {
-                                            if (el) messageRefs.current[msg.id] = el;
-                                        }}
-                                        className={grouped ? 'mt-1' : 'mt-3'}
-                                    >
-                                        {!grouped && !isMe && (
-                                            <p className="mb-1 ml-10 text-xs font-medium text-[#8DA0BF]">{msg.sender?.username || 'Partner'}</p>
-                                        )}
-
-                                        <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2.5`}>
-                                            {!isMe && (
-                                                <div className={`flex h-7 w-7 items-center justify-center rounded-full bg-[#111721] text-xs font-semibold text-[#DCE7F5] ${grouped ? 'invisible' : ''}`}>
-                                                    {(msg.sender?.username || 'U').charAt(0).toUpperCase()}
-                                                </div>
-                                            )}
-
-                                            <div
-                                                className={`relative max-w-xs rounded-xl px-3 py-2 text-sm leading-normal ${isMe ? 'ml-auto bg-blue-600 text-white' : 'mr-auto bg-slate-800 text-[#E6EEF8]'}`}
-                                                onMouseEnter={() => setActiveReactionMessageId(msg.id)}
-                                                onMouseLeave={() => setActiveReactionMessageId((prev) => (prev === msg.id ? null : prev))}
-                                            >
-                                                {activeReactionMessageId === msg.id && (
-                                                    <div className={`absolute bottom-full mb-1 flex gap-2 rounded-lg border border-white/10 bg-slate-800 px-2 py-1 ${isMe ? 'right-0' : 'left-0'}`}>
-                                                        {chatReactionEmojiOptions.map((emoji) => {
-                                                            const isSelected = myReactionByMessage[msg.id] === emoji;
-                                                            return (
-                                                                <button
-                                                                    key={`${msg.id}_${emoji}`}
-                                                                    type="button"
-                                                                    onClick={() => handleReactToMessage(msg.id, emoji)}
-                                                                    className={`rounded px-1 text-base transition ${isSelected ? 'bg-white/15' : 'hover:bg-white/10'}`}
-                                                                >
-                                                                    {emoji}
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
-
-                                                {!hidePlaceholderText && msg.message && (
-                                                    <p className="whitespace-pre-wrap wrap-break-word">{highlightedText(msg.message)}</p>
-                                                )}
-
-                                                {msg.attachmentUrl && msg.messageType === 'IMAGE' && (
-                                                    <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="mt-2 block">
-                                                        <img src={msg.attachmentUrl} alt={msg.attachmentName || 'attachment'} loading="lazy" className="max-h-56 w-full rounded-xl border border-white/6 object-cover" />
-                                                    </a>
-                                                )}
-
-                                                {msg.attachmentUrl && msg.messageType === 'FILE' && (
-                                                    <a
-                                                        href={msg.attachmentUrl}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="mt-2 block rounded-xl border border-white/6 bg-[#111721] p-3"
-                                                    >
-                                                        <div className="flex items-center justify-between gap-3">
-                                                            <span className="truncate text-sm text-[#E6EEF8]">{msg.attachmentName || 'File attachment'}</span>
-                                                            <span className="shrink-0 text-xs text-[#7BB2FF] underline">Download</span>
-                                                        </div>
-                                                    </a>
-                                                )}
-
-                                                {messageReactions[msg.id] && (
-                                                    <div className="mt-1 flex flex-wrap gap-1">
-                                                        {Object.entries(messageReactions[msg.id]).map(([emoji, count]) => (
-                                                            <span key={`${msg.id}_${emoji}`} className="rounded-full border border-white/15 bg-white/10 px-1.5 py-0.5 text-xs">
-                                                                {emoji} {count}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
-
-                                                <div className={`mt-1 text-xs ${isMe ? 'text-blue-100' : 'text-gray-500'}`}>
-                                                    {formatMessageTimestamp(msg.createdAt)}
-                                                </div>
-
-                                                {isMe && (
-                                                    <div className="text-xs text-blue-100/90">
-                                                        {getMessageStatusText(msg)}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-
-                            {partnerTyping && (
-                                <div className="ml-10 mt-2 text-xs italic text-gray-400">
-                                    <span>{partner?.username || 'Partner'} is typing...</span>
-                                </div>
-                            )}
-
-                            <div ref={chatEndRef} />
-                        </>
-                    )}
-                </div>
-
-                <div className="border-t border-white/10 p-3">
-                    <div className="space-y-2">
-                        {selectedFile && (
-                            <div className="flex items-center justify-between rounded-xl border border-white/6 bg-[#111721] px-3 py-2 text-sm text-[#E6EEF8]">
-                                <span className="truncate">{selectedFile.name}</span>
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedFile(null)}
-                                    className="ml-2 rounded p-1 hover:bg-white/10"
-                                >
-                                    <X className="h-3.5 w-3.5" />
-                                </button>
-                            </div>
-                        )}
-
-                        <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                className="hidden"
-                                accept="image/*,.pdf,.txt,.md,.json,.js,.jsx,.ts,.tsx,.py,.java,.c,.cpp,.h,.hpp,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                                disabled={isFinished}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-slate-800 text-[#8DA0BF] transition hover:bg-slate-700 hover:text-[#DCE7F5]"
-                                disabled={isFinished}
-                            >
-                                <Paperclip className="h-4 w-4" />
-                            </button>
-
-                            <input
-                                type="text"
-                                value={newMessage}
-                                onChange={handleInputChange}
-                                placeholder={selectedFile ? 'Add a caption (optional)...' : 'Type message...'}
-                                className="flex-1 rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-[#E6EEF8] placeholder:text-[#8DA0BF] focus:border-[#0A4D9F] focus:outline-none"
-                                disabled={isFinished || sendingMessage}
-                            />
-                            <Button
-                                type="submit"
-                                size="sm"
-                                disabled={isFinished || sendingMessage || (!newMessage.trim() && !selectedFile)}
-                                className="rounded-lg bg-[#0A4D9F] px-4 text-white hover:bg-[#083A78]"
-                            >
-                                {sendingMessage ? 'Sending...' : 'Send'}
-                            </Button>
-                        </form>
-                    </div>
-                </div>
-            </div>
+            <ClassroomChatDrawer
+                isOpen={isChatDrawerOpen}
+                onClose={() => setIsChatDrawerOpen(false)}
+                partnerInitial={partnerInitial}
+                partner={partner}
+                partnerOnline={partnerOnline}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                onSearch={handleSearch}
+                searching={searching}
+                searchResults={searchResults}
+                activeSearchIndex={activeSearchIndex}
+                jumpToSearchResult={jumpToSearchResult}
+                messageListRef={messageListRef}
+                onChatScroll={handleChatScroll}
+                loadingMessages={loadingMessages}
+                messagesMeta={messagesMeta}
+                onLoadOlder={handleLoadOlder}
+                loadingOlder={loadingOlder}
+                messages={messages}
+                messageRefs={messageRefs}
+                userId={user.userId}
+                isGroupedWithPrevious={isGroupedWithPrevious}
+                setActiveReactionMessageId={setActiveReactionMessageId}
+                activeReactionMessageId={activeReactionMessageId}
+                chatReactionEmojiOptions={chatReactionEmojiOptions}
+                myReactionByMessage={myReactionByMessage}
+                onReactToMessage={handleReactToMessage}
+                highlightedText={highlightedText}
+                formatMessageTimestamp={formatMessageTimestamp}
+                getMessageStatusText={getMessageStatusText}
+                messageReactions={messageReactions}
+                partnerTyping={partnerTyping}
+                chatEndRef={chatEndRef}
+                selectedFile={selectedFile}
+                setSelectedFile={setSelectedFile}
+                fileInputRef={fileInputRef}
+                isFinished={isFinished}
+                newMessage={newMessage}
+                onInputChange={handleInputChange}
+                sendingMessage={sendingMessage}
+                onSendMessage={handleSendMessage}
+            />
 
             {whiteboardOpen && (
                 <Suspense

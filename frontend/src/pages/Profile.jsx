@@ -2,208 +2,43 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { getMyProfile, sendUpcomingReminder, updateProfile, deleteAccount } from '../services/profile.service';
-import { getUserReviews } from '../services/review.service';
-import { addSkill, createSkill, getAllSkills, getUserSkills, removeSkill, uploadSkillDemo } from '../services/skill.service';
+import { getMyProfile, sendUpcomingReminder, updateProfile, deleteAccount, getUserReviews, addSkill, createSkill, getAllSkills, getUserSkills, removeSkill, uploadSkillDemo } from '../services/profilePage.service';
+import {
+    emptyTeachSkill,
+    emptyLearnSkill,
+    WEEK_DAYS,
+    sortDays,
+    formatSelectedDays,
+    emptyAvailability,
+    groupAvailabilitySlots,
+    flattenAvailabilitySlots,
+    languageOptions,
+    teachingStyleOptions,
+    PROFILE_STEPS,
+    BIO_MAX_LENGTH,
+    USERNAME_MIN,
+    USERNAME_MAX,
+    USERNAME_REGEX,
+    splitFullName,
+    composeFullName,
+    validateUrl,
+    normalizeTeachingStyles,
+    parseTeachingStyles,
+    profileContainerClass,
+    profileCardClass,
+    renderStarRow
+} from '../hooks/useProfileConfig';
 import { Editor } from '@tinymce/tinymce-react';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
-import { Check, Camera, Trash2, Github, Linkedin, Globe, Youtube } from 'lucide-react';
-
-const emptyTeachSkill = () => ({
-    id: null,
-    skillId: null,
-    skillName: '',
-    level: 'MEDIUM',
-    proofUrl: '',
-    videoUrl: '',
-    videoFile: null,
-    uploadProgress: 0,
-    isUploading: false
-});
-const emptyLearnSkill = () => ({ id: null, skillId: null, skillName: '', level: 'MEDIUM' });
-const WEEK_DAYS = [
-    { value: 'MONDAY', label: 'Mon', fullLabel: 'Monday' },
-    { value: 'TUESDAY', label: 'Tue', fullLabel: 'Tuesday' },
-    { value: 'WEDNESDAY', label: 'Wed', fullLabel: 'Wednesday' },
-    { value: 'THURSDAY', label: 'Thu', fullLabel: 'Thursday' },
-    { value: 'FRIDAY', label: 'Fri', fullLabel: 'Friday' },
-    { value: 'SATURDAY', label: 'Sat', fullLabel: 'Saturday' },
-    { value: 'SUNDAY', label: 'Sun', fullLabel: 'Sunday' }
-];
-
-const DAY_ORDER = WEEK_DAYS.reduce((acc, day, index) => {
-    acc[day.value] = index;
-    return acc;
-}, {});
-
-const sortDays = (days = []) => {
-    const normalized = [...new Set(days.map((day) => String(day).toUpperCase()))].filter((day) => day in DAY_ORDER);
-    normalized.sort((a, b) => DAY_ORDER[a] - DAY_ORDER[b]);
-    return normalized;
-};
-
-const formatSelectedDays = (days = []) => {
-    const sorted = sortDays(days);
-    if (!sorted.length) return 'No days selected';
-    if (sorted.length === WEEK_DAYS.length) return 'All Days';
-
-    return sorted
-        .map((dayValue) => WEEK_DAYS.find((day) => day.value === dayValue)?.label || dayValue.slice(0, 3))
-        .join(', ');
-};
-
-const emptyAvailability = (timezone = 'UTC') => ({
-    days: ['MONDAY'],
-    startTime: '09:00',
-    endTime: '10:00',
-    timezone
-});
-
-const groupAvailabilitySlots = (availability = [], fallbackTimezone = 'UTC') => {
-    if (!Array.isArray(availability) || !availability.length) return [];
-
-    const grouped = new Map();
-
-    availability.forEach((slot) => {
-        const startTime = slot?.startTime;
-        const endTime = slot?.endTime;
-        const timezone = slot?.timezone || fallbackTimezone;
-        const days = Array.isArray(slot?.days) ? slot.days : slot?.dayOfWeek ? [slot.dayOfWeek] : [];
-
-        if (!startTime || !endTime || !timezone) return;
-
-        const key = `${startTime}|${endTime}|${timezone}`;
-        if (!grouped.has(key)) {
-            grouped.set(key, {
-                days: [],
-                startTime,
-                endTime,
-                timezone
-            });
-        }
-
-        const existing = grouped.get(key);
-        existing.days = sortDays([...existing.days, ...days]);
-    });
-
-    return Array.from(grouped.values()).map((slot) => ({ ...slot, days: sortDays(slot.days) }));
-};
-
-const flattenAvailabilitySlots = (slots = [], fallbackTimezone = 'UTC') => {
-    if (!Array.isArray(slots)) return [];
-
-    const flattened = [];
-    slots.forEach((slot) => {
-        const timezone = slot?.timezone || fallbackTimezone;
-        const startTime = slot?.startTime;
-        const endTime = slot?.endTime;
-        const days = Array.isArray(slot?.days) ? slot.days : slot?.dayOfWeek ? [slot.dayOfWeek] : [];
-
-        if (!timezone || !startTime || !endTime) return;
-
-        sortDays(days).forEach((dayOfWeek) => {
-            flattened.push({ dayOfWeek, startTime, endTime, timezone });
-        });
-    });
-
-    const deduplicated = new Map();
-    flattened.forEach((slot) => {
-        deduplicated.set(`${slot.dayOfWeek}|${slot.startTime}|${slot.endTime}|${slot.timezone}`, slot);
-    });
-    return Array.from(deduplicated.values());
-};
-
-const languageOptions = ['English', 'Hindi', 'Spanish', 'French', 'German', 'Arabic', 'Chinese', 'Japanese'];
-const teachingStyleOptions = [
-    'Hands-on Practice',
-    'Project Based Learning',
-    'Step-by-Step Explanation',
-    'Live Coding Sessions',
-    'Concept Based Teaching',
-    'Debugging Together',
-    'Pair Programming',
-    'Code Reviews',
-    'Interactive Discussions',
-    'Real-world Examples',
-    'Visual Diagrams & Whiteboard',
-    'Assignments & Exercises'
-];
-const PROFILE_STEPS = [
-    { id: 1, label: 'Basic Info' },
-    { id: 2, label: 'Skills' },
-    { id: 3, label: 'Time Slots' }
-];
-
-const BIO_MAX_LENGTH = 2000;
-const USERNAME_MIN = 3;
-const USERNAME_MAX = 30;
-const USERNAME_REGEX = /^[a-z0-9_]+$/;
-const URL_REGEX = /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}(\/\S*)?$/i;
-
-const splitFullName = (fullName = '') => {
-    const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
-    return {
-        firstName: parts[0] || '',
-        lastName: parts.slice(1).join(' ')
-    };
-};
-
-const composeFullName = (firstName = '', lastName = '') => `${String(firstName).trim()} ${String(lastName).trim()}`.trim();
-
-const validateUrl = (url) => {
-    if (!url) return null; // optional
-    return URL_REGEX.test(url) ? null : 'Enter a valid URL';
-};
-
-const normalizeTeachingStyles = (styles = []) => {
-    if (!Array.isArray(styles)) return [];
-    const allowed = new Set(teachingStyleOptions);
-    const seen = new Set();
-    const result = [];
-
-    styles.forEach((style) => {
-        const text = String(style || '').trim();
-        if (!allowed.has(text) || seen.has(text)) return;
-        seen.add(text);
-        result.push(text);
-    });
-
-    return result;
-};
-
-const parseTeachingStyles = (profile = {}) => {
-    if (Array.isArray(profile.teachingStyles)) {
-        return normalizeTeachingStyles(profile.teachingStyles);
-    }
-
-    if (typeof profile.teachingStyles === 'string') {
-        try {
-            const parsed = JSON.parse(profile.teachingStyles);
-            return normalizeTeachingStyles(parsed);
-        } catch (_) {
-            return normalizeTeachingStyles(profile.teachingStyles.split(',').map((item) => item.trim()));
-        }
-    }
-
-    if (typeof profile.teachingStyle === 'string' && profile.teachingStyle.trim()) {
-        try {
-            const parsed = JSON.parse(profile.teachingStyle);
-            return normalizeTeachingStyles(parsed);
-        } catch (_) {
-            return normalizeTeachingStyles(profile.teachingStyle.split(',').map((item) => item.trim()));
-        }
-    }
-
-    return [];
-};
-
-const profileContainerClass = 'max-w-6xl mx-auto px-6 py-8 space-y-6';
-const profileCardClass = 'bg-[#111721] border border-white/5 rounded-xl p-6 shadow-md';
-
-const renderStarRow = (score = 0) => {
-    const rounded = Math.max(0, Math.min(5, Math.round(Number(score) || 0)));
-    return '★'.repeat(rounded) || '☆';
-};
+import {
+    ProfilePreviewSection,
+    ProfileReviewsModal,
+    ProfileStepProgress,
+    ProfileSocialLinksSection,
+    ProfileLearningGoalsSection,
+    ProfilePrivacySection
+} from '../components/profile';
+import { Camera, Trash2 } from 'lucide-react';
 
 const Profile = () => {
     const { refreshUser } = useAuth();
@@ -801,167 +636,29 @@ const Profile = () => {
 
     return (
         <div className={profileContainerClass}>
-                {reviewsModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => setReviewsModalOpen(false)}>
-                        <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#111721] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.5)]" onClick={(e) => e.stopPropagation()}>
-                            <div className="mb-4 flex items-center justify-between">
-                                <h4 className="text-lg font-semibold text-[#DCE7F5]">Reviews</h4>
-                                <button
-                                    type="button"
-                                    onClick={() => setReviewsModalOpen(false)}
-                                    className="rounded-md border border-white/10 px-2 py-1 text-xs text-[#8DA0BF] hover:bg-white/5"
-                                >
-                                    Close
-                                </button>
-                            </div>
+                <ProfileReviewsModal
+                    reviewsModalOpen={reviewsModalOpen}
+                    setReviewsModalOpen={setReviewsModalOpen}
+                    reviewsLoading={reviewsLoading}
+                    reviewItems={reviewItems}
+                    renderStarRow={renderStarRow}
+                />
 
-                            {reviewsLoading ? (
-                                <p className="text-sm text-[#8DA0BF]">Loading reviews...</p>
-                            ) : reviewItems.length ? (
-                                <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
-                                    {reviewItems.map((review) => (
-                                        <div key={review.id} className="rounded-xl border border-white/10 bg-[#0E1620] p-3">
-                                            <p className="text-sm text-yellow-400">{renderStarRow(review.overallRating)} <span className="ml-1 text-[#8DA0BF]">{Number(review.overallRating || 0).toFixed(1)}</span></p>
-                                            <p className="mt-2 text-sm text-[#DCE7F5]">{review.comment?.trim() || 'No written feedback.'}</p>
-                                            <p className="mt-2 text-xs text-[#8DA0BF]">by @{review.reviewer?.username || 'user'}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-sm text-[#8DA0BF]">No reviews available yet.</p>
-                            )}
-                        </div>
-                    </div>
-                )}
+                <ProfilePreviewSection
+                    avatarPreview={avatarPreview}
+                    formData={formData}
+                    composeFullName={composeFullName}
+                    profileRating={profileRating}
+                    handleOpenReviews={handleOpenReviews}
+                    earnedBadges={earnedBadges}
+                />
 
-                <section className="space-y-3">
-                    <h3 className="page-title">Profile Preview</h3>
-                    <div className="grid gap-4 rounded-2xl border border-white/10 bg-[#0E1620] p-4 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-                        <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-[#0B1420] px-4 py-5 text-center">
-                            {avatarPreview ? (
-                                <img src={avatarPreview} alt="Profile" className="h-16 w-16 rounded-full object-cover" />
-                            ) : (
-                                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#0A4D9F]/25 text-lg font-bold text-[#DCE7F5]">
-                                    {(formData.firstName || formData.username || 'U').charAt(0).toUpperCase()}
-                                </div>
-                            )}
-                            <p className="mt-3 text-lg font-semibold text-[#DCE7F5] leading-tight">
-                                {composeFullName(formData.firstName, formData.lastName) || 'Your Name'}
-                            </p>
-                            <p className="mt-1 text-sm text-[#8DA0BF]">@{formData.username || 'username'}</p>
-                            <div className="mt-2 flex items-center gap-2 text-sm text-gray-300">
-                                <span className="text-yellow-400">⭐</span>
-                                <span>{profileRating.avgRating > 0 ? profileRating.avgRating.toFixed(1) : '0.0'}</span>
-                                <span className="text-gray-500">|</span>
-                                <button
-                                    type="button"
-                                    onClick={handleOpenReviews}
-                                    className="text-gray-300 underline-offset-2 hover:text-white hover:underline"
-                                >
-                                    {profileRating.reviewCount} Reviews
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
-                                    <p className="text-[11px] uppercase tracking-wide text-[#8DA0BF]">Teaching Skills</p>
-                                    <p className="mt-1 text-base font-semibold text-[#DCE7F5]">{formData.teachSkills.filter((s) => s.skillName.trim()).length}</p>
-                                </div>
-                                <div className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
-                                    <p className="text-[11px] uppercase tracking-wide text-[#8DA0BF]">Learning Skills</p>
-                                    <p className="mt-1 text-base font-semibold text-[#DCE7F5]">{formData.learnSkills.filter((s) => s.skillName.trim()).length}</p>
-                                </div>
-                                <div className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
-                                    <p className="text-[11px] uppercase tracking-wide text-[#8DA0BF]">Availability Slots</p>
-                                    <p className="mt-1 text-base font-semibold text-[#DCE7F5]">{formData.availability.length}</p>
-                                </div>
-                                <div className="rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
-                                    <p className="text-[11px] uppercase tracking-wide text-[#8DA0BF]">Learning Goals</p>
-                                    <p className="mt-1 text-base font-semibold text-[#DCE7F5]">{formData.learningGoals.filter((goal) => String(goal || '').trim()).length}</p>
-                                </div>
-                            </div>
-
-                            <div>
-                                <p className="text-[11px] uppercase tracking-wide text-[#8DA0BF] text-center">Achievements</p>
-                                <div className="mt-2 flex flex-wrap justify-center gap-2">
-                                    {earnedBadges.length ? earnedBadges.map((badgeEntry) => (
-                                        <div
-                                            key={badgeEntry.id}
-                                            title={badgeEntry?.badge?.condition || ''}
-                                            className="flex items-center gap-1 rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-400"
-                                        >
-                                            <span>🏅</span>
-                                            <span>{badgeEntry?.badge?.name || 'Achievement'}</span>
-                                        </div>
-                                    )) : (
-                                        <div className="flex items-center gap-1 rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-400">
-                                            <span>🏅</span>
-                                            <span>No badges yet</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <section className={`${profileCardClass} space-y-4`}>
-                    <div>
-                        <h1 className="page-title mb-5">Complete Your Profile</h1>
-                        <p className="mt-1 text-sm text-[#8DA0BF]">Step {step} of {PROFILE_STEPS.length}</p>
-                    </div>
-
-                    <div className="mx-auto w-full">
-                        <div className="flex items-center justify-between">
-                        {PROFILE_STEPS.map((item, index) => {
-                            const isCompleted = step > item.id;
-                            const isCurrent = step === item.id;
-                            const isPending = step < item.id;
-
-                            return (
-                                <div key={item.id} className="flex flex-1 items-center">
-                                    <button
-                                        type="button"
-                                        onClick={() => setStep(item.id)}
-                                        className="group inline-flex items-center gap-3 text-left"
-                                    >
-                                        <span
-                                            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-colors ${
-                                                isCompleted
-                                                    ? 'border-green-500/50 bg-green-500/30 text-green-400'
-                                                    : isCurrent
-                                                        ? 'border-blue-600 bg-blue-600 text-white'
-                                                        : 'border-gray-300 bg-white text-gray-500'
-                                            }`}
-                                        >
-                                            {isCompleted ? <Check className="h-4 w-4" /> : item.id}
-                                        </span>
-                                        <span
-                                            className={`text-sm font-medium ${
-                                                isCompleted
-                                                    ? 'text-green-400'
-                                                    : isCurrent
-                                                        ? 'text-blue-700'
-                                                        : isPending
-                                                            ? 'text-gray-400'
-                                                            : 'text-gray-700'
-                                            }`}
-                                        >
-                                            {item.label}
-                                        </span>
-                                    </button>
-
-                                    {index < PROFILE_STEPS.length - 1 ? (
-                                        <div className={`mx-3 h-0.5 flex-1 rounded-full ${step > item.id ? 'bg-green-400' : 'bg-gray-200'}`} />
-                                    ) : null}
-                                </div>
-                            );
-                        })}
-                        </div>
-                    </div>
-                </section>
+                <ProfileStepProgress
+                    profileCardClass={profileCardClass}
+                    step={step}
+                    profileSteps={PROFILE_STEPS}
+                    setStep={setStep}
+                />
 
                 {step === 1 && (
                     <div className="space-y-6">
@@ -1120,109 +817,28 @@ const Profile = () => {
                             </div>
                         </section>
 
-                        <section className={`${profileCardClass} space-y-5`}>
-                            <h2 className="text-[21px] font-semibold text-[#DCE7F5]">Social Links</h2>
-                            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                                <div>
-                                    <label className="mb-1 block text-sm font-medium text-[#DCE7F5]">GitHub</label>
-                                    <div className="relative">
-                                        <Github className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                                        <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.githubLink && fieldErrors.githubLink ? 'border-red-500' : ''}`} placeholder="https://github.com/username" value={formData.githubLink} onChange={(e) => updateField('githubLink', e.target.value)} onBlur={() => markTouched('githubLink')} />
-                                    </div>
-                                    {touched.githubLink && fieldErrors.githubLink && <p className="text-xs text-red-400 mt-1">{fieldErrors.githubLink}</p>}
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-sm font-medium text-[#DCE7F5]">LinkedIn</label>
-                                    <div className="relative">
-                                        <Linkedin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                                        <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.linkedinLink && fieldErrors.linkedinLink ? 'border-red-500' : ''}`} placeholder="https://linkedin.com/in/username" value={formData.linkedinLink} onChange={(e) => updateField('linkedinLink', e.target.value)} onBlur={() => markTouched('linkedinLink')} />
-                                    </div>
-                                    {touched.linkedinLink && fieldErrors.linkedinLink && <p className="text-xs text-red-400 mt-1">{fieldErrors.linkedinLink}</p>}
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-sm font-medium text-[#DCE7F5]">Portfolio</label>
-                                    <div className="relative">
-                                        <Globe className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                                        <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.portfolioLink && fieldErrors.portfolioLink ? 'border-red-500' : ''}`} placeholder="https://your-portfolio.com" value={formData.portfolioLink} onChange={(e) => updateField('portfolioLink', e.target.value)} onBlur={() => markTouched('portfolioLink')} />
-                                    </div>
-                                    {touched.portfolioLink && fieldErrors.portfolioLink && <p className="text-xs text-red-400 mt-1">{fieldErrors.portfolioLink}</p>}
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-sm font-medium text-[#DCE7F5]">YouTube</label>
-                                    <div className="relative">
-                                        <Youtube className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                                        <input className={`w-full border rounded py-2 pl-9 pr-3 ${touched.youtubeLink && fieldErrors.youtubeLink ? 'border-red-500' : ''}`} placeholder="https://youtube.com/@channel" value={formData.youtubeLink} onChange={(e) => updateField('youtubeLink', e.target.value)} onBlur={() => markTouched('youtubeLink')} />
-                                    </div>
-                                    {touched.youtubeLink && fieldErrors.youtubeLink && <p className="text-xs text-red-400 mt-1">{fieldErrors.youtubeLink}</p>}
-                                </div>
-                            </div>
-                        </section>
+                        <ProfileSocialLinksSection
+                            profileCardClass={profileCardClass}
+                            formData={formData}
+                            touched={touched}
+                            fieldErrors={fieldErrors}
+                            updateField={updateField}
+                            markTouched={markTouched}
+                        />
 
-                        <section className={`${profileCardClass} space-y-5`}>
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-[21px] font-semibold text-[#DCE7F5]">Learning Goals</h2>
-                                <button type="button" onClick={addLearningGoal} className="px-3 py-1 text-sm bg-blue-600 text-white rounded">Add Goal</button>
-                            </div>
-                            <div className="space-y-3">
-                                {formData.learningGoals.map((goal, index) => (
-                                    <div key={`goal-${index}`} className="flex items-center gap-2">
-                                        <input
-                                            className="w-full border rounded px-3 py-2"
-                                            placeholder="e.g. Build a Node.js API"
-                                            value={goal}
-                                            onChange={(e) => updateLearningGoal(index, e.target.value)}
-                                        />
-                                        <button type="button" onClick={() => removeLearningGoal(index)} className="text-sm text-red-400 hover:text-red-300">Remove</button>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
+                        <ProfileLearningGoalsSection
+                            profileCardClass={profileCardClass}
+                            learningGoals={formData.learningGoals}
+                            addLearningGoal={addLearningGoal}
+                            updateLearningGoal={updateLearningGoal}
+                            removeLearningGoal={removeLearningGoal}
+                        />
 
-                        <section className={`${profileCardClass} space-y-4`}>
-                            <h2 className="text-[21px] font-semibold text-[#DCE7F5]">Profile Privacy Controls</h2>
-                            <label className="flex items-center justify-between gap-3 rounded border border-white/10 px-3 py-2 text-sm text-[#DCE7F5]">
-                                Show availability calendar
-                                <input
-                                    type="checkbox"
-                                    checked={formData.profilePrivacy.showAvailability}
-                                    onChange={(e) => setFormData((prev) => ({
-                                        ...prev,
-                                        profilePrivacy: {
-                                            ...prev.profilePrivacy,
-                                            showAvailability: e.target.checked
-                                        }
-                                    }))}
-                                />
-                            </label>
-                            <label className="flex items-center justify-between gap-3 rounded border border-white/10 px-3 py-2 text-sm text-[#DCE7F5]">
-                                Show portfolio links
-                                <input
-                                    type="checkbox"
-                                    checked={formData.profilePrivacy.showPortfolio}
-                                    onChange={(e) => setFormData((prev) => ({
-                                        ...prev,
-                                        profilePrivacy: {
-                                            ...prev.profilePrivacy,
-                                            showPortfolio: e.target.checked
-                                        }
-                                    }))}
-                                />
-                            </label>
-                            <label className="flex items-center justify-between gap-3 rounded border border-white/10 px-3 py-2 text-sm text-[#DCE7F5]">
-                                Show social links
-                                <input
-                                    type="checkbox"
-                                    checked={formData.profilePrivacy.showSocialLinks}
-                                    onChange={(e) => setFormData((prev) => ({
-                                        ...prev,
-                                        profilePrivacy: {
-                                            ...prev.profilePrivacy,
-                                            showSocialLinks: e.target.checked
-                                        }
-                                    }))}
-                                />
-                            </label>
-                        </section>
+                        <ProfilePrivacySection
+                            profileCardClass={profileCardClass}
+                            profilePrivacy={formData.profilePrivacy}
+                            setFormData={setFormData}
+                        />
                     </div>
                 )}
 

@@ -1,7 +1,7 @@
 // src/pages/Dashboard.jsx
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { BookOpen, ArrowRightLeft, Users, Star, Sparkles, Repeat2, CalendarDays, Clock, PlusCircle, MessageCircle, Bell, TrendingUp } from 'lucide-react';
+import { BookOpen, ArrowRightLeft, Users, Star, Sparkles, PlusCircle, MessageCircle, Bell, TrendingUp, CalendarDays } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getDashboardStats, getNotifications, getCalendarEvents } from '../services/meta.service';
 import { getMatchedUsers } from '../services/matching.service';
@@ -10,7 +10,13 @@ import { getAllSkills, getUserSkills } from '../services/skill.service';
 import { Button } from '../components/ui/Button';
 import { toast } from 'react-hot-toast';
 import InputDialog from '../components/ui/InputDialog';
-import { StatCardSkeleton } from '../components/ui/Skeleton';
+import {
+    DashboardStatsGrid,
+    DashboardNextSessionCard,
+    DashboardActiveSwapsSection,
+    DashboardSuggestedSwapsSection,
+    DashboardOnlineNowSection
+} from '../components/dashboard';
 
 const Dashboard = () => {
     const { user } = useAuth();
@@ -209,188 +215,24 @@ const Dashboard = () => {
                 <p className="mt-1 text-sm text-[#8DA0BF]">Welcome back, {user?.username}!</p>
             </header>
 
-            {/* Stats Grid */}
-            <div className="stats-grid">
-                {loading ? (
-                    <>
-                        <StatCardSkeleton />
-                        <StatCardSkeleton />
-                        <StatCardSkeleton />
-                        <StatCardSkeleton />
-                    </>
-                ) : (
-                    stats.map((item) => (
-                        <div key={item.name} className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#111721] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.55)] transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
-                            <dt>
-                                <div className={`absolute top-5 left-5 rounded-md p-3 ${item.color}`}>
-                                    <item.icon className="h-6 w-6 text-white" aria-hidden="true" />
-                                </div>
-                                <p className="ml-16 truncate text-sm font-medium text-[#8DA0BF]">{item.name}</p>
-                            </dt>
-                            <dd className="ml-16 mt-2 flex items-baseline">
-                                <p className="text-2xl font-semibold text-[#DCE7F5]">{item.stat}</p>
-                            </dd>
-                        </div>
-                    ))
-                )}
-            </div>
+            <DashboardStatsGrid loading={loading} stats={stats} />
 
-            <div className="rounded-xl border border-white/10 bg-[#0F172A] p-5">
-                <div className="flex flex-col gap-3">
-                    <p className="text-sm uppercase tracking-wide text-gray-400">Next Session</p>
-                    {nextSession ? (
-                        <>
-                            <p className="text-lg font-semibold text-white">
-                                {(nextSession.classInfo?.swapRequest?.learnSkill?.skill?.name || 'Skill Session')} with {nextSession.classInfo?.swapRequest?.fromUser?.username === user?.username
-                                    ? nextSession.classInfo?.swapRequest?.toUser?.username
-                                    : nextSession.classInfo?.swapRequest?.fromUser?.username}
-                            </p>
-                            <p className="inline-flex items-center gap-2 text-sm text-gray-400">
-                                <CalendarDays className="h-4 w-4 text-gray-400" />
-                                {formatSessionTime(nextSession.eventDate)}
-                            </p>
-                            <Button
-                                className="w-fit rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-500"
-                                onClick={() => navigate(`/swaps/${nextSession.classInfo.id}`)}
-                            >
-                                Join Classroom
-                            </Button>
-                        </>
-                    ) : (
-                        <>
-                            <p className="text-lg font-semibold text-white">No upcoming session</p>
-                            <p className="inline-flex items-center gap-2 text-sm text-gray-400">
-                                <Clock className="h-4 w-4 text-gray-400" />
-                                Schedule a session from your classroom.
-                            </p>
-                            <Button
-                                className="w-fit rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-500"
-                                onClick={() => navigate('/swaps')}
-                            >
-                                Go to My Swaps
-                            </Button>
-                        </>
-                    )}
-                </div>
-            </div>
+            <DashboardNextSessionCard
+                nextSession={nextSession}
+                user={user}
+                formatSessionTime={formatSessionTime}
+                onGoToClassroom={(swapClassId) => navigate(`/swaps/${swapClassId}`)}
+                onGoToSwaps={() => navigate('/swaps')}
+            />
 
-            <div className="section-card">
-                <div className="mb-4 flex items-center justify-between">
-                    <h2 className="section-title">Active Swaps</h2>
-                    <Link to="/swaps" className="text-sm text-[#8DA0BF] hover:text-[#0A4D9F]">View all</Link>
-                </div>
+            <DashboardActiveSwapsSection
+                activeSwaps={activeSwaps}
+                nextSessionByClassId={nextSessionByClassId}
+                formatSessionTime={formatSessionTime}
+                onGoToClassroom={(swapClassId) => navigate(`/swaps/${swapClassId}`)}
+            />
 
-                {activeSwaps.length === 0 ? (
-                    <div className="rounded-xl border border-white/10 bg-[#0F172A] p-6 text-center">
-                        <p className="text-sm text-gray-400">No active swaps right now.</p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {activeSwaps.slice(0, 4).map((swap) => {
-                            const teachSkill = swap?.swapRequest?.teachSkill?.skill?.name || 'Skill';
-                            const learnSkill = swap?.swapRequest?.learnSkill?.skill?.name || 'Skill';
-                            const sessionDate = nextSessionByClassId[swap.id] || null;
-
-                            return (
-                                <div key={swap.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#0F172A] p-4">
-                                    <div>
-                                        <p className="text-sm font-medium text-white">{teachSkill} <span className="mx-1 text-gray-400">⇄</span> {learnSkill}</p>
-                                        <p className="mt-1 text-xs text-gray-400">Next session</p>
-                                        <p className="text-xs text-gray-300">{formatSessionTime(sessionDate)}</p>
-                                    </div>
-                                    <Button
-                                        size="sm"
-                                        className="rounded-lg bg-blue-600 px-3 py-2 text-white hover:bg-blue-500"
-                                        onClick={() => navigate(`/swaps/${swap.id}`)}
-                                    >
-                                        Go to Classroom
-                                    </Button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-
-            {/* Suggested Swaps */}
-            {matches.length > 0 && (
-                <div className="section-card">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="section-title flex items-center gap-2">
-                            <Sparkles className="h-5 w-5 text-yellow-500" /> Suggested Swaps
-                        </h2>
-                        <Link to="/discover" className="text-sm text-[#8DA0BF] hover:text-[#0A4D9F]">Browse all</Link>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                        {matches.map((m) => (
-                            <div key={m.userId} className="h-full rounded-2xl border border-white/10 bg-[#0E1620] p-4 transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
-                                <div className="mb-3 flex items-center gap-3">
-                                    {m.avatarUrl ? (
-                                        <img src={m.avatarUrl} alt={m.username || 'User'} loading="lazy" className="w-10 h-10 rounded-full object-cover border border-white/10" />
-                                    ) : (
-                                        <div className="w-10 h-10 rounded-full bg-[#0A4D9F]/25 flex items-center justify-center text-[#DCE7F5] font-bold text-sm">
-                                            {(m.username || 'U')[0].toUpperCase()}
-                                        </div>
-                                    )}
-                                    <div className="min-w-0">
-                                        <Link to={`/u/${m.username}`} className="font-semibold text-sm text-[#DCE7F5] hover:text-[#0A4D9F] truncate block">
-                                            {m.username}
-                                        </Link>
-                                        <span className="text-xs text-[#F59E0B]">{m.avgRating > 0 ? `${m.avgRating} ★ (${m.reviewCount})` : 'New user'}</span>
-                                    </div>
-                                </div>
-
-                                <div className="mb-3 rounded-lg border border-white/10 bg-[#0F172A] p-3">
-                                    <div className="flex items-center justify-center gap-4">
-                                        <div className="w-24 rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
-                                            <p className="truncate text-sm text-white">{m.mutualLearnSkills?.[0]?.skillName || 'Not set'}</p>
-                                            <p className="mt-1 text-xs text-gray-400">Teaches</p>
-                                        </div>
-                                        <Repeat2 className="h-4 w-4 text-gray-400" />
-                                        <div className="w-24 rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
-                                            <p className="truncate text-sm text-white">{m.matchingTeachSkills?.[0]?.skillName || 'Not set'}</p>
-                                            <p className="mt-1 text-xs text-gray-400">Learns</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="mb-3">
-                                    <p className="mb-2 text-xs uppercase tracking-wide text-gray-400">Availability</p>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {(m.availability || []).slice(0, 4).map((day) => (
-                                            <span key={`${m.userId}-${day}`} className="rounded-md bg-blue-500/10 px-2 py-1 text-xs text-blue-400">
-                                                {String(day).slice(0, 3)}
-                                            </span>
-                                        ))}
-                                        {(!m.availability || m.availability.length === 0) && (
-                                            <span className="text-xs text-gray-400">Not set</span>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="mt-auto flex gap-2">
-                                    <Link to={`/u/${m.username}`} className="flex-1">
-                                        <Button
-                                            size="sm"
-                                            variant="secondary"
-                                            className="w-full border border-white/10 bg-transparent text-gray-300 hover:bg-white/5"
-                                        >
-                                            View Profile
-                                        </Button>
-                                    </Link>
-                                    <Button
-                                        size="sm"
-                                        className="flex-1 bg-blue-600 text-white hover:bg-blue-500"
-                                        onClick={() => handleQuickSwap(m.userId, m.matchingTeachSkills[0]?.skillId)}
-                                    >
-                                        Request Swap
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+            <DashboardSuggestedSwapsSection matches={matches} onQuickSwap={handleQuickSwap} />
 
             <div className="section-card">
                 <h2 className="section-title mb-4">Quick Actions</h2>
@@ -484,36 +326,7 @@ const Dashboard = () => {
                 </div>
             </div>
 
-            <div className="section-card bg-[#0F172A] border border-white/10 rounded-xl p-5">
-                <h2 className="section-title mb-4">Online Now</h2>
-                {onlineUsers.length === 0 ? (
-                    <p className="text-sm text-gray-400">No online users right now.</p>
-                ) : (
-                    <div className="space-y-3">
-                        {onlineUsers.map((person) => (
-                            <div key={person.userId} className="group flex items-center justify-between rounded-lg p-2 transition hover:bg-white/5">
-                                <div className="flex items-center gap-3">
-                                    <div className="relative h-8 w-8 rounded-full bg-gray-700">
-                                        {person.avatarUrl ? (
-                                            <img src={person.avatarUrl} alt={person.username} loading="lazy" className="h-8 w-8 rounded-full object-cover" />
-                                        ) : (
-                                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0A4D9F]/30 text-xs font-semibold text-white">
-                                                {(person.username || 'U')[0].toUpperCase()}
-                                            </div>
-                                        )}
-                                        <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border border-[#0F172A] bg-green-400" />
-                                    </div>
-                                    <p className="text-sm text-white">{person.username}</p>
-                                </div>
-                                <div className="hidden items-center gap-2 group-hover:flex">
-                                    <Link to={`/u/${person.username}`} className="text-xs text-[#8DA0BF] hover:text-white">View Profile</Link>
-                                    <Link to="/swaps" className="text-xs text-[#8DA0BF] hover:text-white">Send Message</Link>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+            <DashboardOnlineNowSection onlineUsers={onlineUsers} />
         </div>
     );
 };

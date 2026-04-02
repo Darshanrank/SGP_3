@@ -1,36 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getPublicProfile, getPublicProfileByUsername } from '../services/profile.service';
-import { getUserRating, getUserReviews } from '../services/review.service';
-import { blockUser, getBlockStatus, submitReport, unblockUser } from '../services/safety.service';
-import { createSwapRequest, getMyClasses } from '../services/swap.service';
-import { getUserSkills } from '../services/skill.service';
+import {
+    getPublicProfile,
+    getPublicProfileByUsername,
+    getUserRating,
+    getUserReviews,
+    blockUser,
+    getBlockStatus,
+    submitReport,
+    unblockUser,
+    createSwapRequest,
+    getMyClasses,
+    getUserSkills
+} from '../services/publicProfile.service';
 import { useAuth } from '../context/AuthContext';
-import { Button } from '../components/ui/Button';
 import { toast } from 'react-hot-toast';
-import { Star, Github, Linkedin, Globe, Youtube, ExternalLink, ChevronDown, ChevronUp, Trophy, Award, Zap, ArrowRightLeft, Play, MessageCircle } from 'lucide-react';
+import {
+    PublicProfileHeaderSection,
+    PublicProfileModals,
+    PublicProfileReviewsSection,
+    PublicProfileSkillsSection,
+    PublicProfileStatsSection,
+    PublicProfileActivitySection,
+    PublicProfileAvailabilitySection
+} from '../components/publicProfile';
+import { Github, Linkedin, Globe, Youtube } from 'lucide-react';
 
-const levelLabel = { LOW: 'Beginner', MEDIUM: 'Intermediate', HIGH: 'Advanced' };
-const levelColor = { LOW: 'bg-blue-500/15 text-blue-300', MEDIUM: 'bg-yellow-500/15 text-yellow-300', HIGH: 'bg-green-500/15 text-green-300' };
 const reportReasons = ['SPAM', 'HARASSMENT', 'SCAM_OR_FRAUD', 'INAPPROPRIATE_CONTENT', 'IMPERSONATION', 'OTHER'];
-const dayLabelMap = {
-    MONDAY: 'Mon',
-    TUESDAY: 'Tue',
-    WEDNESDAY: 'Wed',
-    THURSDAY: 'Thu',
-    FRIDAY: 'Fri',
-    SATURDAY: 'Sat',
-    SUNDAY: 'Sun'
-};
-
-const formatAvailabilityTime = (value) => {
-    if (!value || typeof value !== 'string') return '--';
-    const [h, m] = value.split(':').map(Number);
-    if (!Number.isFinite(h) || !Number.isFinite(m)) return value;
-    const meridiem = h >= 12 ? 'PM' : 'AM';
-    const hour12 = h % 12 === 0 ? 12 : h % 12;
-    return `${hour12}:${String(m).padStart(2, '0')} ${meridiem}`;
-};
 
 const formatTimeAgo = (dateValue) => {
     if (!dateValue) return 'Recently';
@@ -58,117 +54,6 @@ const formatTimeAgo = (dateValue) => {
     }
     const v = Math.floor(diffMs / week);
     return `${v} week${v === 1 ? '' : 's'} ago`;
-};
-
-const formatExperienceLabel = (createdAt) => {
-    if (!createdAt) return 'N/A';
-    const created = new Date(createdAt);
-    if (Number.isNaN(created.getTime())) return 'N/A';
-
-    const now = new Date();
-    const months = Math.max(1, Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
-
-    if (months < 12) {
-        return `${months} month${months === 1 ? '' : 's'}`;
-    }
-
-    const years = Math.floor(months / 12);
-    const remMonths = months % 12;
-    if (remMonths === 0) return `${years} year${years === 1 ? '' : 's'}`;
-    return `${years}y ${remMonths}m`;
-};
-
-const SocialLink = ({ href, icon: Icon, label, color }) => {
-    if (!href) return null;
-    const url = href.startsWith('http') ? href : `https://${href}`;
-    return (
-        <a href={url} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${color}`}>
-            <Icon className="h-4 w-4" />
-            {label}
-        </a>
-    );
-};
-
-const SkillCard = ({ skill, sessionsCount = 0, mode = 'teach' }) => {
-    const [expanded, setExpanded] = useState(false);
-    const hasDetails = skill.preview?.videoUrl || skill.proofUrl;
-    const progressPercent = Math.min(100, sessionsCount * 20);
-    const progressLabel = mode === 'teach' ? 'Teaching progress' : 'Learning progress';
-
-    return (
-        <div className="overflow-hidden rounded-lg border border-white/10 bg-[#0E1620] transition-colors hover:bg-[#151D27]">
-            <button
-                type="button"
-                onClick={() => hasDetails && setExpanded(!expanded)}
-                className={`w-full flex items-center justify-between p-4 text-left ${hasDetails ? 'cursor-pointer hover:bg-white/5' : 'cursor-default'}`}
-            >
-                <div className="flex items-center gap-3">
-                    <span className="font-semibold text-[#DCE7F5]">{skill.skill.name}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${levelColor[skill.level] || 'bg-white/10 text-[#8DA0BF]'}`}>
-                        {levelLabel[skill.level] || skill.level}
-                    </span>
-                </div>
-                {hasDetails && (
-                    <span className="flex items-center gap-1 text-xs text-[#7BB2FF]">
-                        {expanded ? <ChevronUp className="h-4 w-4" /> : <><Play className="h-3 w-3" /><ChevronDown className="h-4 w-4" /></>}
-                    </span>
-                )}
-            </button>
-
-            <div className="border-t border-white/10 bg-[#0E1620] p-3 space-y-2">
-                <div className="flex items-center justify-between text-sm text-[#8DA0BF]">
-                    <span>Level</span>
-                    <span className="font-medium text-[#DCE7F5]">{levelLabel[skill.level] || skill.level}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm text-[#8DA0BF]">
-                    <span>Experience</span>
-                    <span className="font-medium text-[#DCE7F5]">{formatExperienceLabel(skill.createdAt)}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm text-[#8DA0BF]">
-                    <span>{mode === 'teach' ? 'Taught' : 'Learned'}</span>
-                    <span className="font-medium text-[#DCE7F5]">{sessionsCount} session{sessionsCount === 1 ? '' : 's'}</span>
-                </div>
-                <div>
-                    <div className="mb-1 flex items-center justify-between text-xs text-[#8DA0BF]">
-                        <span>{progressLabel}</span>
-                        <span>{progressPercent}%</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-[#243244]">
-                        <div className="h-2 rounded-full bg-blue-500" style={{ width: `${progressPercent}%` }} />
-                    </div>
-                </div>
-            </div>
-
-            {expanded && hasDetails && (
-                <div className="border-t border-white/10 bg-[#111721] p-4 space-y-3">
-                    {skill.preview?.videoUrl && (
-                        <div>
-                            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Video Demo</p>
-                            <video
-                                src={skill.preview.videoUrl}
-                                controls
-                                className="max-h-64 w-full rounded-lg border border-white/10"
-                            />
-                        </div>
-                    )}
-                    {skill.proofUrl && (
-                        <div>
-                            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Proof Link</p>
-                            <a
-                                href={skill.proofUrl.startsWith('http') ? skill.proofUrl : `https://${skill.proofUrl}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#7BB2FF] hover:text-[#9FC8FF] hover:underline"
-                            >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                                {skill.proofUrl}
-                            </a>
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
 };
 
 const PublicProfile = () => {
@@ -520,448 +405,66 @@ const PublicProfile = () => {
 
     return (
         <div className="max-w-4xl mx-auto py-8 px-4 space-y-6">
-            {swapModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setSwapModalOpen(false)}>
-                    <div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#111721] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.55)]" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-lg font-semibold text-[#DCE7F5]">Request Skill Swap</h3>
-                        <p className="mt-1 text-sm text-[#8DA0BF]">Send a swap request to @{profile.username}</p>
+            <PublicProfileModals
+                swapModalOpen={swapModalOpen}
+                setSwapModalOpen={setSwapModalOpen}
+                profile={profile}
+                swapForm={swapForm}
+                setSwapForm={setSwapForm}
+                teachSkills={teachSkills}
+                myTeachSkills={myTeachSkills}
+                swapSubmitting={swapSubmitting}
+                handleSendSwapRequest={handleSendSwapRequest}
+                reportOpen={reportOpen}
+                setReportOpen={setReportOpen}
+                reportReason={reportReason}
+                setReportReason={setReportReason}
+                reportReasons={reportReasons}
+                reportDescription={reportDescription}
+                setReportDescription={setReportDescription}
+                safetyBusy={safetyBusy}
+                handleSubmitReport={handleSubmitReport}
+            />
 
-                        <div className="mt-4 space-y-3">
-                            <div>
-                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Skill You Want to Learn</label>
-                                <select
-                                    value={swapForm.learnSkillId}
-                                    onChange={(e) => setSwapForm((prev) => ({ ...prev, learnSkillId: e.target.value }))}
-                                    className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]"
-                                >
-                                    <option value="">Select skill</option>
-                                    {teachSkills.map((skill) => (
-                                        <option key={skill.id} value={skill.id}>{skill.skill?.name || 'Skill'}</option>
-                                    ))}
-                                </select>
-                            </div>
+            <PublicProfileHeaderSection
+                p={p}
+                profile={profile}
+                displayName={displayName}
+                rating={rating}
+                socialLinks={socialLinks}
+                isOwnProfile={isOwnProfile}
+                user={user}
+                messageBusy={messageBusy}
+                handleMessageUser={handleMessageUser}
+                openSwapModal={openSwapModal}
+                setReportOpen={setReportOpen}
+                safetyBusy={safetyBusy}
+                blockStatus={blockStatus}
+                handleToggleBlock={handleToggleBlock}
+            />
 
-                            <div>
-                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Skill You Can Teach</label>
-                                <select
-                                    value={swapForm.teachSkillId}
-                                    onChange={(e) => setSwapForm((prev) => ({ ...prev, teachSkillId: e.target.value }))}
-                                    className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]"
-                                >
-                                    <option value="">Optional</option>
-                                    {myTeachSkills.map((skill) => (
-                                        <option key={skill.id} value={skill.id}>{skill.skill?.name || 'Skill'}</option>
-                                    ))}
-                                </select>
-                            </div>
+            <PublicProfileStatsSection
+                reward={reward}
+                badges={badges}
+                rating={rating}
+                trustIndicators={trustIndicators}
+                totalSwaps={profile?.reputationMetrics?.totalSwaps}
+                profileCompletionPercent={profileCompletionPercent}
+                profileCompletion={profileCompletion}
+            />
 
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                <div>
-                                    <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Preferred Date</label>
-                                    <input
-                                        type="date"
-                                        value={swapForm.preferredDate}
-                                        onChange={(e) => setSwapForm((prev) => ({ ...prev, preferredDate: e.target.value }))}
-                                        className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Preferred Time</label>
-                                    <input
-                                        type="time"
-                                        value={swapForm.preferredTime}
-                                        onChange={(e) => setSwapForm((prev) => ({ ...prev, preferredTime: e.target.value }))}
-                                        className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]"
-                                    />
-                                </div>
-                            </div>
+            <PublicProfileActivitySection recentActivityItems={recentActivityItems} badges={badges} />
 
-                            <div>
-                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Message</label>
-                                <textarea
-                                    value={swapForm.message}
-                                    onChange={(e) => setSwapForm((prev) => ({ ...prev, message: e.target.value }))}
-                                    rows={4}
-                                    maxLength={1000}
-                                    placeholder="Add a message..."
-                                    className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
-                                />
-                            </div>
-                        </div>
+            <PublicProfileSkillsSection
+                teachSkills={teachSkills}
+                learnSkills={learnSkills}
+                teachSessionCountByUserSkillId={teachSessionCountByUserSkillId}
+                learnSessionCountByUserSkillId={learnSessionCountByUserSkillId}
+            />
 
-                        <div className="mt-4 flex justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setSwapModalOpen(false)}
-                                className="rounded-lg bg-gray-700 px-4 py-2 font-medium text-white transition hover:bg-gray-600"
-                                disabled={swapSubmitting}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleSendSwapRequest}
-                                className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-500"
-                                disabled={swapSubmitting}
-                            >
-                                {swapSubmitting ? 'Sending...' : 'Send Request'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <PublicProfileAvailabilitySection availabilitySlots={availabilitySlots} />
 
-            {reportOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setReportOpen(false)}>
-                    <div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#111721] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.55)]" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-lg font-semibold text-[#DCE7F5]">Report @{profile.username}</h3>
-                        <p className="mt-1 text-sm text-[#8DA0BF]">Select a reason and optionally add details.</p>
-
-                        <div className="mt-4 space-y-3">
-                            <div>
-                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Reason</label>
-                                <select
-                                    value={reportReason}
-                                    onChange={(e) => setReportReason(e.target.value)}
-                                    className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]"
-                                >
-                                    {reportReasons.map((reason) => (
-                                        <option key={reason} value={reason}>{reason}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Description (optional)</label>
-                                <textarea
-                                    value={reportDescription}
-                                    onChange={(e) => setReportDescription(e.target.value)}
-                                    rows={4}
-                                    maxLength={1000}
-                                    className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
-                                    placeholder="Provide context for admins"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="mt-4 flex justify-end gap-2">
-                            <Button size="sm" variant="ghost" onClick={() => setReportOpen(false)} disabled={safetyBusy}>Cancel</Button>
-                            <Button size="sm" variant="danger" onClick={handleSubmitReport} disabled={safetyBusy}>Submit Report</Button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ───── Profile Header ───── */}
-            <div className="rounded-xl border border-white/10 bg-[#111721] p-8 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
-                <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-                    {p.avatarUrl ? (
-                        <img
-                            src={p.avatarUrl}
-                            alt={displayName}
-                            className="h-28 w-28 rounded-full border-4 border-white/10 object-cover shadow-md"
-                        />
-                    ) : (
-                        <div className="w-28 h-28 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center text-4xl font-bold text-white shadow-md">
-                            {displayName[0].toUpperCase()}
-                        </div>
-                    )}
-
-                    <div className="flex-1 text-center md:text-left">
-                        <h1 className="text-3xl font-bold text-[#DCE7F5]">{displayName}</h1>
-                        {profile.profile?.fullName && profile.username && (
-                            <p className="text-sm text-[#8DA0BF]">@{profile.username}</p>
-                        )}
-                        <p className="mt-1 text-sm text-[#8DA0BF]">Member since {new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
-
-                        {/* Rating */}
-                        {rating.reviewCount > 0 && (
-                            <div className="mt-2 flex items-center gap-2 justify-center md:justify-start">
-                                <div className="flex items-center gap-0.5">
-                                    {[1, 2, 3, 4, 5].map((s) => (
-                                        <Star
-                                            key={s}
-                                            className={`h-4 w-4 ${s <= Math.round(rating.avgRating) ? 'text-yellow-400 fill-yellow-400' : 'text-[#3E4D63]'}`}
-                                        />
-                                    ))}
-                                </div>
-                                <span className="text-sm font-semibold text-[#DCE7F5]">{Number(rating.avgRating).toFixed(1)}</span>
-                                <span className="text-sm text-[#8DA0BF]">({rating.reviewCount} review{rating.reviewCount !== 1 ? 's' : ''})</span>
-                            </div>
-                        )}
-
-                        {/* Social Links */}
-                        {socialLinks.length > 0 && (
-                            <div className="mt-4 flex flex-wrap gap-2 justify-center md:justify-start">
-                                {socialLinks.map(link => (
-                                    <SocialLink key={link.label} {...link} />
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Bio */}
-                        <div className="mt-5">
-                            {p.bio ? (
-                                <div className="prose prose-sm max-w-none text-[#DCE7F5]" dangerouslySetInnerHTML={{ __html: p.bio }} />
-                            ) : (
-                                <p className="italic text-[#8DA0BF]">No bio yet.</p>
-                            )}
-                        </div>
-
-                        {!isOwnProfile && user?.userId && (
-                            <div className="mt-5 flex flex-wrap gap-2">
-                                <button
-                                    type="button"
-                                    onClick={openSwapModal}
-                                    className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-500"
-                                >
-                                    Request Skill Swap
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleMessageUser}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-gray-700 px-4 py-2 font-medium text-white transition hover:bg-gray-600"
-                                    disabled={messageBusy}
-                                >
-                                    <MessageCircle className="h-4 w-4" />
-                                    {messageBusy ? 'Opening...' : 'Message'}
-                                </button>
-                                <Button size="sm" variant="secondary" onClick={() => setReportOpen(true)} disabled={safetyBusy}>
-                                    Report User
-                                </Button>
-                                <Button size="sm" variant={blockStatus?.isBlocking ? 'danger' : 'ghost'} onClick={handleToggleBlock} disabled={safetyBusy}>
-                                    {blockStatus?.isBlocking ? 'Unblock User' : 'Block User'}
-                                </Button>
-                            </div>
-                        )}
-
-                        {p.learningLanguage && (
-                            <div className="mt-4">
-                                <span className="inline-flex items-center rounded-full bg-purple-500/15 px-3 py-1 text-sm font-medium text-purple-300">
-                                    🌐 Learning: {p.learningLanguage}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* ───── Ranking & Stats ───── */}
-            <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
-                <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#DCE7F5]">
-                    <Trophy className="h-5 w-5 text-[#F59E0B]" /> Rankings & Stats
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="rounded-lg border border-white/10 bg-[#0E1620] p-4 text-center shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
-                        <Zap className="mx-auto mb-1 h-6 w-6 text-[#F59E0B]" />
-                        <p className="text-2xl font-bold text-[#F7FBFF]">{reward.points}</p>
-                        <p className="text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Points</p>
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-[#0E1620] p-4 text-center shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
-                        <ArrowRightLeft className="mx-auto mb-1 h-6 w-6 text-[#3B82F6]" />
-                        <p className="text-2xl font-bold text-[#F7FBFF]">{reward.totalSwaps}</p>
-                        <p className="text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Total Swaps</p>
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-[#0E1620] p-4 text-center shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
-                        <Star className="mx-auto mb-1 h-6 w-6 fill-[#FACC15] text-[#FACC15]" />
-                        <p className="text-2xl font-bold text-[#F7FBFF]">{rating.reviewCount > 0 ? Number(rating.avgRating).toFixed(1) : '-'}</p>
-                        <p className="text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Avg Rating</p>
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-[#0E1620] p-4 text-center shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
-                        <Award className="mx-auto mb-1 h-6 w-6 text-[#A855F7]" />
-                        <p className="text-2xl font-bold text-[#F7FBFF]">{badges.length}</p>
-                        <p className="text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">Badges</p>
-                    </div>
-                </div>
-
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
-                    <h2 className="mb-3 text-lg font-bold text-[#DCE7F5]">Trust Indicators</h2>
-                    <div className="space-y-2 text-sm text-[#DCE7F5]">
-                        {trustIndicators.verifiedEmail ? (
-                            <div className="flex items-center gap-2 text-green-400">
-                                <span>✔</span>
-                                <span>Verified Email</span>
-                            </div>
-                        ) : null}
-                        <div className="flex items-center gap-2">
-                            <span className="text-green-400">✔</span>
-                            <span>Completed {Number(trustIndicators.completedSwaps || profile?.reputationMetrics?.totalSwaps || 0)} swaps</span>
-                        </div>
-                        {Number(trustIndicators.penaltyCount || 0) === 0 ? (
-                            <div className="flex items-center gap-2 text-green-400">
-                                <span>✔</span>
-                                <span>No penalties</span>
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-2 text-yellow-400">
-                                <span>!</span>
-                                <span>{Number(trustIndicators.penaltyCount || 0)} penalty records</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
-                    <h2 className="mb-3 text-lg font-bold text-[#DCE7F5]">Profile Strength</h2>
-                    <div className="mb-2 text-sm text-[#8DA0BF]">{profileCompletionPercent}% Complete</div>
-                    <div className="h-2 w-full rounded-full bg-[#243244]">
-                        <div
-                            className="h-2 rounded-full bg-blue-500"
-                            style={{ width: `${profileCompletionPercent}%` }}
-                        />
-                    </div>
-                    {profileCompletion?.suggestion ? (
-                        <p className="mt-3 text-xs text-[#8DA0BF]">{profileCompletion.suggestion}</p>
-                    ) : null}
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
-                    <h2 className="mb-4 text-lg font-bold text-[#DCE7F5]">Recent Activity</h2>
-                    {recentActivityItems.length > 0 ? (
-                        <div className="space-y-3">
-                            {recentActivityItems.map((activity) => (
-                                <div key={activity.id} className="flex items-start gap-3 rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2.5">
-                                    <span className="text-base leading-5">{activity.icon}</span>
-                                    <div>
-                                        <p className="text-sm text-[#DCE7F5]">{activity.text}</p>
-                                        <p className="text-xs text-[#8DA0BF]">{activity.timeAgo}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-sm text-[#8DA0BF]">No recent activity yet.</p>
-                    )}
-                </div>
-
-                <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
-                    <h2 className="mb-4 text-lg font-bold text-[#DCE7F5]">Achievements</h2>
-                    {badges.length > 0 ? (
-                        <div className="flex flex-wrap gap-3">
-                            {badges.map((badgeEntry) => (
-                                <div
-                                    key={badgeEntry.id}
-                                    className="inline-flex items-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-sm text-[#FCD34D]"
-                                    title={badgeEntry.badge?.condition || 'Achievement badge'}
-                                >
-                                    <span>🏅</span>
-                                    <span className="font-medium">{badgeEntry.badge?.name || 'Badge'}</span>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-sm text-[#8DA0BF]">No achievements yet.</p>
-                    )}
-                </div>
-            </div>
-
-            {/* ───── Skills ───── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Teaching Skills */}
-                <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
-                    <h2 className="text-lg font-bold text-green-700 flex items-center gap-2 mb-4">
-                        <span className="w-2 h-2 bg-green-500 rounded-full" /> Can Teach
-                        <span className="ml-auto text-sm font-normal text-[#8DA0BF]">{teachSkills.length}</span>
-                    </h2>
-                    {teachSkills.length > 0 ? (
-                        <div className="space-y-3">
-                            {teachSkills.map(skill => (
-                                <SkillCard
-                                    key={skill.id}
-                                    skill={skill}
-                                    mode="teach"
-                                    sessionsCount={Number(teachSessionCountByUserSkillId[skill.id] || 0)}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-sm italic text-[#8DA0BF]">No teaching skills listed yet.</p>
-                    )}
-                </div>
-
-                {/* Learning Skills */}
-                <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
-                    <h2 className="text-lg font-bold text-blue-700 flex items-center gap-2 mb-4">
-                        <span className="w-2 h-2 bg-blue-500 rounded-full" /> Wants to Learn
-                        <span className="ml-auto text-sm font-normal text-[#8DA0BF]">{learnSkills.length}</span>
-                    </h2>
-                    {learnSkills.length > 0 ? (
-                        <div className="space-y-3">
-                            {learnSkills.map(skill => (
-                                <SkillCard
-                                    key={skill.id}
-                                    skill={skill}
-                                    mode="learn"
-                                    sessionsCount={Number(learnSessionCountByUserSkillId[skill.id] || 0)}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-sm italic text-[#8DA0BF]">No learning goals listed yet.</p>
-                    )}
-                </div>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
-                <h2 className="mb-4 text-lg font-bold text-[#DCE7F5]">🕒 Availability</h2>
-                {availabilitySlots.length > 0 ? (
-                    <div className="space-y-2">
-                        {availabilitySlots.map((slot) => (
-                            <div key={`${slot.id || slot.dayOfWeek}-${slot.startTime}-${slot.endTime}`} className="flex items-center justify-between rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]">
-                                <span>{dayLabelMap[String(slot.dayOfWeek || '').toUpperCase()] || slot.dayOfWeek}</span>
-                                <span className="text-[#8DA0BF]">{formatAvailabilityTime(slot.startTime)} - {formatAvailabilityTime(slot.endTime)}</span>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-sm text-[#8DA0BF]">No availability added yet.</div>
-                )}
-            </div>
-
-            {/* ───── Reviews ───── */}
-            <div className="rounded-xl border border-white/10 bg-[#111721] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
-                <h2 className="mb-4 text-lg font-bold text-[#DCE7F5]">Reviews</h2>
-                <div className="mb-4 rounded-lg border border-white/10 bg-[#0E1620] px-4 py-3">
-                    <p className="text-sm font-semibold text-[#DCE7F5]">⭐ {Number(rating.avgRating || 0).toFixed(1)} average rating</p>
-                    <p className="text-xs text-[#8DA0BF]">{rating.reviewCount || 0} total review{(rating.reviewCount || 0) === 1 ? '' : 's'}</p>
-                </div>
-
-                {detailedReviews.length > 0 ? (
-                    <div className="space-y-4">
-                        {detailedReviews.map((review) => (
-                            <div key={review.id} className="rounded-lg border border-white/10 bg-[#0E1620] p-4">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                        <p className="text-sm font-semibold text-[#DCE7F5]">{review.reviewerName}</p>
-                                        <p className="text-xs text-[#8DA0BF]">{review.reviewDate}</p>
-                                    </div>
-                                    <div className="flex items-center gap-0.5">
-                                        {[1, 2, 3, 4, 5].map((s) => (
-                                            <Star
-                                                key={s}
-                                                className={`h-4 w-4 ${s <= review.ratingValue ? 'text-yellow-400 fill-yellow-400' : 'text-[#3E4D63]'}`}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="mt-3 space-y-1 text-sm text-[#8DA0BF]">
-                                    <p><span className="font-medium text-[#DCE7F5]">Learned:</span> {review.skillLearned}</p>
-                                    <p><span className="font-medium text-[#DCE7F5]">Session:</span> {review.sessionType}</p>
-                                </div>
-
-                                <p className="mt-3 text-sm italic text-[#8DA0BF]">{review.commentText ? `"${review.commentText}"` : 'No comment provided.'}</p>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-sm text-[#8DA0BF]">No reviews yet.</p>
-                )}
-            </div>
+            <PublicProfileReviewsSection rating={rating} detailedReviews={detailedReviews} />
         </div>
     );
 };

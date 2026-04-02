@@ -1,31 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getMyRequests, updateRequestStatus, getMyClasses } from '../services/swap.service';
-import { blockUser, getMyBlockedUsers, submitReport, unblockUser } from '../services/safety.service';
-import { getPublicProfileByUsername } from '../services/profile.service';
-import { getCalendarEvents } from '../services/meta.service';
+import { getMyRequests, updateRequestStatus, getMyClasses, blockUser, getMyBlockedUsers, submitReport, unblockUser, getPublicProfileByUsername, getCalendarEvents } from '../services/swapsPage.service';
 import { Button } from '../components/ui/Button';
-import ConfirmDialog from '../components/ui/ConfirmDialog';
-import InputDialog from '../components/ui/InputDialog';
 import { ListItemSkeleton } from '../components/ui/Skeleton';
+import { StatusBadge, SwapTimeline, SwapsHeaderStats, SwapsModals, SwapsControlPanel } from '../components/swaps';
 import { toast } from 'react-hot-toast';
-import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRightLeft, Clock, CheckCircle, XCircle, Ban, MessageSquare, Plus, Inbox, Send, Users, Play, X, ExternalLink, Shield, RotateCcw, MoreVertical, MessageCircle, User, Repeat2, CalendarDays } from 'lucide-react';
+import { ArrowRightLeft, CheckCircle, XCircle, Ban, MessageSquare, Inbox, Send, Users, MoreVertical, MessageCircle, User, Repeat2, CalendarDays, Shield } from 'lucide-react';
 
 const reportReasons = ['SPAM', 'HARASSMENT', 'SCAM_OR_FRAUD', 'INAPPROPRIATE_CONTENT', 'IMPERSONATION', 'OTHER'];
 
 const statusConfig = {
-    PENDING: { label: 'Pending', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' },
-    ACCEPTED: { label: 'Accepted', color: 'bg-green-500/10 text-green-400 border-green-500/30' },
-    REJECTED: { label: 'Rejected', color: 'bg-red-500/10 text-red-400 border-red-500/30' },
-    COMPLETED: { label: 'Completed', color: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
-    CANCELLED: { label: 'Cancelled', color: 'bg-gray-500/10 text-gray-400 border-gray-500/30' },
+    PENDING: { label: 'Pending' },
+    ACCEPTED: { label: 'Accepted' },
+    REJECTED: { label: 'Rejected' },
+    COMPLETED: { label: 'Completed' },
+    CANCELLED: { label: 'Cancelled' }
 };
-
-const SWAP_TIMELINE_STEPS = ['Request', 'Accepted', 'Classroom', 'Completed'];
 
 const timeAgo = (dateStr) => {
     const now = new Date();
@@ -40,52 +33,6 @@ const timeAgo = (dateStr) => {
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
-
-const StatusBadge = ({ status }) => {
-    const cfg = statusConfig[status] || statusConfig.PENDING;
-    return (
-        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${cfg.color}`}>
-            {cfg.label}
-        </span>
-    );
-};
-
-const SwapTimeline = ({ activeStep }) => (
-    <div className="mt-4 rounded-xl border border-white/10 bg-[#0E1620] px-3 py-3">
-        <div className="flex items-center gap-2 overflow-x-auto">
-            {SWAP_TIMELINE_STEPS.map((step, index) => {
-                const isCompleted = index <= activeStep;
-                const nextCompleted = index < SWAP_TIMELINE_STEPS.length - 1 && index + 1 <= activeStep;
-                return (
-                    <div key={step} className="flex items-center gap-2">
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                            <span
-                                className={`h-2 w-2 rounded-full ${isCompleted ? 'bg-blue-400' : 'bg-gray-500'}`}
-                            />
-                            <span className={`text-xs ${isCompleted ? 'text-[#DCE7F5]' : 'text-[#8DA0BF]'}`}>
-                                {step}
-                            </span>
-                        </div>
-                        {index < SWAP_TIMELINE_STEPS.length - 1 && (
-                            <span className={`h-0.5 w-8 rounded ${nextCompleted ? 'bg-blue-400/80' : 'bg-gray-700'}`} />
-                        )}
-                    </div>
-                );
-            })}
-        </div>
-    </div>
-);
-
-const EmptyState = ({ icon: Icon, title, description, action }) => (
-    <div className="text-center py-16">
-        <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-[#0E1620]">
-            <Icon className="h-8 w-8 text-[#8DA0BF]" />
-        </div>
-        <h3 className="font-semibold text-[#DCE7F5]">{title}</h3>
-        <p className="mx-auto mt-1 max-w-sm text-sm text-[#8DA0BF]">{description}</p>
-        {action && <div className="mt-4">{action}</div>}
-    </div>
-);
 
 const Swaps = () => {
     const { user } = useAuth();
@@ -297,6 +244,46 @@ const Swaps = () => {
     const openBlockConfirm = (userId, username) => {
         setBlockConfirm({ open: true, userId, username });
         setActionMenuKey(null);
+    };
+
+    const handleSubmitReport = async () => {
+        if (!reportModal.userId) return;
+        setSafetyBusy(true);
+        try {
+            await submitReport({
+                reportedUserId: reportModal.userId,
+                reason: reportReason,
+                description: reportDescription.trim() || undefined
+            });
+            toast.success('Report submitted');
+            setReportDescription('');
+            setReportModal({ open: false, userId: null, username: '' });
+        } catch (error) {
+            toast.error(error?.response?.data?.message || 'Failed to submit report');
+        } finally {
+            setSafetyBusy(false);
+        }
+    };
+
+    const handleTabChange = (tabKey) => {
+        setActiveTab(tabKey);
+        setStatusFilter(tabKey === 'classes' ? 'ONGOING' : 'ALL');
+        setBlockMenuOpen(false);
+        setActionMenuKey(null);
+    };
+
+    const handleUnblockUser = async (blockedUserId, handle) => {
+        if (!blockedUserId) return;
+        setSafetyBusy(true);
+        try {
+            await unblockUser(blockedUserId);
+            toast.success(`Unblocked ${handle}`);
+            queryClient.invalidateQueries({ queryKey: ['swaps', 'blocked-users'] });
+        } catch (error) {
+            toast.error(error?.response?.data?.message || 'Failed to unblock user');
+        } finally {
+            setSafetyBusy(false);
+        }
     };
 
     const handleConfirmBlock = async () => {
@@ -763,346 +750,56 @@ const Swaps = () => {
 
     return (
         <div className="page-shell">
-            {/* Video Preview Modal */}
-            {videoPreview && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setVideoPreview(null)}>
-                    <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)]" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between border-b border-white/10 p-4">
-                            <h3 className="font-semibold text-[#DCE7F5]">{videoPreview.skillName} - Preview</h3>
-                            <button onClick={() => setVideoPreview(null)} className="rounded-full p-1 transition-colors hover:bg-[#151D27]">
-                                <X className="h-5 w-5 text-[#8DA0BF]" />
-                            </button>
-                        </div>
-                        <div className="p-4 space-y-4">
-                            {videoPreview.videoUrl ? (
-                                <div>
-                                    <p className="mb-2 text-xs font-medium text-[#8DA0BF]">Demo Video</p>
-                                    <video src={videoPreview.videoUrl} controls className="w-full rounded-lg border border-white/10" />
-                                </div>
-                            ) : (
-                                <div className="rounded-lg bg-[#0E1620] py-8 text-center">
-                                    <Play className="mx-auto mb-2 h-10 w-10 text-[#6F83A3]" />
-                                    <p className="text-sm text-[#8DA0BF]">No demo video available</p>
-                                </div>
-                            )}
-                            {videoPreview.proofUrl && (
-                                <a
-                                    href={videoPreview.proofUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2 text-sm font-medium text-[#7BB2FF] transition-colors hover:text-[#9fc8ff]"
-                                >
-                                    <ExternalLink className="h-4 w-4" />
-                                    View Proof / Portfolio Link
-                                </a>
-                            )}
-                            {!videoPreview.videoUrl && !videoPreview.proofUrl && (
-                                <p className="text-center text-sm text-[#8DA0BF]">No preview content available for this skill.</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {reportModal.open && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setReportModal({ open: false, userId: null, username: '' })}>
-                    <div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#111721] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.55)]" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-lg font-semibold text-[#DCE7F5]">Report @{reportModal.username}</h3>
-                        <p className="mt-1 text-sm text-[#8DA0BF]">This report is sent to admins for review.</p>
-                        <div className="mt-4 space-y-3">
-                            <select
-                                value={reportReason}
-                                onChange={(e) => setReportReason(e.target.value)}
-                                className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]"
-                            >
-                                {reportReasons.map((reason) => (
-                                    <option key={reason} value={reason}>{reason}</option>
-                                ))}
-                            </select>
-                            <textarea
-                                value={reportDescription}
-                                onChange={(e) => setReportDescription(e.target.value)}
-                                placeholder="Optional details"
-                                rows={4}
-                                className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
-                            />
-                        </div>
-                        <div className="mt-4 flex justify-end gap-2">
-                            <Button size="sm" variant="ghost" onClick={() => setReportModal({ open: false, userId: null, username: '' })} disabled={safetyBusy}>Cancel</Button>
-                            <Button
-                                size="sm"
-                                variant="danger"
-                                disabled={safetyBusy || !reportModal.userId}
-                                onClick={async () => {
-                                    if (!reportModal.userId) return;
-                                    setSafetyBusy(true);
-                                    try {
-                                        await submitReport({
-                                            reportedUserId: reportModal.userId,
-                                            reason: reportReason,
-                                            description: reportDescription.trim() || undefined
-                                        });
-                                        toast.success('Report submitted');
-                                        setReportDescription('');
-                                        setReportModal({ open: false, userId: null, username: '' });
-                                    } catch (error) {
-                                        toast.error(error?.response?.data?.message || 'Failed to submit report');
-                                    } finally {
-                                        setSafetyBusy(false);
-                                    }
-                                }}
-                            >
-                                Submit Report
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            <ConfirmDialog
-                open={confirmDialog.open}
-                title={confirmDialog.title}
-                message={confirmDialog.message}
-                confirmLabel={
-                    confirmDialog.action === 'ACCEPTED' ? 'Accept' : 'Reject'
-                }
-                variant={confirmDialog.action === 'ACCEPTED' ? 'primary' : 'danger'}
-                onConfirm={handleConfirmAction}
-                onCancel={() => setConfirmDialog({ open: false, requestId: null, action: '', title: '', message: '' })}
+            <SwapsModals
+                videoPreview={videoPreview}
+                setVideoPreview={setVideoPreview}
+                reportModal={reportModal}
+                setReportModal={setReportModal}
+                reportReason={reportReason}
+                setReportReason={setReportReason}
+                reportReasons={reportReasons}
+                reportDescription={reportDescription}
+                setReportDescription={setReportDescription}
+                safetyBusy={safetyBusy}
+                onSubmitReport={handleSubmitReport}
+                confirmDialog={confirmDialog}
+                setConfirmDialog={setConfirmDialog}
+                handleConfirmAction={handleConfirmAction}
+                blockConfirm={blockConfirm}
+                setBlockConfirm={setBlockConfirm}
+                handleConfirmBlock={handleConfirmBlock}
+                cancelDialog={cancelDialog}
+                closeCancelDialog={closeCancelDialog}
+                handleCancelWithReason={handleCancelWithReason}
             />
 
-            <ConfirmDialog
-                open={blockConfirm.open}
-                title="Block this user?"
-                message="You will no longer receive swap requests or messages from this user."
-                confirmLabel="Confirm Block"
-                variant="danger"
-                confirmDisabled={safetyBusy}
-                onConfirm={handleConfirmBlock}
-                onCancel={() => setBlockConfirm({ open: false, userId: null, username: '' })}
+            <SwapsHeaderStats
+                navigate={navigate}
+                activeSwapsCount={activeSwapsCount}
+                pendingRequestsCount={pendingRequestsCount}
+                completedSwapsCount={completedSwapsCount}
             />
 
-            <InputDialog
-                open={cancelDialog.open}
-                title={`Cancel request to @${cancelDialog.targetUsername}`}
-                placeholder="Enter cancellation reason (min 5 characters)"
-                submitLabel="Cancel Request"
-                onSubmit={handleCancelWithReason}
-                onCancel={closeCancelDialog}
+            <SwapsControlPanel
+                tabs={tabs}
+                activeTab={activeTab}
+                onTabChange={handleTabChange}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+                activeClasses={activeClasses}
+                receivedRequests={receivedRequests}
+                sentRequests={sentRequests}
+                statusConfig={statusConfig}
+                blockedUsersCount={blockedUsersCount}
+                blockMenuOpen={blockMenuOpen}
+                setBlockMenuOpen={setBlockMenuOpen}
+                loadingBlockedUsers={loadingBlockedUsers}
+                blockedUsers={blockedUsers}
+                refetchBlockedUsers={refetchBlockedUsers}
+                safetyBusy={safetyBusy}
+                onUnblock={handleUnblockUser}
+                onLearnMore={() => toast('Use the actions menu on swap cards to block users when needed.')}
             />
-
-            {/* Page header */}
-            <div className="flex flex-wrap justify-between items-start gap-4">
-                <div>
-                    <h1 className="page-title">My Swaps</h1>
-                    <p className="mt-0.5 text-sm text-[#8DA0BF]">Manage your skill swap requests and classrooms</p>
-                </div>
-                <Button onClick={() => navigate('/swaps/new')} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    New Request
-                </Button>
-            </div>
-
-            <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
-                <article className="rounded-xl border border-white/10 bg-[#0F172A] p-5">
-                    <div className="flex items-center gap-3">
-                        <div className="rounded-lg border border-white/10 bg-[#111721] p-2">
-                            <Repeat2 className="h-4 w-4 text-[#9FC8FF]" />
-                        </div>
-                        <p className="text-sm text-gray-400">Active Swaps</p>
-                    </div>
-                    <p className="mt-3 text-3xl font-semibold text-white">{activeSwapsCount}</p>
-                </article>
-
-                <article className="rounded-xl border border-white/10 bg-[#0F172A] p-5">
-                    <div className="flex items-center gap-3">
-                        <div className="rounded-lg border border-white/10 bg-[#111721] p-2">
-                            <Clock className="h-4 w-4 text-yellow-400" />
-                        </div>
-                        <p className="text-sm text-gray-400">Pending Requests</p>
-                    </div>
-                    <p className="mt-3 text-3xl font-semibold text-white">{pendingRequestsCount}</p>
-                </article>
-
-                <article className="rounded-xl border border-white/10 bg-[#0F172A] p-5">
-                    <div className="flex items-center gap-3">
-                        <div className="rounded-lg border border-white/10 bg-[#111721] p-2">
-                            <CheckCircle className="h-4 w-4 text-blue-400" />
-                        </div>
-                        <p className="text-sm text-gray-400">Completed Swaps</p>
-                    </div>
-                    <p className="mt-3 text-3xl font-semibold text-white">{completedSwapsCount}</p>
-                </article>
-            </section>
-
-            <div className="section-card relative p-0! overflow-visible">
-                {/* Tabs */}
-                <div className="flex border-b border-white/10 px-2 sm:px-4">
-                    {tabs.map(tab => (
-                        <button
-                            key={tab.key}
-                            className={clsx(
-                                'flex items-center gap-2 px-4 py-3 font-medium text-sm focus:outline-none transition-colors relative',
-                                activeTab === tab.key
-                                    ? 'border-b-2 border-[#0A4D9F] text-[#DCE7F5]'
-                                    : 'text-[#8DA0BF] hover:text-[#DCE7F5]'
-                            )}
-                            onClick={() => {
-                                setActiveTab(tab.key);
-                                setStatusFilter(tab.key === 'classes' ? 'ONGOING' : 'ALL');
-                                setBlockMenuOpen(false);
-                                setActionMenuKey(null);
-                            }}
-                        >
-                            <tab.icon className="h-4 w-4" />
-                            {tab.label}
-                            {tab.badge > 0 && (
-                                <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-[#0A4D9F] px-1.5 text-xs font-bold text-white">
-                                    {tab.badge}
-                                </span>
-                            )}
-                        </button>
-                    ))}
-
-                    <div className="relative ml-auto self-center pr-1">
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 rounded-lg border border-white/10 bg-[#0E1620] text-[#8DA0BF] hover:text-[#DCE7F5]"
-                            onClick={() => setBlockMenuOpen((prev) => !prev)}
-                        >
-                            <Shield className="mr-1.5 h-3.5 w-3.5" />
-                            Blocked Users
-                            {blockedUsersCount > 0 && (
-                                <span className="ml-2 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-[#0A4D9F] px-1.5 text-[10px] font-bold text-white">
-                                    {blockedUsersCount > 99 ? '99+' : blockedUsersCount}
-                                </span>
-                            )}
-                        </Button>
-
-                        {blockMenuOpen && (
-                            <div className="absolute right-0 top-full z-30 mt-2 w-[24rem] overflow-hidden rounded-xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)]">
-                                <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-                                    <p className="text-sm font-semibold text-[#DCE7F5]">Blocked Users</p>
-                                    <button
-                                        type="button"
-                                        className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-[#8DA0BF] hover:text-[#DCE7F5]"
-                                        onClick={() => refetchBlockedUsers()}
-                                    >
-                                        <RotateCcw className="h-3 w-3" />
-                                        Refresh
-                                    </button>
-                                </div>
-
-                                <div className="max-h-80 space-y-3 overflow-y-auto p-3">
-                                    {loadingBlockedUsers && (
-                                        <p className="text-sm text-[#8DA0BF]">Loading blocked users...</p>
-                                    )}
-
-                                    {!loadingBlockedUsers && blockedUsersCount === 0 && (
-                                        <div className="rounded-xl border border-white/10 bg-[#0F172A] p-6 text-center">
-                                            <h4 className="text-lg font-medium text-white">No blocked users</h4>
-                                            <p className="mt-2 text-sm text-gray-400">Users you block will appear here.</p>
-                                            <button
-                                                type="button"
-                                                className="mt-4 rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-xs text-[#DCE7F5] transition hover:bg-[#151D27]"
-                                                onClick={() => toast('Use the actions menu on swap cards to block users when needed.')}
-                                            >
-                                                Learn More
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {!loadingBlockedUsers && blockedUsers.map((entry) => {
-                                        const blocked = entry?.blockedUser;
-                                        const blockedUserId = blocked?.userId || entry?.blockedUserId;
-                                        const displayName = blocked?.profile?.fullName || blocked?.username || `User ${blockedUserId}`;
-                                        const handle = blocked?.username ? `@${blocked.username}` : `#${blockedUserId}`;
-                                        const blockedAt = entry?.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown';
-                                        const reason = entry?.reason || 'Manual block';
-
-                                        return (
-                                            <div key={entry.id || blockedUserId} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-[#0F172A] p-4">
-                                                <div className="flex min-w-0 items-center gap-3">
-                                                    {blocked?.profile?.avatarUrl ? (
-                                                        <img
-                                                            src={blocked.profile.avatarUrl}
-                                                            alt={displayName}
-                                                            className="h-10 w-10 shrink-0 rounded-full object-cover"
-                                                        />
-                                                    ) : (
-                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0A4D9F]/25 text-sm font-semibold text-[#DCE7F5]">
-                                                            {(blocked?.username || 'U')[0].toUpperCase()}
-                                                        </div>
-                                                    )}
-
-                                                    <div className="min-w-0">
-                                                        <p className="truncate text-sm font-medium text-[#DCE7F5]">{displayName}</p>
-                                                        <p className="truncate text-xs text-[#8DA0BF]">{handle}</p>
-                                                        <p className="mt-1 text-xs text-[#8DA0BF]">Reason: {reason}</p>
-                                                        <p className="text-xs text-[#8DA0BF]">Blocked on: {blockedAt}</p>
-                                                    </div>
-                                                </div>
-
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    className="border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                                                    disabled={safetyBusy || !blockedUserId}
-                                                    onClick={async () => {
-                                                        if (!blockedUserId) return;
-                                                        setSafetyBusy(true);
-                                                        try {
-                                                            await unblockUser(blockedUserId);
-                                                            toast.success(`Unblocked ${handle}`);
-                                                            queryClient.invalidateQueries({ queryKey: ['swaps', 'blocked-users'] });
-                                                        } catch (error) {
-                                                            toast.error(error?.response?.data?.message || 'Failed to unblock user');
-                                                        } finally {
-                                                            setSafetyBusy(false);
-                                                        }
-                                                    }}
-                                                >
-                                                    Unblock
-                                                </Button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Status filter (for request tabs only) */}
-                {(activeTab === 'received' || activeTab === 'sent' || activeTab === 'classes') && (
-                    <div className="p-4 flex gap-2 flex-wrap">
-                        {(activeTab === 'classes'
-                            ? ['ALL', 'ONGOING', 'COMPLETED', 'CANCELLED']
-                            : ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED']
-                        ).map(status => {
-                            const currentItems = activeTab === 'classes'
-                                ? activeClasses
-                                : (activeTab === 'received' ? receivedRequests : sentRequests);
-                            const count = status === 'ALL' ? currentItems.length : currentItems.filter(r => r.status === status).length;
-                            return (
-                                <button
-                                    key={status}
-                                    onClick={() => setStatusFilter(status)}
-                                    className={clsx(
-                                        'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                                        statusFilter === status
-                                            ? 'border-[#0A4D9F] bg-[#0A4D9F] text-white'
-                                            : 'border-white/10 bg-[#0E1620] text-[#8DA0BF] hover:border-white/20 hover:text-[#DCE7F5]'
-                                    )}
-                                >
-                                    {status === 'ALL' ? 'All' : statusConfig[status]?.label || status} ({count})
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
 
             {/* Content */}
             <div>
