@@ -147,14 +147,53 @@ const mapCalendarEventForClient = (event) => {
     };
 };
 
-export const getNotificationsService = async (userId, { page = 1, limit = 20, isRead, type } = {}) => {
+export const getNotificationsService = async (userId, {
+    page = 1,
+    limit = 20,
+    isRead,
+    type,
+    q,
+    fromDate,
+    toDate
+} = {}) => {
     const skip = (page - 1) * limit;
     const normalizedType = String(type || '').trim().toUpperCase();
     const notificationTypeFilter = normalizedType ? { type: normalizedType } : {};
+    const queryText = String(q || '').trim();
+
+    let createdAtFilter = undefined;
+    const createdAt = {};
+    if (fromDate) {
+        const parsedFrom = new Date(`${fromDate}T00:00:00.000Z`);
+        if (!Number.isNaN(parsedFrom.getTime())) {
+            createdAt.gte = parsedFrom;
+        }
+    }
+    if (toDate) {
+        const parsedTo = new Date(`${toDate}T23:59:59.999Z`);
+        if (!Number.isNaN(parsedTo.getTime())) {
+            createdAt.lte = parsedTo;
+        }
+    }
+    if (Object.keys(createdAt).length > 0) {
+        createdAtFilter = createdAt;
+    }
+
+    const textSearchFilter = queryText
+        ? {
+            OR: [
+                { message: { contains: queryText } },
+                { link: { contains: queryText } }
+            ]
+        }
+        : {};
+
     const where = {
         userId,
         ...notificationTypeFilter,
-        ...(isRead !== undefined ? { isRead: isRead === 'true' || isRead === true } : {})
+        ...(isRead !== undefined ? { isRead: isRead === 'true' || isRead === true } : {}),
+        ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
+        ...textSearchFilter
     };
 
     const [notifications, total] = await Promise.all([

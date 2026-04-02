@@ -30,6 +30,7 @@ const Notifications = () => {
     const [unreadCount, setUnreadCount] = useState(0);
     const [activeFilter, setActiveFilter] = useState('ALL');
     const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
     const [fromDate, setFromDate] = useState('');
     const [toDate, setToDate] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
@@ -45,12 +46,27 @@ const Notifications = () => {
         });
     }, [setGlobalUnread]);
 
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            setDebouncedSearchQuery(searchQuery.trim());
+        }, 250);
+
+        return () => clearTimeout(timeout);
+    }, [searchQuery]);
+
     const fetchNotifications = useCallback(async ({ page = 1, reset = false } = {}) => {
         const setLoadingState = reset ? setLoading : setLoadingMore;
         try {
             setLoadingState(true);
             const type = activeFilter === 'ALL' ? undefined : activeFilter;
-            const response = await getNotifications({ page, limit: PAGE_SIZE, type });
+            const response = await getNotifications({
+                page,
+                limit: PAGE_SIZE,
+                type,
+                q: debouncedSearchQuery || undefined,
+                fromDate: fromDate || undefined,
+                toDate: toDate || undefined
+            });
             const items = Array.isArray(response) ? response : response?.data || [];
             const meta = response?.meta || {};
 
@@ -83,7 +99,7 @@ const Notifications = () => {
         } finally {
             setLoadingState(false);
         }
-    }, [activeFilter, setRecentNotifications, syncUnreadCount]);
+    }, [activeFilter, debouncedSearchQuery, fromDate, toDate, setRecentNotifications, syncUnreadCount]);
 
     useEffect(() => {
         fetchNotifications({ page: 1, reset: true });
@@ -167,6 +183,15 @@ const Notifications = () => {
         setToDate('');
     };
 
+    const hasActiveFilters = useMemo(() => {
+        return activeFilter !== 'ALL' || Boolean(searchQuery.trim()) || Boolean(fromDate) || Boolean(toDate);
+    }, [activeFilter, searchQuery, fromDate, toDate]);
+
+    const handleResetAllFilters = () => {
+        setActiveFilter('ALL');
+        handleClearLocalFilters();
+    };
+
     const getDateBucket = (value) => {
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return 'Earlier';
@@ -203,30 +228,8 @@ const Notifications = () => {
         ].filter((group) => group.items.length > 0);
     };
 
-    const filteredNotifications = useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-        const from = fromDate ? new Date(`${fromDate}T00:00:00`) : null;
-        const to = toDate ? new Date(`${toDate}T23:59:59.999`) : null;
-
-        return notifications.filter((notification) => {
-            const createdAt = new Date(notification.createdAt);
-            if (from && (Number.isNaN(createdAt.getTime()) || createdAt < from)) return false;
-            if (to && (Number.isNaN(createdAt.getTime()) || createdAt > to)) return false;
-
-            if (!query) return true;
-
-            const haystack = [
-                notification.message,
-                notification.type,
-                notification.link
-            ].filter(Boolean).join(' ').toLowerCase();
-
-            return haystack.includes(query);
-        });
-    }, [notifications, searchQuery, fromDate, toDate]);
-
-    const unreadNotifications = filteredNotifications.filter((n) => !n.isRead);
-    const readNotifications = filteredNotifications.filter((n) => n.isRead);
+    const unreadNotifications = useMemo(() => notifications.filter((n) => !n.isRead), [notifications]);
+    const readNotifications = useMemo(() => notifications.filter((n) => n.isRead), [notifications]);
     const unreadGrouped = useMemo(() => groupNotificationsByDate(unreadNotifications), [unreadNotifications]);
     const readGrouped = useMemo(() => groupNotificationsByDate(readNotifications), [readNotifications]);
 
@@ -328,10 +331,41 @@ const Notifications = () => {
             </section>
 
             <div className="text-xs text-[#8DA0BF]">
-                Showing {filteredNotifications.length} filtered notifications ({notifications.length} loaded of {totalCount} total)
+                Showing {notifications.length} loaded notifications of {totalCount} matching results.
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
+            {notifications.length === 0 && (
+                <section className="section-card text-center">
+                    <h2 className="text-lg font-semibold text-[#DCE7F5]">
+                        {hasActiveFilters ? 'No notifications match your filters.' : 'You are all caught up.'}
+                    </h2>
+                    <p className="mt-2 text-sm text-[#8DA0BF]">
+                        {hasActiveFilters
+                            ? 'Try broadening your search or removing date/type filters to see more activity.'
+                            : 'Start a new swap or discover partners to generate activity notifications.'}
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                        {hasActiveFilters ? (
+                            <Button size="sm" variant="secondary" onClick={handleResetAllFilters}>
+                                Clear filters
+                            </Button>
+                        ) : (
+                            <Link to="/discover?sort=best-match&rating=4">
+                                <Button size="sm" variant="secondary">Find Partners</Button>
+                            </Link>
+                        )}
+                        <Link to="/swaps">
+                            <Button size="sm" variant="secondary">Open Swaps</Button>
+                        </Link>
+                        <Link to="/settings/notifications">
+                            <Button size="sm" variant="ghost">Notification Settings</Button>
+                        </Link>
+                    </div>
+                </section>
+            )}
+
+            {notifications.length > 0 && (
+                <div className="grid gap-6 lg:grid-cols-2">
                 <section className="section-card overflow-hidden p-0!">
                     <div className="flex items-center justify-between border-b border-white/5 px-4 py-3 sm:px-6">
                         <h2 className="text-base font-semibold text-[#DCE7F5]">Unread</h2>
@@ -427,17 +461,20 @@ const Notifications = () => {
                         ))}
                     </ul>
                 </section>
-            </div>
+                </div>
+            )}
 
-            <div className="flex justify-center">
-                {hasMore ? (
-                    <Button size="sm" variant="secondary" onClick={handleLoadMore} disabled={loadingMore}>
-                        {loadingMore ? 'Loading older notifications...' : 'Load older notifications'}
-                    </Button>
-                ) : (
-                    <p className="text-xs text-[#8DA0BF]">You have reached the end of your notification history.</p>
-                )}
-            </div>
+            {notifications.length > 0 && (
+                <div className="flex justify-center">
+                    {hasMore ? (
+                        <Button size="sm" variant="secondary" onClick={handleLoadMore} disabled={loadingMore}>
+                            {loadingMore ? 'Loading older notifications...' : 'Load older notifications'}
+                        </Button>
+                    ) : (
+                        <p className="text-xs text-[#8DA0BF]">You have reached the end of your notification history.</p>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

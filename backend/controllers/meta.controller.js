@@ -47,7 +47,18 @@ export const getNotifications = async (req, res, next) => {
         const limit = Number.parseInt(req.query.limit, 10) || 20;
         const isRead = req.query.isRead;
         const type = req.query.type;
-        const notifications = await getNotificationsService(userId, { page, limit, isRead, type });
+        const q = req.query.q;
+        const fromDate = req.query.fromDate;
+        const toDate = req.query.toDate;
+        const notifications = await getNotificationsService(userId, {
+            page,
+            limit,
+            isRead,
+            type,
+            q,
+            fromDate,
+            toDate
+        });
         res.json(notifications);
     } catch (error) {
         next(error);

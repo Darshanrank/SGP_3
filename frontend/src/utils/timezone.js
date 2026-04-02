@@ -6,6 +6,52 @@ const getBrowserTimeZone = () => {
     }
 };
 
+const COMMON_TIME_ZONES = [
+    'UTC',
+    'Asia/Kolkata',
+    'Asia/Dubai',
+    'Asia/Singapore',
+    'Europe/London',
+    'Europe/Berlin',
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'Australia/Sydney'
+];
+
+export const getSupportedTimeZones = () => {
+    if (typeof Intl.supportedValuesOf === 'function') {
+        try {
+            const values = Intl.supportedValuesOf('timeZone');
+            if (Array.isArray(values) && values.length > 0) return values;
+        } catch (_) {
+            // Fall back to curated list below.
+        }
+    }
+
+    return COMMON_TIME_ZONES;
+};
+
+export const isValidTimeZone = (value) => {
+    const timeZone = String(value || '').trim();
+    if (!timeZone) return false;
+
+    try {
+        new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());
+        return true;
+    } catch (_) {
+        return false;
+    }
+};
+
+export const normalizeTimeZone = (value, fallback = 'UTC') => {
+    const candidate = String(value || '').trim();
+    if (isValidTimeZone(candidate)) return candidate;
+    if (isValidTimeZone(fallback)) return fallback;
+    return 'UTC';
+};
+
 export const getTimeZoneShortLabel = (referenceDate = new Date(), timeZone) => {
     try {
         const parts = new Intl.DateTimeFormat('en-US', {
@@ -21,13 +67,7 @@ export const getTimeZoneShortLabel = (referenceDate = new Date(), timeZone) => {
 
 const isUsablePartnerTimeZone = (partnerTimeZone) => {
     if (!partnerTimeZone || typeof partnerTimeZone !== 'string') return false;
-
-    try {
-        new Intl.DateTimeFormat('en-US', { timeZone: partnerTimeZone }).format(new Date());
-        return true;
-    } catch (_) {
-        return false;
-    }
+    return isValidTimeZone(partnerTimeZone);
 };
 
 export const formatSessionWithPartnerTime = (sessionDate, partnerTimeZone) => {

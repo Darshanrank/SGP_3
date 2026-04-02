@@ -210,17 +210,32 @@ const Swaps = () => {
         </div>
     );
 
-    const renderTabEmptyState = (title, description) => (
+    const renderTabEmptyState = (title, description, actions = []) => (
         <div className="mx-auto max-w-xl rounded-xl border border-white/10 bg-[#0F172A] p-8 text-center">
             <h3 className="text-lg font-medium text-white">{title}</h3>
             <p className="mt-2 text-sm text-gray-400">{description}</p>
-            <Button
-                size="sm"
-                className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-500"
-                onClick={() => navigate('/discover')}
-            >
-                Discover Skills
-            </Button>
+            {actions.length > 0 && (
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    {actions.map((action) => (
+                        action.to ? (
+                            <Link key={action.label} to={action.to}>
+                                <Button size="sm" variant={action.variant || 'secondary'}>
+                                    {action.label}
+                                </Button>
+                            </Link>
+                        ) : (
+                            <Button
+                                key={action.label}
+                                size="sm"
+                                variant={action.variant || 'secondary'}
+                                onClick={action.onClick}
+                            >
+                                {action.label}
+                            </Button>
+                        )
+                    ))}
+                </div>
+            )}
         </div>
     );
 
@@ -812,7 +827,20 @@ const Swaps = () => {
                                     statusFilter === 'ALL'
                                         ? 'No swaps yet.'
                                         : `No ${String(statusConfig[statusFilter]?.label || statusFilter).toLowerCase()} swaps yet.`,
-                                    'Find users and start a new skill exchange.'
+                                    'Find users and start a new skill exchange.',
+                                    statusFilter === 'ALL'
+                                        ? [
+                                            { label: 'Find Matching Partners', to: '/discover?sort=best-match&rating=4', variant: 'secondary' },
+                                            { label: 'Create Swap Request', to: '/swaps/new', variant: 'secondary' }
+                                        ]
+                                        : [
+                                            {
+                                                label: 'Clear Status Filter',
+                                                onClick: () => setStatusFilter('ALL'),
+                                                variant: 'secondary'
+                                            },
+                                            { label: 'Find Matching Partners', to: '/discover?sort=best-match&rating=4', variant: 'secondary' }
+                                        ]
                                 )
                             ) : (
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -831,7 +859,20 @@ const Swaps = () => {
                                     statusFilter === 'ALL'
                                         ? 'No swaps yet.'
                                         : `No ${String(statusConfig[statusFilter]?.label || statusFilter).toLowerCase()} swaps yet.`,
-                                    'Find users and start a new skill exchange.'
+                                    'Find users and start a new skill exchange.',
+                                    statusFilter === 'ALL'
+                                        ? [
+                                            { label: 'Discover Teachers', to: '/discover?sort=best-match&rating=3', variant: 'secondary' },
+                                            { label: 'Browse by Category', to: '/discover?category=Programming', variant: 'secondary' }
+                                        ]
+                                        : [
+                                            {
+                                                label: 'Clear Status Filter',
+                                                onClick: () => setStatusFilter('ALL'),
+                                                variant: 'secondary'
+                                            },
+                                            { label: 'Discover Teachers', to: '/discover?sort=best-match&rating=3', variant: 'secondary' }
+                                        ]
                                 )
                             ) : (
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -852,12 +893,39 @@ const Swaps = () => {
 
                                 if (filteredClasses.length === 0) {
                                     if (statusFilter === 'COMPLETED') {
-                                        return renderTabEmptyState('No completed classes yet.', 'Completed swap classes will appear here.');
+                                        return renderTabEmptyState(
+                                            'No completed classes yet.',
+                                            'Complete your first active class to build your progress history.',
+                                            [
+                                                { label: 'Open Active Classes', onClick: () => setStatusFilter('ONGOING'), variant: 'secondary' },
+                                                { label: 'Find New Partners', to: '/discover?sort=best-match', variant: 'secondary' }
+                                            ]
+                                        );
                                     }
                                     if (statusFilter === 'CANCELLED') {
-                                        return renderTabEmptyState('No cancelled classes.', 'Cancelled swap classes will appear here.');
+                                        return renderTabEmptyState(
+                                            'No cancelled classes.',
+                                            'Great news - no cancelled classes to review.',
+                                            [
+                                                { label: 'View Active Classes', onClick: () => setStatusFilter('ONGOING'), variant: 'secondary' }
+                                            ]
+                                        );
                                     }
-                                    return renderTabEmptyState('No active classes yet.', 'Accepted swaps and ongoing classes will appear here.');
+                                    return renderTabEmptyState(
+                                        'No active classes yet.',
+                                        'Accept a pending request or start a new one to begin learning.',
+                                        [
+                                            {
+                                                label: 'Review Pending Requests',
+                                                onClick: () => {
+                                                    setActiveTab('received');
+                                                    setStatusFilter('PENDING');
+                                                },
+                                                variant: 'secondary'
+                                            },
+                                            { label: 'Find New Partners', to: '/discover?sort=best-match&rating=4', variant: 'secondary' }
+                                        ]
+                                    );
                                 }
 
                                 return (

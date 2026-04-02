@@ -118,6 +118,31 @@ const normalizePrivacy = (privacy) => ({
     showSocialLinks: typeof privacy?.showSocialLinks === 'boolean' ? privacy.showSocialLinks : true
 });
 
+const isValidIanaTimeZone = (value) => {
+    const timezone = String(value || '').trim();
+    if (!timezone) return false;
+
+    try {
+        new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+        return true;
+    } catch (_) {
+        return false;
+    }
+};
+
+const normalizeTimeZoneOrThrow = (value, fieldPath) => {
+    const timezone = String(value || '').trim();
+    if (!timezone) {
+        throw new ValidationError(`${fieldPath} is required`, 'INVALID_TIMEZONE');
+    }
+
+    if (!isValidIanaTimeZone(timezone)) {
+        throw new ValidationError(`Invalid timezone: ${timezone}`, 'INVALID_TIMEZONE');
+    }
+
+    return timezone;
+};
+
 const buildProfileCompletion = ({ profile, teachSkills, learnSkills, availability }) => {
     const socialLinks = [
         profile?.githubLink,
@@ -211,11 +236,13 @@ const normalizeAvailabilitySlots = (availability = []) => {
 
         if (!startTime || !endTime || !timezone) return;
 
+        const normalizedTimeZone = normalizeTimeZoneOrThrow(timezone, 'availability timezone');
+
         rawDays
             .map((day) => String(day).trim().toUpperCase())
             .filter((day) => VALID_WEEK_DAYS.includes(day))
             .forEach((dayOfWeek) => {
-                normalized.push({ dayOfWeek, startTime, endTime, timezone });
+                normalized.push({ dayOfWeek, startTime, endTime, timezone: normalizedTimeZone });
             });
     });
 
@@ -534,6 +561,9 @@ export const updateProfileService = async (userId, data) => {
     } = data;
 
     const normalizedAvailability = normalizeAvailabilitySlots(availability);
+    const normalizedProfileTimeZone = timezone
+        ? normalizeTimeZoneOrThrow(timezone, 'timezone')
+        : 'UTC';
 
     const normalizedGoals = normalizeGoals(learningGoals);
     const normalizedPrivacy = normalizePrivacy(profilePrivacy);
@@ -588,7 +618,7 @@ export const updateProfileService = async (userId, data) => {
             linkedinLink,
             portfolioLink,
             youtubeLink,
-            timezone,
+            timezone: normalizedProfileTimeZone,
             upcomingSessions,
             emailRemindersEnabled,
             profileCompleted,

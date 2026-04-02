@@ -39,6 +39,7 @@ import {
     ProfilePrivacySection
 } from '../components/profile';
 import { Camera, Trash2 } from 'lucide-react';
+import { getSupportedTimeZones, isValidTimeZone, normalizeTimeZone } from '../utils/timezone';
 
 const Profile = () => {
     const { refreshUser } = useAuth();
@@ -66,6 +67,14 @@ const Profile = () => {
     const [reviewsLoading, setReviewsLoading] = useState(false);
     const [reviewItems, setReviewItems] = useState([]);
     const avatarInputRef = useRef(null);
+    const supportedTimeZones = useMemo(() => getSupportedTimeZones(), []);
+    const browserTimeZone = useMemo(() => {
+        try {
+            return normalizeTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone, 'UTC');
+        } catch (_) {
+            return 'UTC';
+        }
+    }, []);
 
     const [formData, setFormData] = useState({
         firstName: '',
@@ -84,14 +93,14 @@ const Profile = () => {
             showPortfolio: true,
             showSocialLinks: true
         },
-        timezone: 'UTC',
+        timezone: browserTimeZone,
         upcomingSessions: '',
         emailRemindersEnabled: true,
         avatarFile: null,
         avatarUrl: '',
         teachSkills: [emptyTeachSkill()],
         learnSkills: [emptyLearnSkill()],
-        availability: [emptyAvailability('UTC')]
+        availability: [emptyAvailability(browserTimeZone)]
     });
 
     useEffect(() => {
@@ -139,6 +148,7 @@ const Profile = () => {
                 const privacy = profileData.profilePrivacy || {};
 
                 const timezone = profile.timezone || 'UTC';
+                const safeTimeZone = normalizeTimeZone(timezone, browserTimeZone);
                 const { firstName, lastName } = splitFullName(profile.fullName || '');
 
                 setFormData({
@@ -158,7 +168,7 @@ const Profile = () => {
                         showPortfolio: typeof privacy.showPortfolio === 'boolean' ? privacy.showPortfolio : true,
                         showSocialLinks: typeof privacy.showSocialLinks === 'boolean' ? privacy.showSocialLinks : true
                     },
-                    timezone,
+                    timezone: safeTimeZone,
                     upcomingSessions: profile.upcomingSessions || '',
                     emailRemindersEnabled: profile.emailRemindersEnabled ?? true,
                     avatarFile: null,
@@ -166,8 +176,8 @@ const Profile = () => {
                     teachSkills: teachSkills.length ? teachSkills : [emptyTeachSkill()],
                     learnSkills: learnSkills.length ? learnSkills : [emptyLearnSkill()],
                     availability: profileData.availability?.length
-                        ? groupAvailabilitySlots(profileData.availability, timezone)
-                        : [emptyAvailability(timezone)]
+                        ? groupAvailabilitySlots(profileData.availability, safeTimeZone)
+                        : [emptyAvailability(safeTimeZone)]
                 });
                 if (!isSetupMode && profile.profileCompleted) setStep(1);
             } catch (error) {
@@ -178,7 +188,7 @@ const Profile = () => {
         };
 
         loadProfile();
-    }, [isSetupMode]);
+    }, [isSetupMode, browserTimeZone]);
 
     const updateField = (key, value) => {
         const normalizedValue = key === 'username' ? String(value).trim().toLowerCase() : value;
@@ -213,6 +223,9 @@ const Profile = () => {
             case 'teachingStyles':
                 if (!Array.isArray(value) || value.length < 1) error = 'Please select at least one teaching style.';
                 break;
+            case 'timezone':
+                if (!isValidTimeZone(value)) error = 'Please choose a valid timezone (IANA format).';
+                break;
             case 'githubLink':
             case 'linkedinLink':
             case 'portfolioLink':
@@ -233,12 +246,13 @@ const Profile = () => {
         errs.username = validateField('username', formData.username);
         errs.bio = validateField('bio', formData.bio);
         errs.teachingStyles = validateField('teachingStyles', formData.teachingStyles);
+        errs.timezone = validateField('timezone', formData.timezone);
         errs.githubLink = validateField('githubLink', formData.githubLink);
         errs.linkedinLink = validateField('linkedinLink', formData.linkedinLink);
         errs.portfolioLink = validateField('portfolioLink', formData.portfolioLink);
         errs.youtubeLink = validateField('youtubeLink', formData.youtubeLink);
         // Mark all as touched to show errors
-        setTouched({ firstName: true, lastName: true, username: true, bio: true, teachingStyles: true, githubLink: true, linkedinLink: true, portfolioLink: true, youtubeLink: true });
+        setTouched({ firstName: true, lastName: true, username: true, bio: true, teachingStyles: true, timezone: true, githubLink: true, linkedinLink: true, portfolioLink: true, youtubeLink: true });
         return Object.values(errs).some(Boolean);
     };
 
@@ -967,7 +981,22 @@ const Profile = () => {
                             <p className="text-sm text-gray-600">Let others know when you are open to swap sessions.</p>
                         </div>
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                            <input className="border rounded px-3 py-2" placeholder="Timezone (e.g. Asia/Kolkata)" value={formData.timezone} onChange={(e) => updateField('timezone', e.target.value)} />
+                            <div>
+                                <input
+                                    className={`w-full border rounded px-3 py-2 ${touched.timezone && fieldErrors.timezone ? 'border-red-500/50' : ''}`}
+                                    list="profile-timezone-options"
+                                    placeholder="Timezone (e.g. Asia/Kolkata)"
+                                    value={formData.timezone}
+                                    onChange={(e) => updateField('timezone', e.target.value)}
+                                    onBlur={() => markTouched('timezone')}
+                                />
+                                <datalist id="profile-timezone-options">
+                                    {supportedTimeZones.map((tz) => (
+                                        <option key={tz} value={tz} />
+                                    ))}
+                                </datalist>
+                                {touched.timezone && fieldErrors.timezone && <p className="text-xs text-red-400 mt-1">{fieldErrors.timezone}</p>}
+                            </div>
                             <label className="flex items-center gap-2 text-sm text-gray-700">
                                 <input type="checkbox" checked={formData.emailRemindersEnabled} onChange={(e) => updateField('emailRemindersEnabled', e.target.checked)} />
                                 Enable email reminders
@@ -1038,7 +1067,12 @@ const Profile = () => {
                                         <div className="grid md:grid-cols-3 gap-2">
                                             <input type="time" className="border rounded px-2 py-2" value={slot.startTime} onChange={(e) => updateArrayItem('availability', index, 'startTime', e.target.value)} />
                                             <input type="time" className="border rounded px-2 py-2" value={slot.endTime} onChange={(e) => updateArrayItem('availability', index, 'endTime', e.target.value)} />
-                                            <input className="border rounded px-2 py-2" value={slot.timezone} onChange={(e) => updateArrayItem('availability', index, 'timezone', e.target.value)} />
+                                            <input
+                                                className="border rounded px-2 py-2"
+                                                list="profile-timezone-options"
+                                                value={slot.timezone}
+                                                onChange={(e) => updateArrayItem('availability', index, 'timezone', e.target.value)}
+                                            />
                                         </div>
                                     </div>
                                 ))}

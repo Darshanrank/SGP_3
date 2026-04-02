@@ -71,6 +71,33 @@ const INITIAL_FILTERS = {
     sort: 'best-match'
 };
 
+const parseFiltersFromSearchParams = (searchParams) => {
+    const read = (key) => String(searchParams.get(key) || '').trim();
+    const daysRaw = read('days');
+    const parsedDays = daysRaw
+        ? daysRaw
+            .split(',')
+            .map((day) => day.trim().toUpperCase())
+            .filter((day) => DAY_OPTIONS.some((option) => option.key === day))
+        : [];
+
+    const level = read('level');
+    const language = read('language');
+    const rating = read('rating');
+    const sort = read('sort');
+
+    return {
+        ...INITIAL_FILTERS,
+        skill: read('skill'),
+        category: read('category'),
+        level: SKILL_LEVEL_OPTIONS.some((option) => option.value === level) ? level : '',
+        language: language && LANGUAGE_OPTIONS.includes(language) ? language : '',
+        rating: RATING_OPTIONS.some((option) => option.value === rating) ? rating : '',
+        availableDays: parsedDays,
+        sort: SORT_OPTIONS.some((option) => option.value === sort) ? sort : INITIAL_FILTERS.sort
+    };
+};
+
 const DiscoverSkillsPage = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -154,19 +181,28 @@ const DiscoverSkillsPage = () => {
     }, [filters]);
 
     useEffect(() => {
-        const nextSkill = String(searchParams.get('skill') || '').trim();
-        const nextCategory = String(searchParams.get('category') || '').trim();
+        const nextFilters = parseFiltersFromSearchParams(searchParams);
+        const hasPrefilledFilters =
+            nextFilters.skill ||
+            nextFilters.category ||
+            nextFilters.level ||
+            nextFilters.language ||
+            nextFilters.rating ||
+            nextFilters.availableDays.length > 0 ||
+            nextFilters.sort !== INITIAL_FILTERS.sort;
 
-        if (!nextSkill && !nextCategory) return;
+        if (!hasPrefilledFilters) return;
 
-        const nextFilters = {
-            ...INITIAL_FILTERS,
-            skill: nextSkill,
-            category: nextCategory
-        };
-
-        setFilters((prev) => (prev.skill === nextSkill && prev.category === nextCategory ? prev : nextFilters));
-        setAppliedFilters((prev) => (prev.skill === nextSkill && prev.category === nextCategory ? prev : nextFilters));
+        setFilters((prev) => {
+            const prevSerialized = JSON.stringify(prev);
+            const nextSerialized = JSON.stringify(nextFilters);
+            return prevSerialized === nextSerialized ? prev : nextFilters;
+        });
+        setAppliedFilters((prev) => {
+            const prevSerialized = JSON.stringify(prev);
+            const nextSerialized = JSON.stringify(nextFilters);
+            return prevSerialized === nextSerialized ? prev : nextFilters;
+        });
         setPage(1);
     }, [searchParams]);
 

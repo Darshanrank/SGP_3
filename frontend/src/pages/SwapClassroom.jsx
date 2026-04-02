@@ -72,6 +72,14 @@ import {
 
 const WhiteboardModal = lazy(() => import('../components/classroom/WhiteboardModal'));
 
+const safeJsonClone = (value, fallback) => {
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+        return fallback;
+    }
+};
+
 const sanitizeWhiteboardScene = (scene) => {
     if (!scene || typeof scene !== 'object') {
         return {
@@ -81,8 +89,9 @@ const sanitizeWhiteboardScene = (scene) => {
         };
     }
 
-    const safeElements = Array.isArray(scene.elements) ? scene.elements : [];
-    const safeFiles = scene.files && typeof scene.files === 'object' ? scene.files : {};
+    const safeElements = Array.isArray(scene.elements)
+        ? safeJsonClone(scene.elements, [])
+        : [];
     const appState = scene.appState && typeof scene.appState === 'object' ? scene.appState : {};
 
     // Only keep serializable, stable app state fields.
@@ -96,7 +105,8 @@ const sanitizeWhiteboardScene = (scene) => {
     return {
         elements: safeElements,
         appState: safeAppState,
-        files: safeFiles
+        // Skip files to avoid sending large/non-serializable payloads that can crash scene hydration.
+        files: {}
     };
 };
 
@@ -743,10 +753,17 @@ const SwapClassroom = () => {
             if (!excalidrawApiRef.current) return;
 
             isApplyingRemoteWhiteboardRef.current = true;
-            excalidrawApiRef.current.updateScene(safeScene);
-            requestAnimationFrame(() => {
-                isApplyingRemoteWhiteboardRef.current = false;
-            });
+            try {
+                excalidrawApiRef.current.updateScene(safeScene);
+            } catch (_) {
+                try {
+                    excalidrawApiRef.current.updateScene({ elements: [], appState: {}, files: {} });
+                } catch {}
+            } finally {
+                requestAnimationFrame(() => {
+                    isApplyingRemoteWhiteboardRef.current = false;
+                });
+            }
         };
 
         socket.on('receive_message', handleNewMessage);
@@ -1651,7 +1668,7 @@ const SwapClassroom = () => {
                         icon={StickyNote}
                         iconClass="text-purple-400"
                     >
-                        <div className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900 p-5 transition hover:border-blue-500">
+                        <div className="flex items-center justify-between p-1">
                             <div>
                                 <p className="text-base font-semibold text-white">Shared Whiteboard</p>
                                 <p className="mt-1 text-sm text-gray-400">Draw diagrams, explain concepts, and sketch ideas together.</p>

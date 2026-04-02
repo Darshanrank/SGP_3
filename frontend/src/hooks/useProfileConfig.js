@@ -1,3 +1,5 @@
+import { normalizeTimeZone } from '../utils/timezone';
+
 const emptyTeachSkill = () => ({
     id: null,
     skillId: null,
@@ -47,7 +49,7 @@ const emptyAvailability = (timezone = 'UTC') => ({
     days: ['MONDAY'],
     startTime: '09:00',
     endTime: '10:00',
-    timezone
+    timezone: normalizeTimeZone(timezone, 'UTC')
 });
 
 const groupAvailabilitySlots = (availability = [], fallbackTimezone = 'UTC') => {
@@ -58,7 +60,7 @@ const groupAvailabilitySlots = (availability = [], fallbackTimezone = 'UTC') => 
     availability.forEach((slot) => {
         const startTime = slot?.startTime;
         const endTime = slot?.endTime;
-        const timezone = slot?.timezone || fallbackTimezone;
+        const timezone = normalizeTimeZone(slot?.timezone, fallbackTimezone);
         const days = Array.isArray(slot?.days) ? slot.days : slot?.dayOfWeek ? [slot.dayOfWeek] : [];
 
         if (!startTime || !endTime || !timezone) return;
@@ -85,7 +87,7 @@ const flattenAvailabilitySlots = (slots = [], fallbackTimezone = 'UTC') => {
 
     const flattened = [];
     slots.forEach((slot) => {
-        const timezone = slot?.timezone || fallbackTimezone;
+        const timezone = normalizeTimeZone(slot?.timezone, fallbackTimezone);
         const startTime = slot?.startTime;
         const endTime = slot?.endTime;
         const days = Array.isArray(slot?.days) ? slot.days : slot?.dayOfWeek ? [slot.dayOfWeek] : [];

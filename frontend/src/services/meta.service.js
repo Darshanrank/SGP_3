@@ -1,10 +1,13 @@
 // src/services/meta.service.js
 import api from './api';
 
-export const getNotifications = async ({ page = 1, limit = 20, isRead, type } = {}) => {
+export const getNotifications = async ({ page = 1, limit = 20, isRead, type, q, fromDate, toDate } = {}) => {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (isRead !== undefined && isRead !== null) params.append('isRead', String(isRead));
     if (type) params.append('type', String(type));
+    if (q) params.append('q', String(q));
+    if (fromDate) params.append('fromDate', String(fromDate));
+    if (toDate) params.append('toDate', String(toDate));
     const response = await api.get(`/meta/notifications?${params.toString()}`);
     return response.data;
 };

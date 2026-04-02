@@ -19,6 +19,7 @@ import blockRoute from './routes/block.routes.js'
 import reportRoute from './routes/report.routes.js'
 import statsRoute from './routes/stats.routes.js'
 import cookieParser from 'cookie-parser';
+import fs from 'fs/promises';
 import path from 'path';
 import { verifyAccessToken } from './utils/jwt.js';
 import prisma from './prisma/client.js';
@@ -28,6 +29,9 @@ import { startClassReminderScheduler } from './services/classReminder.service.js
 const app = express();
 const server = createServer(app);
 const whiteboardSceneByClassId = new Map();
+const WHITEBOARD_CACHE_DIR = path.resolve('uploads', 'whiteboard-scenes');
+const WHITEBOARD_CACHE_MAX_ENTRIES = 300;
+const WHITEBOARD_CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
 const frontendOrigin = conf.FRONTEND_URL || 'http://localhost:5173';
 const io = new Server(server, {
     cors: {
@@ -84,13 +88,22 @@ const getRoomUserIds = async (room, ioInstance) => {
     )];
 };
 
+const safeJsonClone = (value, fallback) => {
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+        return fallback;
+    }
+};
+
 const sanitizeWhiteboardScene = (scene) => {
     if (!scene || typeof scene !== 'object') {
         return { elements: [], appState: {}, files: {} };
     }
 
-    const elements = Array.isArray(scene.elements) ? scene.elements : [];
-    const files = scene.files && typeof scene.files === 'object' ? scene.files : {};
+    const elements = Array.isArray(scene.elements)
+        ? safeJsonClone(scene.elements, [])
+        : [];
     const appState = scene.appState && typeof scene.appState === 'object' ? scene.appState : {};
 
     return {
@@ -101,8 +114,94 @@ const sanitizeWhiteboardScene = (scene) => {
             gridSize: appState.gridSize,
             zenModeEnabled: appState.zenModeEnabled
         },
-        files
+        // Ignore files to prevent relaying huge or malformed blobs through socket payloads.
+        files: {}
     };
+};
+
+const ensureWhiteboardCacheDir = async () => {
+    try {
+        await fs.mkdir(WHITEBOARD_CACHE_DIR, { recursive: true });
+    } catch (_) {}
+};
+
+const getWhiteboardSceneFilePath = (classId) => {
+    const normalizedClassId = Number(classId);
+    return path.join(WHITEBOARD_CACHE_DIR, `class-${normalizedClassId}.json`);
+};
+
+const pruneWhiteboardCache = () => {
+    const now = Date.now();
+
+    for (const [classId, value] of whiteboardSceneByClassId.entries()) {
+        const lastTouched = new Date(value?.lastAccessAt || value?.updatedAt || 0).getTime();
+        if (!Number.isFinite(lastTouched) || now - lastTouched > WHITEBOARD_CACHE_TTL_MS) {
+            whiteboardSceneByClassId.delete(classId);
+        }
+    }
+
+    if (whiteboardSceneByClassId.size <= WHITEBOARD_CACHE_MAX_ENTRIES) return;
+
+    const sortedEntries = [...whiteboardSceneByClassId.entries()].sort((a, b) => {
+        const aTs = new Date(a?.[1]?.lastAccessAt || a?.[1]?.updatedAt || 0).getTime();
+        const bTs = new Date(b?.[1]?.lastAccessAt || b?.[1]?.updatedAt || 0).getTime();
+        return aTs - bTs;
+    });
+
+    const overflow = sortedEntries.length - WHITEBOARD_CACHE_MAX_ENTRIES;
+    for (let i = 0; i < overflow; i += 1) {
+        const classId = sortedEntries[i]?.[0];
+        if (classId !== undefined) {
+            whiteboardSceneByClassId.delete(classId);
+        }
+    }
+};
+
+const persistWhiteboardSceneToDisk = async (classId, payload) => {
+    await ensureWhiteboardCacheDir();
+    const filePath = getWhiteboardSceneFilePath(classId);
+    await fs.writeFile(filePath, JSON.stringify(payload), 'utf-8');
+};
+
+const readWhiteboardSceneFromDisk = async (classId) => {
+    await ensureWhiteboardCacheDir();
+    const filePath = getWhiteboardSceneFilePath(classId);
+
+    try {
+        const raw = await fs.readFile(filePath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (!parsed?.scene) return null;
+        return {
+            scene: sanitizeWhiteboardScene(parsed.scene),
+            updatedBy: parsed.updatedBy || null,
+            updatedAt: parsed.updatedAt || null,
+            lastAccessAt: new Date().toISOString()
+        };
+    } catch (_) {
+        return null;
+    }
+};
+
+const getStoredWhiteboardScene = async (classId) => {
+    const normalizedClassId = Number(classId);
+    if (!Number.isInteger(normalizedClassId)) return null;
+
+    const cached = whiteboardSceneByClassId.get(normalizedClassId);
+    if (cached?.scene) {
+        const updated = {
+            ...cached,
+            lastAccessAt: new Date().toISOString()
+        };
+        whiteboardSceneByClassId.set(normalizedClassId, updated);
+        return updated;
+    }
+
+    const fromDisk = await readWhiteboardSceneFromDisk(normalizedClassId);
+    if (!fromDisk) return null;
+
+    whiteboardSceneByClassId.set(normalizedClassId, fromDisk);
+    pruneWhiteboardCache();
+    return fromDisk;
 };
 
 const emitChatPresence = async (classId, ioInstance) => {
@@ -169,7 +268,7 @@ io.on('connection', (socket) => {
 
             await emitChatPresence(normalizedClassId, io);
 
-            const existingScene = whiteboardSceneByClassId.get(normalizedClassId);
+            const existingScene = await getStoredWhiteboardScene(normalizedClassId);
             if (existingScene?.scene) {
                 socket.emit('whiteboard_scene_updated', {
                     classId: normalizedClassId,
@@ -194,7 +293,7 @@ io.on('connection', (socket) => {
             const allowed = await isUserInClass(userId, normalizedClassId);
             if (!allowed) return;
 
-            const existingScene = whiteboardSceneByClassId.get(normalizedClassId);
+            const existingScene = await getStoredWhiteboardScene(normalizedClassId);
             if (!existingScene?.scene) return;
 
             socket.emit('whiteboard_scene_updated', {
@@ -396,12 +495,16 @@ io.on('connection', (socket) => {
             if (partnerId && await areUsersBlocked(userId, partnerId)) return;
 
             const safeScene = sanitizeWhiteboardScene(scene);
-
-            whiteboardSceneByClassId.set(normalizedClassId, {
+            const payload = {
                 scene: safeScene,
                 updatedBy: userId,
-                updatedAt: new Date().toISOString()
-            });
+                updatedAt: new Date().toISOString(),
+                lastAccessAt: new Date().toISOString()
+            };
+
+            whiteboardSceneByClassId.set(normalizedClassId, payload);
+            pruneWhiteboardCache();
+            await persistWhiteboardSceneToDisk(normalizedClassId, payload);
 
             socket.to(`chat_${normalizedClassId}`).emit('whiteboard_scene_updated', {
                 classId: normalizedClassId,
