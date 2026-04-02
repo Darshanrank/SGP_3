@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { useState } from 'react';
-import clsx from 'clsx';
+import { Button } from '../components/ui/Button';
 
 const USERNAME_REGEX = /^[a-z0-9_]+$/;
 
@@ -38,138 +38,128 @@ const Register = () => {
     };
 
     return (
-        <div className="min-h-full flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-            <div className="sm:mx-auto sm:w-full sm:max-w-md">
-                <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                    Create your account
-                </h2>
-                <p className="mt-2 text-center text-sm text-gray-600">
-                    Already have an account?{' '}
-                    <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
-                        Sign in
-                    </Link>
-                </p>
-            </div>
+        <div className="page-shell">
+            <div className="mx-auto w-full max-w-md">
+                <header className="mb-6 text-center">
+                    <h1 className="text-3xl font-extrabold tracking-tight text-[#DCE7F5]">Create Account</h1>
+                    <p className="mt-2 text-sm text-[#8DA0BF]">Join SkillSwap and start learning by teaching.</p>
+                    <p className="mt-2 text-sm text-[#8DA0BF]">
+                        Already have an account?{' '}
+                        <Link to="/login" className="font-medium text-[#7BB2FF] hover:text-[#9FC8FF]">
+                            Sign in
+                        </Link>
+                    </p>
+                </header>
 
-            <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-                    <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+                <section className="section-card">
+                    <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
                         <div>
-                            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                            <label htmlFor="username" className="mb-2 block text-sm font-medium text-[#DCE7F5]">
                                 Username
                             </label>
-                            <div className="mt-1">
-                                <input
-                                    id="username"
-                                    type="text"
-                                    {...registerField('username', { 
-                                        required: 'Username is required',
-                                        minLength: { value: 3, message: 'Username must be at least 3 characters' },
-                                        maxLength: { value: 30, message: 'Username can be at most 30 characters' },
-                                        pattern: {
-                                            value: USERNAME_REGEX,
-                                            message: 'Use only lowercase letters, numbers, and underscore (_)'
-                                        }
-                                    })}
-                                    onInput={(e) => {
-                                        e.target.value = e.target.value.toLowerCase();
-                                    }}
-                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                />
-                                {errors.username && <p className="mt-1 text-sm text-red-400">{errors.username.message}</p>}
-                                {!errors.username && <p className="mt-1 text-xs text-gray-500">Allowed: a-z, 0-9, underscore (_)</p>}
-                            </div>
+                            <input
+                                id="username"
+                                type="text"
+                                {...registerField('username', {
+                                    required: 'Username is required',
+                                    minLength: { value: 3, message: 'Username must be at least 3 characters' },
+                                    maxLength: { value: 30, message: 'Username can be at most 30 characters' },
+                                    pattern: {
+                                        value: USERNAME_REGEX,
+                                        message: 'Use only lowercase letters, numbers, and underscore (_)'
+                                    }
+                                })}
+                                onInput={(e) => {
+                                    e.target.value = e.target.value.toLowerCase();
+                                }}
+                                className="w-full rounded-xl border border-white/10 bg-[#0E1620] px-3 py-2.5 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
+                                placeholder="your_username"
+                            />
+                            {errors.username && <p className="mt-1.5 text-xs text-red-400">{errors.username.message}</p>}
+                            {!errors.username && <p className="mt-1.5 text-xs text-[#6F83A3]">Allowed: a-z, 0-9, underscore (_)</p>}
                         </div>
 
                         <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                            <label htmlFor="email" className="mb-2 block text-sm font-medium text-[#DCE7F5]">
                                 Email address
                             </label>
-                            <div className="mt-1">
-                                <input
-                                    id="email"
-                                    type="email"
-                                    {...registerField('email', { 
-                                        required: 'Email is required',
-                                        pattern: {
-                                            value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                                            message: "Invalid email address"
-                                        }
-                                    })}
-                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                />
-                                {errors.email && <p className="mt-1 text-sm text-red-400">{errors.email.message}</p>}
-                            </div>
+                            <input
+                                id="email"
+                                type="email"
+                                {...registerField('email', {
+                                    required: 'Email is required',
+                                    pattern: {
+                                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                                        message: 'Invalid email address'
+                                    }
+                                })}
+                                className="w-full rounded-xl border border-white/10 bg-[#0E1620] px-3 py-2.5 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
+                                placeholder="you@example.com"
+                            />
+                            {errors.email && <p className="mt-1.5 text-xs text-red-400">{errors.email.message}</p>}
                         </div>
 
                         <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                                Password
-                            </label>
-                            <div className="mt-1">
-                                <input
-                                    id="password"
-                                    type={showPassword ? 'text' : 'password'}
-                                    {...registerField('password', { 
-                                        required: 'Password is required',
-                                        minLength: { value: 8, message: 'Password must be at least 8 characters' },
-                                        pattern: {
-                                            value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/,
-                                            message: 'Password must include uppercase, lowercase, number, and special character'
-                                        }
-                                    })}
-                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                />
+                            <div className="mb-2 flex items-center justify-between">
+                                <label htmlFor="password" className="block text-sm font-medium text-[#DCE7F5]">
+                                    Password
+                                </label>
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword((prev) => !prev)}
-                                    className="mt-2 text-sm text-blue-600 hover:text-blue-500"
+                                    className="text-xs font-medium text-[#7BB2FF] hover:text-[#9FC8FF]"
                                 >
-                                    {showPassword ? 'Hide password' : 'Show password'}
+                                    {showPassword ? 'Hide' : 'Show'}
                                 </button>
-                                {errors.password && <p className="mt-1 text-sm text-red-400">{errors.password.message}</p>}
                             </div>
-                        </div>
-
-                         <div>
-                            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                                Confirm Password
-                            </label>
-                            <div className="mt-1">
-                                <input
-                                    id="confirmPassword"
-                                    type={showConfirmPassword ? 'text' : 'password'}
-                                    {...registerField('confirmPassword', { 
-                                        required: 'Please confirm your password',
-                                        validate: value => value === password || "The passwords do not match"
-                                    })}
-                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowConfirmPassword((prev) => !prev)}
-                                    className="mt-2 text-sm text-blue-600 hover:text-blue-500"
-                                >
-                                    {showConfirmPassword ? 'Hide password' : 'Show password'}
-                                </button>
-                                {errors.confirmPassword && <p className="mt-1 text-sm text-red-400">{errors.confirmPassword.message}</p>}
-                            </div>
+                            <input
+                                id="password"
+                                type={showPassword ? 'text' : 'password'}
+                                {...registerField('password', {
+                                    required: 'Password is required',
+                                    minLength: { value: 8, message: 'Password must be at least 8 characters' },
+                                    pattern: {
+                                        value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/,
+                                        message: 'Password must include uppercase, lowercase, number, and special character'
+                                    }
+                                })}
+                                className="w-full rounded-xl border border-white/10 bg-[#0E1620] px-3 py-2.5 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
+                                placeholder="Create a strong password"
+                            />
+                            {errors.password && <p className="mt-1.5 text-xs text-red-400">{errors.password.message}</p>}
                         </div>
 
                         <div>
-                            <button
-                                type="submit"
-                                disabled={isLoading}
-                                className={clsx(
-                                    "w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
-                                    isLoading && "opacity-75 cursor-wait"
-                                )}
-                            >
-                                {isLoading ? 'Creating account...' : 'Create account'}
-                            </button>
+                            <div className="mb-2 flex items-center justify-between">
+                                <label htmlFor="confirmPassword" className="block text-sm font-medium text-[#DCE7F5]">
+                                    Confirm Password
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                                    className="text-xs font-medium text-[#7BB2FF] hover:text-[#9FC8FF]"
+                                >
+                                    {showConfirmPassword ? 'Hide' : 'Show'}
+                                </button>
+                            </div>
+                            <input
+                                id="confirmPassword"
+                                type={showConfirmPassword ? 'text' : 'password'}
+                                {...registerField('confirmPassword', {
+                                    required: 'Please confirm your password',
+                                    validate: (value) => value === password || 'The passwords do not match'
+                                })}
+                                className="w-full rounded-xl border border-white/10 bg-[#0E1620] px-3 py-2.5 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
+                                placeholder="Re-enter your password"
+                            />
+                            {errors.confirmPassword && <p className="mt-1.5 text-xs text-red-400">{errors.confirmPassword.message}</p>}
                         </div>
+
+                        <Button type="submit" className="w-full" disabled={isLoading}>
+                            {isLoading ? 'Creating account...' : 'Create account'}
+                        </Button>
                     </form>
-                </div>
+                </section>
             </div>
         </div>
     );

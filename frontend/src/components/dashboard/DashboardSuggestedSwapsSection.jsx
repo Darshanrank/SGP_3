@@ -32,17 +32,15 @@ const DashboardSuggestedSwapsSection = ({ matches, onQuickSwap }) => {
                             </div>
                         </div>
 
-                        <div className="mb-3 rounded-lg border border-white/10 bg-[#0F172A] p-3">
-                            <div className="flex items-center justify-center gap-4">
-                                <div className="w-24 rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
-                                    <p className="truncate text-sm text-white">{m.mutualLearnSkills?.[0]?.skillName || 'Not set'}</p>
-                                    <p className="mt-1 text-xs text-gray-400">Teaches</p>
-                                </div>
-                                <Repeat2 className="h-4 w-4 text-gray-400" />
-                                <div className="w-24 rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
-                                    <p className="truncate text-sm text-white">{m.matchingTeachSkills?.[0]?.skillName || 'Not set'}</p>
-                                    <p className="mt-1 text-xs text-gray-400">Learns</p>
-                                </div>
+                        <div className="mb-3 flex items-center justify-center gap-4">
+                            <div className="w-24 rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
+                                <p className="truncate text-sm text-white">{m.mutualLearnSkills?.[0]?.skillName || 'Not set'}</p>
+                                <p className="mt-1 text-xs text-gray-400">Teaches</p>
+                            </div>
+                            <Repeat2 className="h-4 w-4 text-gray-400" />
+                            <div className="w-24 rounded-lg border border-white/10 bg-[#111721] px-3 py-2 text-center">
+                                <p className="truncate text-sm text-white">{m.matchingTeachSkills?.[0]?.skillName || 'Not set'}</p>
+                                <p className="mt-1 text-xs text-gray-400">Learns</p>
                             </div>
                         </div>
 

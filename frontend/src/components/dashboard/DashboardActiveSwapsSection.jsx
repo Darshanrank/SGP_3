@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '../ui/Button';
 
-const DashboardActiveSwapsSection = ({ activeSwaps, nextSessionByClassId, formatSessionTime, onGoToClassroom }) => {
+const DashboardActiveSwapsSection = ({ activeSwaps, nextSessionByClassId, formatSessionTime, onGoToClassroom, user }) => {
     return (
         <div className="section-card">
             <div className="mb-4 flex items-center justify-between">
@@ -19,13 +19,17 @@ const DashboardActiveSwapsSection = ({ activeSwaps, nextSessionByClassId, format
                         const teachSkill = swap?.swapRequest?.teachSkill?.skill?.name || 'Skill';
                         const learnSkill = swap?.swapRequest?.learnSkill?.skill?.name || 'Skill';
                         const sessionDate = nextSessionByClassId[swap.id] || null;
+                        const fromUser = swap?.swapRequest?.fromUser;
+                        const toUser = swap?.swapRequest?.toUser;
+                        const partner = fromUser?.userId === user?.userId ? toUser : fromUser;
+                        const partnerTimeZone = partner?.profile?.timezone || null;
 
                         return (
                             <div key={swap.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#0F172A] p-4">
                                 <div>
                                     <p className="text-sm font-medium text-white">{teachSkill} <span className="mx-1 text-gray-400">⇄</span> {learnSkill}</p>
-                                    <p className="mt-1 text-xs text-gray-400">Next session</p>
-                                    <p className="text-xs text-gray-300">{formatSessionTime(sessionDate)}</p>
+                                    <p className="mt-1 text-xs text-gray-400">Next session (your local time)</p>
+                                    <p className="text-xs text-gray-300">{formatSessionTime(sessionDate, partnerTimeZone)}</p>
                                 </div>
                                 <Button size="sm" className="rounded-lg bg-blue-600 px-3 py-2 text-white hover:bg-blue-500" onClick={() => onGoToClassroom(swap.id)}>
                                     Go to Classroom

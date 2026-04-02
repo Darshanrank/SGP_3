@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { useState } from 'react';
-import clsx from 'clsx';
+import { Button } from '../components/ui/Button';
 
 const Login = () => {
     const { register, handleSubmit, formState: { errors } } = useForm({
@@ -30,99 +30,87 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-full flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-            <div className="sm:mx-auto sm:w-full sm:max-w-md">
-                <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                    Sign in to your account
-                </h2>
-                <p className="mt-2 text-center text-sm text-gray-600">
-                    Or{' '}
-                    <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500">
-                        create a new account
-                    </Link>
-                </p>
-            </div>
+        <div className="page-shell">
+            <div className="mx-auto w-full max-w-md">
+                <header className="mb-6 text-center">
+                    <h1 className="text-3xl font-extrabold tracking-tight text-[#DCE7F5]">Welcome Back</h1>
+                    <p className="mt-2 text-sm text-[#8DA0BF]">
+                        Sign in to continue your SkillSwap journey.
+                    </p>
+                    <p className="mt-2 text-sm text-[#8DA0BF]">
+                        New here?{' '}
+                        <Link to="/register" className="font-medium text-[#7BB2FF] hover:text-[#9FC8FF]">
+                            Create an account
+                        </Link>
+                    </p>
+                </header>
 
-            <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-                    <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+                <section className="section-card">
+                    <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
                         <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                            <label htmlFor="email" className="mb-2 block text-sm font-medium text-[#DCE7F5]">
                                 Email address
                             </label>
-                            <div className="mt-1">
-                                <input
-                                    id="email"
-                                    type="email"
-                                    {...register('email', { 
-                                        required: 'Email is required',
-                                        pattern: {
-                                            value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                                            message: "Invalid email address"
-                                        }
-                                    })}
-                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                />
-                                {errors.email && <p className="mt-1 text-sm text-red-400">{errors.email.message}</p>}
-                            </div>
+                            <input
+                                id="email"
+                                type="email"
+                                {...register('email', {
+                                    required: 'Email is required',
+                                    pattern: {
+                                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                                        message: 'Invalid email address'
+                                    }
+                                })}
+                                className="w-full rounded-xl border border-white/10 bg-[#0E1620] px-3 py-2.5 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
+                                placeholder="you@example.com"
+                            />
+                            {errors.email && <p className="mt-1.5 text-xs text-red-400">{errors.email.message}</p>}
                         </div>
 
                         <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                                Password
-                            </label>
-                            <div className="mt-1">
-                                <input
-                                    id="password"
-                                    type={showPassword ? 'text' : 'password'}
-                                    {...register('password', { required: 'Password is required' })}
-                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                />
+                            <div className="mb-2 flex items-center justify-between">
+                                <label htmlFor="password" className="block text-sm font-medium text-[#DCE7F5]">
+                                    Password
+                                </label>
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword((prev) => !prev)}
-                                    className="mt-2 text-sm text-blue-600 hover:text-blue-500"
+                                    className="text-xs font-medium text-[#7BB2FF] hover:text-[#9FC8FF]"
                                 >
-                                    {showPassword ? 'Hide password' : 'Show password'}
+                                    {showPassword ? 'Hide' : 'Show'}
                                 </button>
-                                {errors.password && <p className="mt-1 text-sm text-red-400">{errors.password.message}</p>}
                             </div>
+                            <input
+                                id="password"
+                                type={showPassword ? 'text' : 'password'}
+                                {...register('password', { required: 'Password is required' })}
+                                className="w-full rounded-xl border border-white/10 bg-[#0E1620] px-3 py-2.5 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
+                                placeholder="Enter your password"
+                            />
+                            {errors.password && <p className="mt-1.5 text-xs text-red-400">{errors.password.message}</p>}
                         </div>
 
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center">
+                            <label htmlFor="remember-me" className="inline-flex items-center gap-2 text-sm text-[#8DA0BF]">
                                 <input
                                     id="remember-me"
                                     type="checkbox"
                                     {...register('rememberMe')}
-                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    className="h-4 w-4 rounded border-white/10 bg-[#0E1620]"
                                 />
-                                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-                                    Remember me
-                                </label>
-                            </div>
+                                Remember me
+                            </label>
 
-                            <div className="text-sm">
-                                <Link to="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
-                                    Forgot your password?
-                                </Link>
-                            </div>
+                            <Link to="/forgot-password" className="text-sm font-medium text-[#7BB2FF] hover:text-[#9FC8FF]">
+                                Forgot password?
+                            </Link>
                         </div>
 
-                        <div>
-                            <button
-                                type="submit"
-                                disabled={isLoading}
-                                className={clsx(
-                                    "w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
-                                    isLoading && "opacity-75 cursor-wait"
-                                )}
-                            >
-                                {isLoading ? 'Signing in...' : 'Sign in'}
-                            </button>
-                        </div>
+                        <Button type="submit" className="w-full" disabled={isLoading}>
+                            {isLoading ? 'Signing in...' : 'Sign in'}
+                        </Button>
                     </form>
-                </div>
+                </section>
             </div>
         </div>
     );

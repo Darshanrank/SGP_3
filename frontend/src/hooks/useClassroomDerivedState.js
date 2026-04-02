@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { formatSessionWithPartnerTime } from '../utils/timezone';
 
 const computeOverallFromCategories = (ratings) => {
     const values = Object.values(ratings || {}).map((value) => Number(value || 0));
@@ -38,8 +39,9 @@ export const useClassroomDerivedState = ({
         const waitingForPartnerInCall = isInCall && !callParticipantIds.includes(Number(getPartnerUserId()));
         const nextSessionDate = swapClass?.startedAt ? new Date(swapClass.startedAt) : null;
         const hasValidNextSession = Boolean(nextSessionDate && !Number.isNaN(nextSessionDate.getTime()));
+        const partnerTimeZone = partner?.profile?.timezone || null;
         const nextSessionText = hasValidNextSession
-            ? nextSessionDate.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', ' •')
+            ? formatSessionWithPartnerTime(nextSessionDate, partnerTimeZone)
             : 'Not scheduled';
         const classDurationMs = swapClass?.startedAt && swapClass?.endedAt
             ? new Date(swapClass.endedAt).getTime() - new Date(swapClass.startedAt).getTime()

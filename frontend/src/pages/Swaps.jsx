@@ -9,6 +9,7 @@ import { useSocket } from '../context/SocketContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRightLeft, CheckCircle, XCircle, Ban, MessageSquare, Inbox, Send, Users, MoreVertical, MessageCircle, User, Repeat2, CalendarDays, Shield } from 'lucide-react';
+import { formatSessionWithPartnerTime } from '../utils/timezone';
 
 const reportReasons = ['SPAM', 'HARASSMENT', 'SCAM_OR_FRAUD', 'INAPPROPRIATE_CONTENT', 'IMPERSONATION', 'OTHER'];
 
@@ -189,13 +190,8 @@ const Swaps = () => {
         return mapped;
     }, [calendarEvents]);
 
-    const formatNextSession = (sessionDate) => {
-        if (!sessionDate) return 'No session scheduled';
-        return sessionDate.toLocaleString('en-US', {
-            weekday: 'short',
-            hour: 'numeric',
-            minute: '2-digit'
-        }).replace(',', ' •');
+    const formatNextSession = (sessionDate, partnerTimeZone) => {
+        return formatSessionWithPartnerTime(sessionDate, partnerTimeZone);
     };
 
     const renderSwapDirectionBlock = ({ teachSkill, learnSkill, teachLabel = 'You teach', learnLabel = 'You learn' }) => (
@@ -464,6 +460,7 @@ const Swaps = () => {
         const teachSkillName = isReceived ? req.learnSkill?.skill?.name : req.teachSkill?.skill?.name;
         const learnSkillName = isReceived ? req.teachSkill?.skill?.name : req.learnSkill?.skill?.name;
         const nextSession = req.swapClass?.id ? nextSessionByClassId[req.swapClass.id] : null;
+        const partnerTimeZone = otherUser?.profile?.timezone || null;
 
         return (
             <div key={req.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#111721] shadow-[0_16px_40px_rgba(0,0,0,0.55)] transition duration-200 hover:-translate-y-1 hover:bg-[#151D27]">
@@ -514,7 +511,7 @@ const Swaps = () => {
                         <p className="text-[11px] uppercase tracking-wide text-gray-400">Next Session</p>
                         <p className="mt-1 inline-flex items-center gap-2 text-sm font-medium text-white">
                             <CalendarDays className="h-4 w-4 text-gray-400" />
-                            {formatNextSession(nextSession)}
+                            {formatNextSession(nextSession, partnerTimeZone)}
                         </p>
                     </div>
 
@@ -624,10 +621,14 @@ const Swaps = () => {
     const renderClassCard = (cls) => {
         const fromUser = cls.swapRequest?.fromUser?.username || 'Unknown';
         const toUser = cls.swapRequest?.toUser?.username || 'Unknown';
+        const partnerUser = cls.swapRequest?.fromUser?.userId === user?.userId
+            ? cls.swapRequest?.toUser
+            : cls.swapRequest?.fromUser;
         const partnerName = fromUser === user?.username ? toUser : fromUser;
         const partnerUserId = cls.swapRequest?.fromUser?.userId === user?.userId
             ? cls.swapRequest?.toUser?.userId
             : cls.swapRequest?.fromUser?.userId;
+        const partnerTimeZone = partnerUser?.profile?.timezone || null;
         const learnSkillObj = cls.swapRequest?.learnSkill;
         const teachSkillObj = cls.swapRequest?.teachSkill;
         const learnSkill = learnSkillObj?.skill?.name || 'Unknown';
@@ -690,7 +691,7 @@ const Swaps = () => {
                         <p className="text-[11px] uppercase tracking-wide text-gray-400">Next Session</p>
                         <p className="mt-1 inline-flex items-center gap-2 text-sm font-medium text-white">
                             <CalendarDays className="h-4 w-4 text-gray-400" />
-                            {formatNextSession(nextSession)}
+                            {formatNextSession(nextSession, partnerTimeZone)}
                         </p>
                     </div>
 

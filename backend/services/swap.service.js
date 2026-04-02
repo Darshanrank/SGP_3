@@ -99,8 +99,28 @@ export const getMyRequestsService = async (userId, type, { page = 1, limit = 20 
         prisma.swapRequest.findMany({
             where: whereClause,
             include: {
-                fromUser: { select: { username: true, userId: true } },
-                toUser: { select: { username: true, userId: true } },
+                fromUser: {
+                    select: {
+                        username: true,
+                        userId: true,
+                        profile: {
+                            select: {
+                                timezone: true
+                            }
+                        }
+                    }
+                },
+                toUser: {
+                    select: {
+                        username: true,
+                        userId: true,
+                        profile: {
+                            select: {
+                                timezone: true
+                            }
+                        }
+                    }
+                },
                 teachSkill: { include: { skill: true, preview: true } },
                 learnSkill: { include: { skill: true, preview: true } },
                 swapClass: { select: { id: true } }
@@ -254,8 +274,28 @@ export const getMyClassesService = async (userId, { page = 1, limit = 20 } = {})
             include: {
                 swapRequest: {
                     include: {
-                        fromUser: { select: { username: true, userId: true } },
-                        toUser: { select: { username: true, userId: true } },
+                        fromUser: {
+                            select: {
+                                username: true,
+                                userId: true,
+                                profile: {
+                                    select: {
+                                        timezone: true
+                                    }
+                                }
+                            }
+                        },
+                        toUser: {
+                            select: {
+                                username: true,
+                                userId: true,
+                                profile: {
+                                    select: {
+                                        timezone: true
+                                    }
+                                }
+                            }
+                        },
                         teachSkill: { include: { skill: true, preview: true } },
                         learnSkill: { include: { skill: true, preview: true } }
                     }
@@ -315,8 +355,28 @@ export const getClassDetailsService = async (userId, classId) => {
             },
             swapRequest: {
                 include: {
-                    fromUser: { select: { userId: true, username: true } },
-                    toUser: { select: { userId: true, username: true } },
+                    fromUser: {
+                        select: {
+                            userId: true,
+                            username: true,
+                            profile: {
+                                select: {
+                                    timezone: true
+                                }
+                            }
+                        }
+                    },
+                    toUser: {
+                        select: {
+                            userId: true,
+                            username: true,
+                            profile: {
+                                select: {
+                                    timezone: true
+                                }
+                            }
+                        }
+                    },
                     teachSkill: { include: { skill: true } },
                     learnSkill: { include: { skill: true } }
                 }

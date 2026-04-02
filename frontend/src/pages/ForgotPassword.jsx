@@ -26,61 +26,64 @@ const ForgotPassword = () => {
 
   if (success) {
      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full space-y-8 text-center">
-                <h2 className="mt-6 text-3xl font-extrabold text-gray-900">Check your email</h2>
-                <p className="mt-2 text-sm text-gray-600">
+        <div className="page-shell">
+            <div className="mx-auto w-full max-w-md">
+              <section className="section-card text-center">
+                <h1 className="text-3xl font-extrabold tracking-tight text-[#DCE7F5]">Check Your Email</h1>
+                <p className="mt-3 text-sm text-[#8DA0BF]">
                     We have sent a password reset link to your email address.
                 </p>
-                <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
+                <Link to="/login" className="mt-4 inline-block font-medium text-[#7BB2FF] hover:text-[#9FC8FF]">
                     Back to login
                 </Link>
+              </section>
             </div>
         </div>
      );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Forgot your password?</h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Enter your email address and we'll send you a link to reset your password.
+    <div className="page-shell">
+      <div className="mx-auto w-full max-w-md">
+        <header className="mb-6 text-center">
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#DCE7F5]">Forgot Password?</h1>
+          <p className="mt-2 text-sm text-[#8DA0BF]">
+            Enter your email and we will send a secure reset link.
           </p>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
-          <div>
-            <label htmlFor="email" className="sr-only">Email address</label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-              placeholder="Email address"
-              {...register('email', { 
-                required: 'Email is required',
-                pattern: {
-                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                  message: 'Invalid email address'
-                }
-              })}
-            />
-            {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
-          </div>
+        </header>
 
-          <div>
-            <Button type="submit" className="w-full flex justify-center" disabled={isSubmitting}>
+        <section className="section-card">
+          <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
+            <div>
+              <label htmlFor="email" className="mb-2 block text-sm font-medium text-[#DCE7F5]">Email address</label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                className="w-full rounded-xl border border-white/10 bg-[#0E1620] px-3 py-2.5 text-sm text-[#DCE7F5] placeholder:text-[#6F83A3]"
+                placeholder="you@example.com"
+                {...register('email', {
+                  required: 'Email is required',
+                  pattern: {
+                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                    message: 'Invalid email address'
+                  }
+                })}
+              />
+              {errors.email && <p className="mt-1.5 text-xs text-red-400">{errors.email.message}</p>}
+            </div>
+
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? 'Sending...' : 'Send Reset Link'}
             </Button>
-          </div>
-          
-          <div className="text-center">
-             <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
+
+            <div className="text-center">
+              <Link to="/login" className="font-medium text-[#7BB2FF] hover:text-[#9FC8FF]">
                 Back to login
-            </Link>
-          </div>
-        </form>
+              </Link>
+            </div>
+          </form>
+        </section>
       </div>
     </div>
   );

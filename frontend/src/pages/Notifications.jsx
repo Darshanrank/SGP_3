@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
     getNotifications,
@@ -13,6 +13,8 @@ import { Bell, Check, RotateCcw, Trash2, Settings2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useSocket } from '../context/SocketContext';
 
+const PAGE_SIZE = 30;
+
 const filters = [
     { label: 'All', value: 'ALL' },
     { label: 'Requests', value: 'SWAP_REQUEST' },
@@ -24,8 +26,15 @@ const filters = [
 const Notifications = () => {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
     const [activeFilter, setActiveFilter] = useState('ALL');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [fromDate, setFromDate] = useState('');
+    const [toDate, setToDate] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
     const { socket, setUnreadCount: setGlobalUnread, setRecentNotifications, refreshNotificationState } = useSocket() || {};
 
     const syncUnreadCount = useCallback((updater) => {
@@ -36,36 +45,63 @@ const Notifications = () => {
         });
     }, [setGlobalUnread]);
 
-    const fetchNotifications = useCallback(async () => {
+    const fetchNotifications = useCallback(async ({ page = 1, reset = false } = {}) => {
+        const setLoadingState = reset ? setLoading : setLoadingMore;
         try {
+            setLoadingState(true);
             const type = activeFilter === 'ALL' ? undefined : activeFilter;
-            const data = await getNotifications({ page: 1, limit: 100, type });
-            const items = Array.isArray(data) ? data : data?.data || [];
-            setNotifications(items);
-            setRecentNotifications?.(items.slice(0, 8));
+            const response = await getNotifications({ page, limit: PAGE_SIZE, type });
+            const items = Array.isArray(response) ? response : response?.data || [];
+            const meta = response?.meta || {};
+
+            setNotifications((prev) => {
+                if (reset) return items;
+
+                const existingIds = new Set(prev.map((n) => n.id));
+                const deduped = items.filter((n) => !existingIds.has(n.id));
+                return [...prev, ...deduped];
+            });
+
+            const resolvedPage = Number(meta.page || page || 1);
+            const resolvedTotalPages = Number(meta.totalPages || 1);
+            const resolvedTotal = Number(meta.total || 0);
+
+            setCurrentPage(resolvedPage);
+            setTotalCount(resolvedTotal);
+            setHasMore(resolvedPage < resolvedTotalPages);
 
             const countRes = await getUnreadCount();
             const count = countRes?.unread ?? 0;
             syncUnreadCount(count);
+
+            if (reset) {
+                const latestItems = Array.isArray(items) ? items : [];
+                setRecentNotifications?.(latestItems.slice(0, 8));
+            }
         } catch (error) {
             console.error(error);
         } finally {
-            setLoading(false);
+            setLoadingState(false);
         }
     }, [activeFilter, setRecentNotifications, syncUnreadCount]);
 
     useEffect(() => {
-        fetchNotifications();
+        fetchNotifications({ page: 1, reset: true });
     }, [fetchNotifications]);
 
     useEffect(() => {
         if (!socket) return;
         const handleNew = () => {
-            fetchNotifications();
+            fetchNotifications({ page: 1, reset: true });
         };
         socket.on('new_notification', handleNew);
         return () => socket.off('new_notification', handleNew);
     }, [socket, fetchNotifications]);
+
+    const handleLoadMore = async () => {
+        if (!hasMore || loadingMore) return;
+        await fetchNotifications({ page: currentPage + 1, reset: false });
+    };
 
     const handleMarkAsRead = async (id) => {
         try {
@@ -125,8 +161,74 @@ const Notifications = () => {
         }
     };
 
-    const unreadNotifications = notifications.filter((n) => !n.isRead);
-    const readNotifications = notifications.filter((n) => n.isRead);
+    const handleClearLocalFilters = () => {
+        setSearchQuery('');
+        setFromDate('');
+        setToDate('');
+    };
+
+    const getDateBucket = (value) => {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return 'Earlier';
+
+        const now = new Date();
+        const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startTomorrow = new Date(startToday);
+        startTomorrow.setDate(startTomorrow.getDate() + 1);
+
+        if (date >= startToday && date < startTomorrow) return 'Today';
+
+        const sevenDaysAgo = new Date(startToday);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        if (date >= sevenDaysAgo) return 'Last 7 Days';
+
+        return 'Earlier';
+    };
+
+    const groupNotificationsByDate = (items) => {
+        const groups = {
+            Today: [],
+            'Last 7 Days': [],
+            Earlier: []
+        };
+
+        items.forEach((item) => {
+            groups[getDateBucket(item.createdAt)].push(item);
+        });
+
+        return [
+            { key: 'today', title: 'Today', items: groups.Today },
+            { key: 'last-7-days', title: 'Last 7 Days', items: groups['Last 7 Days'] },
+            { key: 'earlier', title: 'Earlier', items: groups.Earlier }
+        ].filter((group) => group.items.length > 0);
+    };
+
+    const filteredNotifications = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        const from = fromDate ? new Date(`${fromDate}T00:00:00`) : null;
+        const to = toDate ? new Date(`${toDate}T23:59:59.999`) : null;
+
+        return notifications.filter((notification) => {
+            const createdAt = new Date(notification.createdAt);
+            if (from && (Number.isNaN(createdAt.getTime()) || createdAt < from)) return false;
+            if (to && (Number.isNaN(createdAt.getTime()) || createdAt > to)) return false;
+
+            if (!query) return true;
+
+            const haystack = [
+                notification.message,
+                notification.type,
+                notification.link
+            ].filter(Boolean).join(' ').toLowerCase();
+
+            return haystack.includes(query);
+        });
+    }, [notifications, searchQuery, fromDate, toDate]);
+
+    const unreadNotifications = filteredNotifications.filter((n) => !n.isRead);
+    const readNotifications = filteredNotifications.filter((n) => n.isRead);
+    const unreadGrouped = useMemo(() => groupNotificationsByDate(unreadNotifications), [unreadNotifications]);
+    const readGrouped = useMemo(() => groupNotificationsByDate(readNotifications), [readNotifications]);
 
     if (loading) return <div className="section-card text-center">Loading...</div>;
 
@@ -159,7 +261,10 @@ const Notifications = () => {
                     <button
                         key={filter.value}
                         type="button"
-                        onClick={() => setActiveFilter(filter.value)}
+                        onClick={() => {
+                            if (activeFilter === filter.value) return;
+                            setActiveFilter(filter.value);
+                        }}
                         className={`rounded-full px-3 py-1 text-xs transition-colors ${
                             activeFilter === filter.value
                                 ? 'bg-[#0A4D9F] text-white'
@@ -169,6 +274,61 @@ const Notifications = () => {
                         {filter.label}
                     </button>
                 ))}
+            </div>
+
+            <section className="rounded-xl border border-white/10 bg-[#111721] p-4">
+                <div className="grid gap-3 md:grid-cols-4">
+                    <div className="md:col-span-2">
+                        <label htmlFor="notification-search" className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">
+                            Search notifications
+                        </label>
+                        <input
+                            id="notification-search"
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search by message or type"
+                            className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]"
+                        />
+                    </div>
+
+                    <div>
+                        <label htmlFor="notifications-from-date" className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">
+                            From date
+                        </label>
+                        <input
+                            id="notifications-from-date"
+                            type="date"
+                            value={fromDate}
+                            onChange={(e) => setFromDate(e.target.value)}
+                            className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]"
+                        />
+                    </div>
+
+                    <div>
+                        <label htmlFor="notifications-to-date" className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#8DA0BF]">
+                            To date
+                        </label>
+                        <input
+                            id="notifications-to-date"
+                            type="date"
+                            value={toDate}
+                            onChange={(e) => setToDate(e.target.value)}
+                            className="w-full rounded-lg border border-white/10 bg-[#0E1620] px-3 py-2 text-sm text-[#DCE7F5]"
+                        />
+                    </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-2">
+                    <p className="text-xs text-[#8DA0BF]">Notifications are grouped by date: Today, Last 7 Days, Earlier.</p>
+                    <Button size="sm" variant="ghost" onClick={handleClearLocalFilters}>
+                        Clear filters
+                    </Button>
+                </div>
+            </section>
+
+            <div className="text-xs text-[#8DA0BF]">
+                Showing {filteredNotifications.length} filtered notifications ({notifications.length} loaded of {totalCount} total)
             </div>
 
             <div className="grid gap-6 lg:grid-cols-2">
@@ -183,29 +343,38 @@ const Notifications = () => {
                         {unreadNotifications.length === 0 && (
                             <li className="px-4 py-8 text-center text-[#8DA0BF]">No unread notifications.</li>
                         )}
-                        {unreadNotifications.map((notification) => (
-                            <li key={notification.id} className="bg-[#0A4D9F]/18 px-4 py-4 transition-colors hover:bg-[#0A4D9F]/25 sm:px-6">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center">
-                                        <div className="shrink-0">
-                                            <Bell className="h-6 w-6 text-[#7BB2FF]" />
-                                        </div>
-                                        <div className="ml-4">
-                                            <p className="text-sm font-semibold text-[#DCE7F5]">{notification.message}</p>
-                                            <p className="mt-1 text-xs text-[#8DA0BF]">
-                                                {new Date(notification.createdAt).toLocaleString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Button size="sm" variant="ghost" onClick={() => handleMarkAsRead(notification.id)} title="Mark as read">
-                                            <Check className="h-4 w-4" />
-                                        </Button>
-                                        <Button size="sm" variant="ghost" onClick={() => handleDeleteNotification(notification.id)} title="Delete">
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
+                        {unreadGrouped.map((group) => (
+                            <li key={group.key}>
+                                <div className="border-b border-white/5 bg-[#0E1620] px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-[#8DA0BF] sm:px-6">
+                                    {group.title}
                                 </div>
+                                <ul role="list" className="divide-y divide-white/5">
+                                    {group.items.map((notification) => (
+                                        <li key={notification.id} className="bg-[#0A4D9F]/18 px-4 py-4 transition-colors hover:bg-[#0A4D9F]/25 sm:px-6">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center">
+                                                    <div className="shrink-0">
+                                                        <Bell className="h-6 w-6 text-[#7BB2FF]" />
+                                                    </div>
+                                                    <div className="ml-4">
+                                                        <p className="text-sm font-semibold text-[#DCE7F5]">{notification.message}</p>
+                                                        <p className="mt-1 text-xs text-[#8DA0BF]">
+                                                            {new Date(notification.createdAt).toLocaleString()}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <Button size="sm" variant="ghost" onClick={() => handleMarkAsRead(notification.id)} title="Mark as read">
+                                                        <Check className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button size="sm" variant="ghost" onClick={() => handleDeleteNotification(notification.id)} title="Delete">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
                             </li>
                         ))}
                     </ul>
@@ -222,33 +391,52 @@ const Notifications = () => {
                         {readNotifications.length === 0 && (
                             <li className="px-4 py-8 text-center text-[#8DA0BF]">No read notifications yet.</li>
                         )}
-                        {readNotifications.map((notification) => (
-                            <li key={notification.id} className="px-4 py-4 opacity-80 transition-colors hover:bg-[#151D27] sm:px-6">
-                                <div className="flex items-center justify-between gap-3">
-                                    <div className="flex items-center">
-                                        <div className="shrink-0">
-                                            <Bell className="h-6 w-6 text-[#8DA0BF]" />
-                                        </div>
-                                        <div className="ml-4">
-                                            <p className="text-sm font-medium text-[#DCE7F5]">{notification.message}</p>
-                                            <p className="mt-1 text-xs text-[#8DA0BF]">
-                                                {new Date(notification.createdAt).toLocaleString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Button size="sm" variant="ghost" onClick={() => handleMarkAsUnread(notification.id)} title="Mark as unread">
-                                            <RotateCcw className="h-4 w-4" />
-                                        </Button>
-                                        <Button size="sm" variant="ghost" onClick={() => handleDeleteNotification(notification.id)} title="Delete">
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
+                        {readGrouped.map((group) => (
+                            <li key={group.key}>
+                                <div className="border-b border-white/5 bg-[#0E1620] px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-[#8DA0BF] sm:px-6">
+                                    {group.title}
                                 </div>
+                                <ul role="list" className="divide-y divide-white/5">
+                                    {group.items.map((notification) => (
+                                        <li key={notification.id} className="px-4 py-4 opacity-80 transition-colors hover:bg-[#151D27] sm:px-6">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="flex items-center">
+                                                    <div className="shrink-0">
+                                                        <Bell className="h-6 w-6 text-[#8DA0BF]" />
+                                                    </div>
+                                                    <div className="ml-4">
+                                                        <p className="text-sm font-medium text-[#DCE7F5]">{notification.message}</p>
+                                                        <p className="mt-1 text-xs text-[#8DA0BF]">
+                                                            {new Date(notification.createdAt).toLocaleString()}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <Button size="sm" variant="ghost" onClick={() => handleMarkAsUnread(notification.id)} title="Mark as unread">
+                                                        <RotateCcw className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button size="sm" variant="ghost" onClick={() => handleDeleteNotification(notification.id)} title="Delete">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
                             </li>
                         ))}
                     </ul>
                 </section>
+            </div>
+
+            <div className="flex justify-center">
+                {hasMore ? (
+                    <Button size="sm" variant="secondary" onClick={handleLoadMore} disabled={loadingMore}>
+                        {loadingMore ? 'Loading older notifications...' : 'Load older notifications'}
+                    </Button>
+                ) : (
+                    <p className="text-xs text-[#8DA0BF]">You have reached the end of your notification history.</p>
+                )}
             </div>
         </div>
     );

@@ -10,6 +10,7 @@ import { getAllSkills, getUserSkills } from '../services/skill.service';
 import { Button } from '../components/ui/Button';
 import { toast } from 'react-hot-toast';
 import InputDialog from '../components/ui/InputDialog';
+import { formatSessionWithPartnerTime } from '../utils/timezone';
 import {
     DashboardStatsGrid,
     DashboardNextSessionCard,
@@ -189,13 +190,8 @@ const Dashboard = () => {
         };
     }, [statsData]);
 
-    const formatSessionTime = (date) => {
-        if (!date) return 'No upcoming session';
-        return date.toLocaleString('en-US', {
-            weekday: 'short',
-            hour: 'numeric',
-            minute: '2-digit'
-        }).replace(',', ' •');
+    const formatSessionTime = (date, partnerTimeZone) => {
+        return formatSessionWithPartnerTime(date, partnerTimeZone);
     };
 
     return (
@@ -230,6 +226,7 @@ const Dashboard = () => {
                 nextSessionByClassId={nextSessionByClassId}
                 formatSessionTime={formatSessionTime}
                 onGoToClassroom={(swapClassId) => navigate(`/swaps/${swapClassId}`)}
+                user={user}
             />
 
             <DashboardSuggestedSwapsSection matches={matches} onQuickSwap={handleQuickSwap} />

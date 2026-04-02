@@ -95,6 +95,16 @@ const dayStyleGetter = (date) => {
     };
 };
 
+const getLocalTimeZoneLabel = (referenceDate = new Date()) => {
+    try {
+        const parts = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(referenceDate);
+        const tzName = parts.find((part) => part.type === 'timeZoneName')?.value;
+        return tzName || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local time';
+    } catch (_) {
+        return 'Local time';
+    }
+};
+
 const CalendarEventCard = ({ event }) => {
     const startText = new Date(event.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     const visual = getCalendarEventVisual(event.status || 'scheduled');
@@ -169,6 +179,7 @@ const canJoinSession = (session) => {
 
 // Helper function to format upcoming session time
 const formatUpcomingTime = (date) => {
+    const tzLabel = getLocalTimeZoneLabel(date);
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const tomorrow = new Date(today);
@@ -176,12 +187,12 @@ const formatUpcomingTime = (date) => {
     const sessionDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
     if (sessionDate.getTime() === today.getTime()) {
-        return `Today • ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+        return `Today • ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} (${tzLabel}, your local time)`;
     } else if (sessionDate.getTime() === tomorrow.getTime()) {
-        return `Tomorrow • ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+        return `Tomorrow • ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} (${tzLabel}, your local time)`;
     } else {
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        return `${days[date.getDay()]} • ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+        return `${days[date.getDay()]} • ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} (${tzLabel}, your local time)`;
     }
 };
 
@@ -522,6 +533,7 @@ const Calendar = () => {
 
             <section className="section-card space-y-4">
                 <h2 className="section-title">Upcoming Sessions</h2>
+                <p className="text-xs text-[#8DA0BF]">All times are shown in your local timezone.</p>
                 {upcomingSessions.length === 0 ? (
                     <p className="rounded-lg border border-white/10 bg-[#0E1620] p-4 text-sm text-[#8DA0BF]">No upcoming sessions scheduled.</p>
                 ) : (

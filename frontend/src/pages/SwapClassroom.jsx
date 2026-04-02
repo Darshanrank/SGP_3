@@ -72,6 +72,34 @@ import {
 
 const WhiteboardModal = lazy(() => import('../components/classroom/WhiteboardModal'));
 
+const sanitizeWhiteboardScene = (scene) => {
+    if (!scene || typeof scene !== 'object') {
+        return {
+            elements: [],
+            appState: {},
+            files: {}
+        };
+    }
+
+    const safeElements = Array.isArray(scene.elements) ? scene.elements : [];
+    const safeFiles = scene.files && typeof scene.files === 'object' ? scene.files : {};
+    const appState = scene.appState && typeof scene.appState === 'object' ? scene.appState : {};
+
+    // Only keep serializable, stable app state fields.
+    const safeAppState = {
+        viewBackgroundColor: appState.viewBackgroundColor,
+        theme: appState.theme,
+        gridSize: appState.gridSize,
+        zenModeEnabled: appState.zenModeEnabled
+    };
+
+    return {
+        elements: safeElements,
+        appState: safeAppState,
+        files: safeFiles
+    };
+};
+
 const SwapClassroom = () => {
     const navigate = useNavigate();
     const { id } = useParams();
@@ -534,6 +562,7 @@ const SwapClassroom = () => {
 
         const joinRoom = () => {
             socket.emit('join_chat', classId);
+            socket.emit('whiteboard_scene_request', { classId });
         };
 
         if (socket.connected) {
@@ -545,6 +574,11 @@ const SwapClassroom = () => {
             socket.off('connect', joinRoom);
         };
     }, [socket, classId]);
+
+    useEffect(() => {
+        if (!socket || !whiteboardOpen) return;
+        socket.emit('whiteboard_scene_request', { classId });
+    }, [socket, classId, whiteboardOpen]);
 
     useEffect(() => {
         if (!socket || !isInCall) return;
@@ -704,11 +738,12 @@ const SwapClassroom = () => {
 
         const handleWhiteboardSceneUpdated = ({ classId: updatedClassId, scene }) => {
             if (Number(updatedClassId) !== classId || !scene) return;
-            whiteboardSceneRef.current = scene;
+            const safeScene = sanitizeWhiteboardScene(scene);
+            whiteboardSceneRef.current = safeScene;
             if (!excalidrawApiRef.current) return;
 
             isApplyingRemoteWhiteboardRef.current = true;
-            excalidrawApiRef.current.updateScene(scene);
+            excalidrawApiRef.current.updateScene(safeScene);
             requestAnimationFrame(() => {
                 isApplyingRemoteWhiteboardRef.current = false;
             });
@@ -1360,11 +1395,7 @@ const SwapClassroom = () => {
     };
 
     const handleWhiteboardSceneChange = (elements, appState, files) => {
-        const scene = {
-            elements,
-            appState,
-            files
-        };
+        const scene = sanitizeWhiteboardScene({ elements, appState, files });
 
         whiteboardSceneRef.current = scene;
         if (!socket || isApplyingRemoteWhiteboardRef.current) return;

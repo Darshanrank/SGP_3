@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { Excalidraw } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 
@@ -9,6 +10,36 @@ const WhiteboardModal = ({
     onExport,
     onClose
 }) => {
+    const [api, setApi] = useState(null);
+    const appliedInitialSceneRef = useRef(false);
+
+    useEffect(() => {
+        if (!api || !initialData || appliedInitialSceneRef.current) return;
+
+        try {
+            const safeScene = {
+                elements: Array.isArray(initialData.elements) ? initialData.elements : [],
+                appState: initialData.appState && typeof initialData.appState === 'object' ? initialData.appState : {},
+                files: initialData.files && typeof initialData.files === 'object' ? initialData.files : {}
+            };
+
+            requestAnimationFrame(() => {
+                try {
+                    api.updateScene(safeScene);
+                } catch {
+                    api.updateScene({ elements: [], appState: {}, files: {} });
+                }
+            });
+
+            appliedInitialSceneRef.current = true;
+        } catch {
+            try {
+                api.updateScene({ elements: [], appState: {}, files: {} });
+            } catch {}
+            appliedInitialSceneRef.current = true;
+        }
+    }, [api, initialData]);
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
             <div className="flex h-[85vh] w-[90%] flex-col overflow-hidden rounded-lg bg-white">
@@ -41,8 +72,10 @@ const WhiteboardModal = ({
 
                 <div className="h-full w-full">
                     <Excalidraw
-                        initialData={initialData || undefined}
-                        excalidrawAPI={onApiReady}
+                        excalidrawAPI={(instance) => {
+                            setApi(instance);
+                            onApiReady?.(instance);
+                        }}
                         onChange={onSceneChange}
                         theme="light"
                     />

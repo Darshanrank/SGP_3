@@ -27,6 +27,7 @@ import { areUsersBlocked } from './services/block.service.js';
 import { startClassReminderScheduler } from './services/classReminder.service.js';
 const app = express();
 const server = createServer(app);
+const whiteboardSceneByClassId = new Map();
 const frontendOrigin = conf.FRONTEND_URL || 'http://localhost:5173';
 const io = new Server(server, {
     cors: {
@@ -81,6 +82,27 @@ const getRoomUserIds = async (room, ioInstance) => {
             .map((s) => s.user?.userId)
             .filter((id) => Number.isInteger(id))
     )];
+};
+
+const sanitizeWhiteboardScene = (scene) => {
+    if (!scene || typeof scene !== 'object') {
+        return { elements: [], appState: {}, files: {} };
+    }
+
+    const elements = Array.isArray(scene.elements) ? scene.elements : [];
+    const files = scene.files && typeof scene.files === 'object' ? scene.files : {};
+    const appState = scene.appState && typeof scene.appState === 'object' ? scene.appState : {};
+
+    return {
+        elements,
+        appState: {
+            viewBackgroundColor: appState.viewBackgroundColor,
+            theme: appState.theme,
+            gridSize: appState.gridSize,
+            zenModeEnabled: appState.zenModeEnabled
+        },
+        files
+    };
 };
 
 const emitChatPresence = async (classId, ioInstance) => {
@@ -146,9 +168,44 @@ io.on('connection', (socket) => {
             }
 
             await emitChatPresence(normalizedClassId, io);
+
+            const existingScene = whiteboardSceneByClassId.get(normalizedClassId);
+            if (existingScene?.scene) {
+                socket.emit('whiteboard_scene_updated', {
+                    classId: normalizedClassId,
+                    scene: existingScene.scene,
+                    updatedBy: existingScene.updatedBy || null,
+                    updatedAt: existingScene.updatedAt || null,
+                    hydrated: true
+                });
+            }
         } catch (err) {
             logger.warn('join_chat failed', { socketId: socket.id, err: err.message });
             socket.emit('error', 'Unable to join room');
+        }
+    });
+
+    socket.on('whiteboard_scene_request', async ({ classId }) => {
+        try {
+            const userId = socket.user?.userId;
+            const normalizedClassId = Number(classId);
+            if (!Number.isInteger(normalizedClassId)) return;
+
+            const allowed = await isUserInClass(userId, normalizedClassId);
+            if (!allowed) return;
+
+            const existingScene = whiteboardSceneByClassId.get(normalizedClassId);
+            if (!existingScene?.scene) return;
+
+            socket.emit('whiteboard_scene_updated', {
+                classId: normalizedClassId,
+                scene: sanitizeWhiteboardScene(existingScene.scene),
+                updatedBy: existingScene.updatedBy || null,
+                updatedAt: existingScene.updatedAt || null,
+                hydrated: true
+            });
+        } catch (err) {
+            logger.warn('whiteboard_scene_request failed', { socketId: socket.id, err: err.message });
         }
     });
 
@@ -338,9 +395,17 @@ io.on('connection', (socket) => {
             const partnerId = await getPartnerIdInClass(userId, normalizedClassId);
             if (partnerId && await areUsersBlocked(userId, partnerId)) return;
 
+            const safeScene = sanitizeWhiteboardScene(scene);
+
+            whiteboardSceneByClassId.set(normalizedClassId, {
+                scene: safeScene,
+                updatedBy: userId,
+                updatedAt: new Date().toISOString()
+            });
+
             socket.to(`chat_${normalizedClassId}`).emit('whiteboard_scene_updated', {
                 classId: normalizedClassId,
-                scene,
+                scene: safeScene,
                 updatedBy: userId
             });
         } catch (err) {
