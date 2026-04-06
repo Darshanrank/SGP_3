@@ -184,7 +184,7 @@ export const useSwapClassroomChat = (classId, socket, user, mergeUniqueById, app
                 previousEmoji
             });
         }
-    }, [messageId, myReactionByMessage, classId, socket, applyReactionChange]);
+    }, [myReactionByMessage, classId, socket, applyReactionChange]);
 
     // Append incoming message
     const appendIncomingMessage = useCallback((incomingMessage) => {

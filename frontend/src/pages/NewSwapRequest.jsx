@@ -2,13 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { useAuth } from '../context/AuthContext';
 import { createSwapRequest, getMyRequests } from '../services/swap.service';
 import { getUserSkills } from '../services/skill.service';
 import { getPublicProfileByUsername } from '../services/profile.service';
 import { getMatchedUsers } from '../services/matching.service';
 import { Button } from '../components/ui/Button';
-import { Search, ArrowRightLeft, Send, ChevronLeft, User, BookOpen, GraduationCap, X, Play, ExternalLink } from 'lucide-react';
+import { Search, ArrowRightLeft, Send, ChevronLeft, User, BookOpen, GraduationCap, X, Play, ExternalLink, CalendarDays } from 'lucide-react';
 
 const levelLabel = { LOW: 'Beginner', MEDIUM: 'Intermediate', HIGH: 'Advanced' };
 const levelColor = { LOW: 'bg-blue-500/10 text-blue-400', MEDIUM: 'bg-amber-500/10 text-amber-400', HIGH: 'bg-green-500/10 text-green-400' };
@@ -18,7 +17,6 @@ const MESSAGE_MAX = 1000;
 const NewSwapRequest = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { user } = useAuth();
 
     // URL params for pre-filling
     const prefilledUsername = searchParams.get('to') || '';
@@ -36,6 +34,8 @@ const NewSwapRequest = () => {
     const [loadingTarget, setLoadingTarget] = useState(false);
     const [selectedLearnSkillId, setSelectedLearnSkillId] = useState(prefilledSkillId ? parseInt(prefilledSkillId, 10) : null);
     const [selectedTeachSkillId, setSelectedTeachSkillId] = useState(null);
+    const [preferredDate, setPreferredDate] = useState('');
+    const [preferredTime, setPreferredTime] = useState('');
     const [message, setMessage] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [previewSkill, setPreviewSkill] = useState(null);
@@ -103,7 +103,7 @@ const NewSwapRequest = () => {
                         setSelectedLearnSkillId(found.id);
                     }
                 }
-            } catch (err) {
+            } catch {
                 toast.error('User not found');
                 setStep(1);
                 setTargetUsername('');
@@ -124,6 +124,8 @@ const NewSwapRequest = () => {
         setTargetUsername(username);
         setSelectedLearnSkillId(null);
         setSelectedTeachSkillId(null);
+        setPreferredDate('');
+        setPreferredTime('');
         setMessage('');
         setStep(2);
     };
@@ -138,13 +140,21 @@ const NewSwapRequest = () => {
             return;
         }
 
+        const preferredBits = [];
+        if (preferredDate) preferredBits.push(`Date: ${preferredDate}`);
+        if (preferredTime) preferredBits.push(`Time: ${preferredTime}`);
+
+        const scheduleLine = preferredBits.length > 0 ? `Preferred schedule - ${preferredBits.join(', ')}` : '';
+        const customMessage = message.trim();
+        const fullMessage = [scheduleLine, customMessage].filter(Boolean).join('\n').slice(0, MESSAGE_MAX);
+
         setSubmitting(true);
         try {
             await createSwapRequest({
                 toUserId: targetProfile.userId,
                 learnSkillId: selectedLearnSkillId,
                 teachSkillId: selectedTeachSkillId || undefined,
-                message: message.trim() || undefined,
+                message: fullMessage || undefined,
             });
             toast.success('Swap request sent successfully!');
             navigate('/swaps', { replace: true });
@@ -439,6 +449,33 @@ const NewSwapRequest = () => {
                     {/* Message */}
                     <div>
                         <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-3">
+                            <CalendarDays className="h-5 w-5 text-blue-600" />
+                            Preferred Schedule <span className="text-xs text-gray-400 font-normal">(optional)</span>
+                        </h2>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Preferred Date</label>
+                                <input
+                                    type="date"
+                                    value={preferredDate}
+                                    onChange={(e) => setPreferredDate(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Preferred Time</label>
+                                <input
+                                    type="time"
+                                    value={preferredTime}
+                                    onChange={(e) => setPreferredTime(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-3">
                             <Send className="h-5 w-5 text-purple-600" />
                             Message <span className="text-xs text-gray-400 font-normal">(optional)</span>
                         </h2>
@@ -477,6 +514,12 @@ const NewSwapRequest = () => {
                                     }
                                 </span>
                             </div>
+                            {(preferredDate || preferredTime) && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">Preferred schedule</span>
+                                    <span className="font-medium text-gray-900">{[preferredDate, preferredTime].filter(Boolean).join(', ')}</span>
+                                </div>
+                            )}
                             {message.trim() && (
                                 <div className="pt-2 border-t border-gray-200">
                                     <span className="text-gray-500">Message</span>

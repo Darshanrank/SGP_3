@@ -12,6 +12,9 @@ const Home = () => {
     const [loadingProfiles, setLoadingProfiles] = useState(true);
     const [activeCategory, setActiveCategory] = useState('');
     const [stats, setStats] = useState({ learners: 0, swaps: 0, skills: 0 });
+    const [heroSkill, setHeroSkill] = useState('');
+    const [heroCategory, setHeroCategory] = useState('');
+    const [heroAvailability, setHeroAvailability] = useState('');
 
     useEffect(() => {
         let mounted = true;
@@ -89,6 +92,27 @@ const Home = () => {
 
     const formatStat = (value) => Number(value || 0).toLocaleString();
 
+    const heroDiscoverUrl = useMemo(() => {
+        const params = new URLSearchParams();
+
+        if (heroSkill.trim()) {
+            params.set('skill', heroSkill.trim());
+        }
+
+        if (heroCategory.trim()) {
+            params.set('category', heroCategory.trim());
+        }
+
+        if (heroAvailability === 'WEEKDAYS') {
+            params.set('days', 'MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY');
+        } else if (heroAvailability === 'WEEKENDS') {
+            params.set('days', 'SATURDAY,SUNDAY');
+        }
+
+        const query = params.toString();
+        return query ? `/discover?${query}` : '/discover';
+    }, [heroSkill, heroCategory, heroAvailability]);
+
     return (
         <div className="space-y-12">
             <section className="section-card max-w-7xl mx-auto px-6 py-16 grid gap-10">
@@ -118,21 +142,34 @@ const Home = () => {
 
                 <div className="rounded-xl border border-white/10 bg-[#0F172A] p-4">
                     <div className="flex flex-col gap-3 md:flex-row">
-                        <input placeholder="Python, React, UI Design..." className="h-11 px-3 md:flex-1" />
-                        <select className="h-11 px-3 md:w-48">
-                            <option>Programming, Design...</option>
+                        <input
+                            placeholder="Python, React, UI Design..."
+                            className="h-11 px-3 md:flex-1"
+                            value={heroSkill}
+                            onChange={(e) => setHeroSkill(e.target.value)}
+                        />
+                        <select
+                            className="h-11 px-3 md:w-48"
+                            value={heroCategory}
+                            onChange={(e) => setHeroCategory(e.target.value)}
+                        >
+                            <option value="">Programming, Design...</option>
                             {categories.map((category) => (
-                                <option key={category}>{category}</option>
+                                <option key={category} value={category}>{category}</option>
                             ))}
                         </select>
-                        <select className="h-11 px-3 md:w-48">
-                            <option>Weekdays, Weekends...</option>
-                            <option>Weekdays</option>
-                            <option>Weekends</option>
-                            <option>Evenings</option>
+                        <select
+                            className="h-11 px-3 md:w-48"
+                            value={heroAvailability}
+                            onChange={(e) => setHeroAvailability(e.target.value)}
+                        >
+                            <option value="">Weekdays, Weekends...</option>
+                            <option value="WEEKDAYS">Weekdays</option>
+                            <option value="WEEKENDS">Weekends</option>
+                            <option value="EVENINGS">Evenings</option>
                         </select>
                         <Link
-                            to={user ? '/skills' : '/register'}
+                            to={heroDiscoverUrl}
                             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0A4D9F] px-5 text-sm font-semibold text-white transition hover:bg-[#083A78] md:px-6"
                         >
                             <Search className="h-4 w-4" />

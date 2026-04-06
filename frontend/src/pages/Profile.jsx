@@ -405,7 +405,7 @@ const Profile = () => {
         // Validate teach skill proof URLs
         let hasSkillUrlErrors = false;
         formData.teachSkills.forEach((skill, index) => {
-            if (skill.proofUrl && !URL_REGEX.test(skill.proofUrl)) {
+            if (validateUrl(skill.proofUrl)) {
                 updateArrayItem('teachSkills', index, '_proofUrlError', 'Enter a valid URL');
                 hasSkillUrlErrors = true;
             }
@@ -884,12 +884,12 @@ const Profile = () => {
                                                     updateArrayItem('teachSkills', index, 'proofUrl', e.target.value);
                                                     // Live validate proof URL
                                                     const val = e.target.value;
-                                                    const err = val && !URL_REGEX.test(val) ? 'Enter a valid URL' : null;
+                                                    const err = validateUrl(val);
                                                     updateArrayItem('teachSkills', index, '_proofUrlError', err);
                                                 }}
                                                 onBlur={() => {
                                                     const val = skill.proofUrl;
-                                                    const err = val && !URL_REGEX.test(val) ? 'Enter a valid URL' : null;
+                                                    const err = validateUrl(val);
                                                     updateArrayItem('teachSkills', index, '_proofUrlError', err);
                                                 }}
                                             />
