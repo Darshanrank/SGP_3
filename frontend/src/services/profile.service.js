@@ -19,8 +19,10 @@ export const sendUpcomingReminder = async () => {
     return response.data;
 };
 
-export const deleteAccount = async () => {
-    const response = await api.delete('/profile/me');
+export const deleteAccount = async (confirmationText) => {
+    const response = await api.delete('/profile/me', {
+        data: { confirmationText }
+    });
     return response.data;
 };
 

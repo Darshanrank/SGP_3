@@ -78,7 +78,7 @@
   model UserProfile {
     id               Int      @id @default(autoincrement())
     userId           Int      @unique
-    user             Users    @relation(fields: [userId], references: [userId])
+    user             Users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
     fullName         String?
     bio              String?  @db.Text
     avatarUrl        String?
@@ -102,7 +102,7 @@
   model LearningGoal {
     id        Int      @id @default(autoincrement())
     userId    Int
-    user      Users    @relation(fields: [userId], references: [userId])
+    user      Users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
     goalText  String
     createdAt DateTime @default(now())
 
@@ -113,7 +113,7 @@
   model ProfilePrivacy {
     id               Int      @id @default(autoincrement())
     userId           Int      @unique
-    user             Users    @relation(fields: [userId], references: [userId])
+    user             Users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
     showAvailability Boolean  @default(true)
     showPortfolio    Boolean  @default(true)
     showSocialLinks  Boolean  @default(true)
@@ -123,9 +123,9 @@
   model ProfileView {
     id        Int      @id @default(autoincrement())
     userId    Int
-    user      Users    @relation("ProfileViewsReceived", fields: [userId], references: [userId])
+    user      Users    @relation("ProfileViewsReceived", fields: [userId], references: [userId], onDelete: Cascade)
     viewerId  Int
-    viewer    Users    @relation("ProfileViewsGiven", fields: [viewerId], references: [userId])
+    viewer    Users    @relation("ProfileViewsGiven", fields: [viewerId], references: [userId], onDelete: Cascade)
     viewedAt  DateTime @default(now())
 
     @@index([userId])
@@ -137,7 +137,7 @@
   model UserAvailability {
     id        Int      @id @default(autoincrement())
     userId    Int
-    user      Users    @relation(fields: [userId], references: [userId])
+    user      Users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
     dayOfWeek String   // MONDAY, TUESDAY, etc.
     startTime String   // "09:00"
     endTime   String   // "17:00"
@@ -150,7 +150,7 @@
 model SavedFilter {
   id        Int      @id @default(autoincrement())
   userId    Int
-  user      Users    @relation(fields: [userId], references: [userId])
+  user      Users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
   name      String
   filters   Json
   createdAt DateTime @default(now())
@@ -181,7 +181,7 @@ model SavedFilter {
   model UserSkill {
     id        Int       @id @default(autoincrement())
     userId    Int
-    user      Users     @relation(fields: [userId], references: [userId])
+    user      Users     @relation(fields: [userId], references: [userId], onDelete: Cascade)
     skillId   Int
     skill     Skill     @relation(fields: [skillId], references: [id])
     type      SkillType
@@ -204,7 +204,7 @@ model SavedFilter {
   model SkillPreview {
     id              Int       @id @default(autoincrement())
     userSkillId     Int       @unique
-    userSkill       UserSkill @relation(fields: [userSkillId], references: [id])
+    userSkill       UserSkill @relation(fields: [userSkillId], references: [id], onDelete: Cascade)
     videoUrl        String?
     description     String?   @db.Text
     syllabusOutline String?   @db.Text
@@ -221,9 +221,9 @@ model SavedFilter {
   model SwapRequest {
     id            Int        @id @default(autoincrement())
     fromUserId    Int
-    fromUser      Users      @relation("SentRequests", fields: [fromUserId], references: [userId])
+    fromUser      Users      @relation("SentRequests", fields: [fromUserId], references: [userId], onDelete: Cascade)
     toUserId      Int
-    toUser        Users      @relation("ReceivedRequests", fields: [toUserId], references: [userId])
+    toUser        Users      @relation("ReceivedRequests", fields: [toUserId], references: [userId], onDelete: Cascade)
     teachSkillId  Int?
     teachSkill    UserSkill?  @relation("TeachSkill", fields: [teachSkillId], references: [id])
     learnSkillId  Int
@@ -250,7 +250,7 @@ model SavedFilter {
   model SwapClass {
     id             Int             @id @default(autoincrement())
     swapRequestId  Int             @unique
-    swapRequest    SwapRequest     @relation(fields: [swapRequestId], references: [id])
+    swapRequest    SwapRequest     @relation(fields: [swapRequestId], references: [id], onDelete: Cascade)
     classroomCode  String?
     meetLink       String?
     status         ClassStatus     @default(ONGOING)
@@ -271,7 +271,7 @@ model SavedFilter {
   model ClassTodo {
     id           Int       @id @default(autoincrement())
     swapClassId  Int
-    swapClass    SwapClass @relation(fields: [swapClassId], references: [id])
+    swapClass    SwapClass @relation(fields: [swapClassId], references: [id], onDelete: Cascade)
     title        String
     description  String?
     dueDate      DateTime?
@@ -281,11 +281,11 @@ model SavedFilter {
   model PinnedResource {
     id          Int       @id @default(autoincrement())
     swapClassId Int
-    swapClass   SwapClass @relation(fields: [swapClassId], references: [id])
+    swapClass   SwapClass @relation(fields: [swapClassId], references: [id], onDelete: Cascade)
     title       String
     url         String
     createdBy   Int
-    creator     Users     @relation("PinnedResourceCreator", fields: [createdBy], references: [userId])
+    creator     Users     @relation("PinnedResourceCreator", fields: [createdBy], references: [userId], onDelete: Cascade)
     createdAt   DateTime  @default(now())
 
     @@index([swapClassId])
@@ -295,12 +295,12 @@ model SavedFilter {
   model CodeSnippet {
     id          Int       @id @default(autoincrement())
     swapClassId Int
-    swapClass   SwapClass @relation(fields: [swapClassId], references: [id])
+    swapClass   SwapClass @relation(fields: [swapClassId], references: [id], onDelete: Cascade)
     title       String
     language    String
     code        String    @db.Text
     createdBy   Int
-    creator     Users     @relation("CodeSnippetCreator", fields: [createdBy], references: [userId])
+    creator     Users     @relation("CodeSnippetCreator", fields: [createdBy], references: [userId], onDelete: Cascade)
     createdAt   DateTime  @default(now())
 
     @@index([swapClassId])
@@ -310,11 +310,11 @@ model SavedFilter {
   model ClassroomFile {
     id          Int       @id @default(autoincrement())
     swapClassId Int
-    swapClass   SwapClass @relation(fields: [swapClassId], references: [id])
+    swapClass   SwapClass @relation(fields: [swapClassId], references: [id], onDelete: Cascade)
     fileName    String
     fileUrl     String
     uploadedBy  Int
-    uploader    Users     @relation("ClassroomFileUploader", fields: [uploadedBy], references: [userId])
+    uploader    Users     @relation("ClassroomFileUploader", fields: [uploadedBy], references: [userId], onDelete: Cascade)
     createdAt   DateTime  @default(now())
 
     @@index([swapClassId])
@@ -324,7 +324,7 @@ model SavedFilter {
   model SharedNote {
     id          Int       @id @default(autoincrement())
     swapClassId Int       @unique
-    swapClass   SwapClass @relation(fields: [swapClassId], references: [id])
+    swapClass   SwapClass @relation(fields: [swapClassId], references: [id], onDelete: Cascade)
     content     String    @db.LongText
     updatedAt   DateTime  @updatedAt
   }
@@ -332,7 +332,7 @@ model SavedFilter {
   model ChatRoom {
     id           Int           @id @default(autoincrement())
     swapClassId  Int           @unique
-    swapClass    SwapClass     @relation(fields: [swapClassId], references: [id])
+    swapClass    SwapClass     @relation(fields: [swapClassId], references: [id], onDelete: Cascade)
     createdAt    DateTime      @default(now())
     messages     ChatMessage[]
   }
@@ -346,9 +346,9 @@ model SavedFilter {
   model ChatMessage {
     id              Int             @id @default(autoincrement())
     chatRoomId      Int
-    chatRoom        ChatRoom        @relation(fields: [chatRoomId], references: [id])
+    chatRoom        ChatRoom        @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
     senderId        Int
-    sender          Users           @relation(fields: [senderId], references: [userId])
+    sender          Users           @relation(fields: [senderId], references: [userId], onDelete: Cascade)
     message         String          @db.Text
     messageType     ChatMessageType @default(TEXT)
     attachmentUrl   String?
@@ -369,7 +369,7 @@ model SavedFilter {
   model SwapCompletion {
     id               Int       @id @default(autoincrement())
     swapClassId      Int       @unique
-    swapClass        SwapClass @relation(fields: [swapClassId], references: [id])
+    swapClass        SwapClass @relation(fields: [swapClassId], references: [id], onDelete: Cascade)
     completedByUser1 Boolean   @default(false)
     completedByUser2 Boolean   @default(false)
     completedAt      DateTime?
@@ -378,11 +378,11 @@ model SavedFilter {
   model SwapReview {
     id              Int       @id @default(autoincrement())
     swapClassId     Int
-    swapClass       SwapClass @relation(fields: [swapClassId], references: [id])
+    swapClass       SwapClass @relation(fields: [swapClassId], references: [id], onDelete: Cascade)
     reviewerId      Int
-    reviewer        Users     @relation("ReviewsGiven", fields: [reviewerId], references: [userId])
+    reviewer        Users     @relation("ReviewsGiven", fields: [reviewerId], references: [userId], onDelete: Cascade)
     revieweeId      Int
-    reviewee        Users     @relation("ReviewsReceived", fields: [revieweeId], references: [userId])
+    reviewee        Users     @relation("ReviewsReceived", fields: [revieweeId], references: [userId], onDelete: Cascade)
 
     clarityRating       Int
     punctualityRating   Int
@@ -405,9 +405,9 @@ model SavedFilter {
   model ReviewHelpfulVote {
     id        Int        @id @default(autoincrement())
     reviewId  Int
-    review    SwapReview @relation(fields: [reviewId], references: [id])
+    review    SwapReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
     userId    Int
-    user      Users      @relation("HelpfulVotesByUser", fields: [userId], references: [userId])
+    user      Users      @relation("HelpfulVotesByUser", fields: [userId], references: [userId], onDelete: Cascade)
     createdAt DateTime   @default(now())
 
     @@unique([reviewId, userId])
@@ -418,7 +418,7 @@ model SavedFilter {
   model UserReward {
     id         Int   @id @default(autoincrement())
     userId     Int   @unique
-    user       Users @relation(fields: [userId], references: [userId])
+    user       Users @relation(fields: [userId], references: [userId], onDelete: Cascade)
     points     Int   @default(0)
     totalSwaps Int   @default(0)
   }
@@ -433,7 +433,7 @@ model SavedFilter {
   model UserBadge {
     id        Int      @id @default(autoincrement())
     userId    Int
-    user      Users    @relation(fields: [userId], references: [userId])
+    user      Users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
     badgeId   Int
     badge     Badge    @relation(fields: [badgeId], references: [id])
     earnedAt  DateTime @default(now())
@@ -453,7 +453,7 @@ model SavedFilter {
   model Notification {
     id        Int              @id @default(autoincrement())
     userId    Int
-    user      Users            @relation(fields: [userId], references: [userId])
+    user      Users            @relation(fields: [userId], references: [userId], onDelete: Cascade)
     type      NotificationType
     message   String
     isRead    Boolean          @default(false)
@@ -470,7 +470,7 @@ model SavedFilter {
   model NotificationPreference {
     id             Int      @id @default(autoincrement())
     userId         Int      @unique
-    user           Users    @relation(fields: [userId], references: [userId])
+    user           Users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
     swapRequests   Boolean  @default(true)
     classReminders Boolean  @default(true)
     chatMessages   Boolean  @default(true)
@@ -482,7 +482,7 @@ model SavedFilter {
   model PushSubscription {
     id            Int      @id @default(autoincrement())
     userId        Int
-    user          Users    @relation(fields: [userId], references: [userId])
+    user          Users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
     endpoint      String   @db.Text
     endpointHash  String   @unique
     p256dh        String
@@ -496,9 +496,9 @@ model SavedFilter {
   model CalendarReminderLog {
     id            Int           @id @default(autoincrement())
     userId        Int
-    user          Users         @relation(fields: [userId], references: [userId])
+    user          Users         @relation(fields: [userId], references: [userId], onDelete: Cascade)
     calendarEventId Int
-    calendarEvent CalendarEvent @relation(fields: [calendarEventId], references: [id])
+    calendarEvent CalendarEvent @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
     minutesBefore Int
     createdAt     DateTime      @default(now())
 
@@ -509,9 +509,9 @@ model SavedFilter {
   model CalendarEvent {
     id          Int               @id @default(autoincrement())
     userId      Int
-    user        Users             @relation(fields: [userId], references: [userId])
+    user        Users             @relation(fields: [userId], references: [userId], onDelete: Cascade)
     swapClassId Int?
-    swapClass   SwapClass?        @relation(fields: [swapClassId], references: [id])
+    swapClass   SwapClass?        @relation(fields: [swapClassId], references: [id], onDelete: Cascade)
     title       String
     eventDate   DateTime
     description String?
@@ -538,9 +538,9 @@ model SavedFilter {
   model Report {
     id             Int          @id @default(autoincrement())
     reporterId     Int
-    reporter       Users        @relation("Reporter", fields: [reporterId], references: [userId])
+    reporter       Users        @relation("Reporter", fields: [reporterId], references: [userId], onDelete: Cascade)
     reportedUserId Int
-    reportedUser   Users        @relation("ReportedUser", fields: [reportedUserId], references: [userId])
+    reportedUser   Users        @relation("ReportedUser", fields: [reportedUserId], references: [userId], onDelete: Cascade)
     reason         String
     status         ReportStatus @default(OPEN)
     createdAt      DateTime     @default(now())
@@ -549,9 +549,9 @@ model SavedFilter {
   model BlockedUser {
     id             Int      @id @default(autoincrement())
     blockerId      Int
-    blocker        Users    @relation("Blocker", fields: [blockerId], references: [userId])
+    blocker        Users    @relation("Blocker", fields: [blockerId], references: [userId], onDelete: Cascade)
     blockedUserId  Int
-    blockedUser    Users    @relation("BlockedUser", fields: [blockedUserId], references: [userId])
+    blockedUser    Users    @relation("BlockedUser", fields: [blockedUserId], references: [userId], onDelete: Cascade)
     createdAt      DateTime @default(now())
 
     @@unique([blockerId, blockedUserId])
@@ -568,7 +568,7 @@ model SavedFilter {
   model AdminPenalty {
     id          Int         @id @default(autoincrement())
     userId      Int
-    user        Users       @relation(fields: [userId], references: [userId])
+    user        Users       @relation(fields: [userId], references: [userId], onDelete: Cascade)
     reason      String
     penaltyType PenaltyType
     createdAt   DateTime    @default(now())
@@ -581,7 +581,7 @@ model SavedFilter {
     tokenId            String   @unique
     tokenHash          String
     userId             Int
-    user               Users    @relation(fields: [userId], references: [userId])
+    user               Users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
     userAgent          String?
     ip                 String?
     revoked            Boolean  @default(false)

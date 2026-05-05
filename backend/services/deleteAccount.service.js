@@ -7,136 +7,111 @@ import { logger } from '../utils/logger.js';
  */
 export const deleteAccountService = async (userId) => {
     return await prisma.$transaction(async (tx) => {
-        // 1. Delete skill previews (depends on userSkills)
+        // Gather IDs up-front for dependency-safe deletes.
         const userSkillIds = await tx.userSkill.findMany({
             where: { userId },
-            select: { id: true },
-        }).then((skills) => skills.map((s) => s.id));
+            select: { id: true }
+        }).then((rows) => rows.map((row) => row.id));
 
-        if (userSkillIds.length > 0) {
-            await tx.skillPreview.deleteMany({
-                where: { userSkillId: { in: userSkillIds } },
-            });
-        }
+        const requestIds = await tx.swapRequest.findMany({
+            where: { OR: [{ fromUserId: userId }, { toUserId: userId }] },
+            select: { id: true }
+        }).then((rows) => rows.map((row) => row.id));
 
-        // 2. Delete chat messages
-        await tx.chatMessage.deleteMany({ where: { senderId: userId } });
+        const classIds = requestIds.length
+            ? await tx.swapClass.findMany({
+                where: { swapRequestId: { in: requestIds } },
+                select: { id: true }
+            }).then((rows) => rows.map((row) => row.id))
+            : [];
 
-        // 3. Delete helpful votes authored by this user
-        await tx.reviewHelpfulVote.deleteMany({ where: { userId } });
+        const chatRoomIds = classIds.length
+            ? await tx.chatRoom.findMany({
+                where: { swapClassId: { in: classIds } },
+                select: { id: true }
+            }).then((rows) => rows.map((row) => row.id))
+            : [];
 
-        // 4. Delete helpful votes linked to reviews this user authored/received
-        const reviewIds = await tx.swapReview.findMany({
+        const classReviewIds = classIds.length
+            ? await tx.swapReview.findMany({
+                where: { swapClassId: { in: classIds } },
+                select: { id: true }
+            }).then((rows) => rows.map((row) => row.id))
+            : [];
+
+        const userReviewIds = await tx.swapReview.findMany({
             where: { OR: [{ reviewerId: userId }, { revieweeId: userId }] },
             select: { id: true }
         }).then((rows) => rows.map((row) => row.id));
 
-        if (reviewIds.length > 0) {
-            await tx.reviewHelpfulVote.deleteMany({
-                where: { reviewId: { in: reviewIds } }
-            });
+        const allReviewIds = Array.from(new Set([...classReviewIds, ...userReviewIds]));
+
+        // 1) Delete deepest classroom/review/chat children first.
+        if (allReviewIds.length) {
+            await tx.reviewHelpfulVote.deleteMany({ where: { reviewId: { in: allReviewIds } } });
+        }
+        await tx.reviewHelpfulVote.deleteMany({ where: { userId } });
+
+        if (chatRoomIds.length) {
+            await tx.chatMessage.deleteMany({ where: { chatRoomId: { in: chatRoomIds } } });
+        }
+        await tx.chatMessage.deleteMany({ where: { senderId: userId } });
+
+        if (classIds.length) {
+            await tx.sharedNote.deleteMany({ where: { swapClassId: { in: classIds } } });
+            await tx.pinnedResource.deleteMany({ where: { swapClassId: { in: classIds } } });
+            await tx.codeSnippet.deleteMany({ where: { swapClassId: { in: classIds } } });
+            await tx.classroomFile.deleteMany({ where: { swapClassId: { in: classIds } } });
+            await tx.classTodo.deleteMany({ where: { swapClassId: { in: classIds } } });
+            await tx.swapCompletion.deleteMany({ where: { swapClassId: { in: classIds } } });
+            await tx.swapReview.deleteMany({ where: { swapClassId: { in: classIds } } });
+            await tx.calendarReminderLog.deleteMany({ where: { calendarEvent: { swapClassId: { in: classIds } } } });
+            await tx.calendarEvent.deleteMany({ where: { swapClassId: { in: classIds } } });
         }
 
-        // 5. Delete swap reviews (given and received)
-        await tx.swapReview.deleteMany({
-            where: { OR: [{ reviewerId: userId }, { revieweeId: userId }] },
-        });
-
-        // 6. Delete notifications
-        await tx.notification.deleteMany({ where: { userId } });
-
-        // 5. Delete calendar events
-        await tx.calendarEvent.deleteMany({ where: { userId } });
-
-        // 6. Delete availability
-        await tx.userAvailability.deleteMany({ where: { userId } });
-
-        // 7. Delete badges
-        await tx.userBadge.deleteMany({ where: { userId } });
-
-        // 8. Delete rewards
-        await tx.userReward.deleteMany({ where: { userId } });
-
-        // 9. Delete penalties
-        await tx.adminPenalty.deleteMany({ where: { userId } });
-
-        // 10. Delete reports (filed and received)
-        await tx.report.deleteMany({
-            where: { OR: [{ reporterId: userId }, { reportedUserId: userId }] },
-        });
-
-        // 11. Delete refresh tokens
-        await tx.refreshToken.deleteMany({ where: { userId } });
-
-        // 12. Handle swap classes — clean up todos, completions, chat rooms for classes the user is in
-        const userSwapRequests = await tx.swapRequest.findMany({
-            where: { OR: [{ fromUserId: userId }, { toUserId: userId }] },
-            select: { id: true },
-        });
-        const requestIds = userSwapRequests.map((r) => r.id);
-
-        if (requestIds.length > 0) {
-            const classIds = await tx.swapClass.findMany({
-                where: { swapRequestId: { in: requestIds } },
-                select: { id: true },
-            }).then((cs) => cs.map((c) => c.id));
-
-            if (classIds.length > 0) {
-                // Delete chat room messages, then rooms
-                const chatRoomIds = await tx.chatRoom.findMany({
-                    where: { swapClassId: { in: classIds } },
-                    select: { id: true },
-                }).then((cr) => cr.map((r) => r.id));
-
-                if (chatRoomIds.length > 0) {
-                    await tx.chatMessage.deleteMany({
-                        where: { chatRoomId: { in: chatRoomIds } },
-                    });
-                    await tx.chatRoom.deleteMany({
-                        where: { id: { in: chatRoomIds } },
-                    });
-                }
-
-                await tx.classTodo.deleteMany({
-                    where: { swapClassId: { in: classIds } },
-                });
-                await tx.swapCompletion.deleteMany({
-                    where: { swapClassId: { in: classIds } },
-                });
-                const classReviewIds = await tx.swapReview.findMany({
-                    where: { swapClassId: { in: classIds } },
-                    select: { id: true }
-                }).then((rows) => rows.map((row) => row.id));
-                if (classReviewIds.length > 0) {
-                    await tx.reviewHelpfulVote.deleteMany({
-                        where: { reviewId: { in: classReviewIds } }
-                    });
-                }
-                await tx.swapReview.deleteMany({
-                    where: { swapClassId: { in: classIds } },
-                });
-                await tx.calendarEvent.deleteMany({
-                    where: { swapClassId: { in: classIds } },
-                });
-                await tx.swapClass.deleteMany({
-                    where: { id: { in: classIds } },
-                });
-            }
+        // 2) Remove containers/parents for classroom data.
+        if (chatRoomIds.length) {
+            await tx.chatRoom.deleteMany({ where: { id: { in: chatRoomIds } } });
+        }
+        if (classIds.length) {
+            await tx.swapClass.deleteMany({ where: { id: { in: classIds } } });
         }
 
-        // 13. Delete swap requests (must detach userSkills first)
-        // Clear teachSkillId/learnSkillId references before deleting user skills
-        await tx.swapRequest.deleteMany({
-            where: { OR: [{ fromUserId: userId }, { toUserId: userId }] },
-        });
+        // 3) Remove remaining swap-linked records.
+        await tx.swapReview.deleteMany({ where: { OR: [{ reviewerId: userId }, { revieweeId: userId }] } });
+        await tx.swapRequest.deleteMany({ where: { OR: [{ fromUserId: userId }, { toUserId: userId }] } });
 
-        // 14. Delete user skills
+        // 4) Remove remaining user children.
+        if (userSkillIds.length) {
+            await tx.skillPreview.deleteMany({ where: { userSkillId: { in: userSkillIds } } });
+        }
         await tx.userSkill.deleteMany({ where: { userId } });
 
-        // 15. Delete profile
+        await tx.learningGoal.deleteMany({ where: { userId } });
+        await tx.profilePrivacy.deleteMany({ where: { userId } });
+        await tx.profileView.deleteMany({ where: { OR: [{ userId }, { viewerId: userId }] } });
+        await tx.userAvailability.deleteMany({ where: { userId } });
+        await tx.savedFilter.deleteMany({ where: { userId } });
+
+        await tx.notification.deleteMany({ where: { userId } });
+        await tx.notificationPreference.deleteMany({ where: { userId } });
+        await tx.pushSubscription.deleteMany({ where: { userId } });
+
+        await tx.calendarReminderLog.deleteMany({ where: { userId } });
+        await tx.calendarReminderLog.deleteMany({ where: { calendarEvent: { userId } } });
+        await tx.calendarEvent.deleteMany({ where: { userId } });
+
+        await tx.userBadge.deleteMany({ where: { userId } });
+        await tx.userReward.deleteMany({ where: { userId } });
+
+        await tx.adminPenalty.deleteMany({ where: { userId } });
+        await tx.report.deleteMany({ where: { OR: [{ reporterId: userId }, { reportedUserId: userId }] } });
+        await tx.blockedUser.deleteMany({ where: { OR: [{ blockerId: userId }, { blockedUserId: userId }] } });
+
+        await tx.refreshToken.deleteMany({ where: { userId } });
         await tx.userProfile.deleteMany({ where: { userId } });
 
-        // 16. Delete user
+        // 5) Finally delete user record.
         await tx.users.delete({ where: { userId } });
 
         logger.info(`Account deleted for userId ${userId}`);

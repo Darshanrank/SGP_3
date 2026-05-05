@@ -110,6 +110,29 @@ const sanitizeWhiteboardScene = (scene) => {
     };
 };
 
+const ClassroomPanel = ({
+    panelKey,
+    title,
+    icon,
+    iconClass = 'text-[#7BB2FF]',
+    actions,
+    collapsed,
+    onToggle,
+    children
+}) => (
+    <PanelSection
+        panelKey={panelKey}
+        collapsed={collapsed}
+        onToggle={onToggle}
+        title={title}
+        icon={icon}
+        iconClass={iconClass}
+        actions={actions}
+    >
+        {children}
+    </PanelSection>
+);
+
 const SwapClassroom = () => {
     const navigate = useNavigate();
     const { id } = useParams();
@@ -377,8 +400,15 @@ const SwapClassroom = () => {
             return;
         }
 
-        if (!onlineParticipantIds.includes(user?.userId) || !onlineParticipantIds.includes(partnerId)) {
-            toast.error('Both participants must be online to start call');
+        // Check if participant is online
+        if (!onlineParticipantIds.includes(partnerId)) {
+            toast.error('Participant is currently offline.');
+            return;
+        }
+
+        // Check if current user is online
+        if (!onlineParticipantIds.includes(user?.userId)) {
+            toast.error('You are currently offline');
             return;
         }
 
@@ -584,6 +614,22 @@ const SwapClassroom = () => {
             socket.off('connect', joinRoom);
         };
     }, [socket, classId]);
+
+    // Defensive: prevent native form submissions from causing full page reloads
+    // while allowing React onSubmit handlers to run. This captures native
+    // submit events and calls preventDefault so the SPA isn't reloaded.
+    useEffect(() => {
+        const handleNativeFormSubmit = (e) => {
+            try {
+                if (e && e.target && e.target.tagName === 'FORM') {
+                    e.preventDefault();
+                }
+            } catch (_) {}
+        };
+
+        window.addEventListener('submit', handleNativeFormSubmit, true);
+        return () => window.removeEventListener('submit', handleNativeFormSubmit, true);
+    }, []);
 
     useEffect(() => {
         if (!socket || !whiteboardOpen) return;
@@ -1504,20 +1550,6 @@ const SwapClassroom = () => {
     const teachSkillName = swapClass.swapRequest.teachSkill?.skill.name || 'TBD';
     const learnSkillName = swapClass.swapRequest.learnSkill?.skill.name || 'TBD';
 
-    const Panel = ({ panelKey, title, icon, iconClass = 'text-[#7BB2FF]', actions, children }) => (
-        <PanelSection
-            panelKey={panelKey}
-            collapsed={collapsedPanels[panelKey]}
-            onToggle={togglePanel}
-            title={title}
-            icon={icon}
-            iconClass={iconClass}
-            actions={actions}
-        >
-            {children}
-        </PanelSection>
-    );
-
     return (
         <div className="bg-[#0A0F14]">
             <ConfirmDialog
@@ -1552,11 +1584,13 @@ const SwapClassroom = () => {
             />
 
             <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-                    <Panel
+                    <ClassroomPanel
                         panelKey="classroom"
                         title={`Classroom #${swapClass.id}`}
                         icon={StickyNote}
                         iconClass="text-blue-400"
+                        collapsed={collapsedPanels.classroom}
+                        onToggle={togglePanel}
                         actions={
                             <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase ${isFinished ? 'bg-green-500/10 text-green-400' : 'bg-blue-500/10 text-blue-400'}`}>
                                 {swapClass.status}
@@ -1588,10 +1622,15 @@ const SwapClassroom = () => {
                                 <button
                                     type="button"
                                     onClick={handleStartCall}
-                                    disabled={!bothUsersOnline || callStarting}
-                                    className="rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                    disabled={callStarting}
+                                    className={`rounded-lg px-4 py-2 text-white transition ${
+                                        bothUsersOnline
+                                            ? 'bg-blue-600 hover:bg-blue-500'
+                                            : 'bg-blue-600/70 hover:bg-blue-600/60 cursor-not-allowed opacity-70'
+                                    } disabled:cursor-not-allowed disabled:opacity-40`}
+                                    title={bothUsersOnline ? undefined : 'Participant is offline'}
                                 >
-                                    {callStarting ? 'Starting...' : bothUsersOnline ? 'Join Call' : 'Waiting for participant...'}
+                                    {callStarting ? 'Starting...' : 'Join Call'}
                                 </button>
                                 <button
                                     type="button"
@@ -1660,13 +1699,15 @@ const SwapClassroom = () => {
                                 <Button onClick={handleCompleteClass} size="sm" variant="primary">Mark Complete</Button>
                             </div>
                         )}
-                    </Panel>
+                    </ClassroomPanel>
 
-                    <Panel
+                    <ClassroomPanel
                         panelKey="whiteboard"
                         title="Whiteboard"
                         icon={StickyNote}
                         iconClass="text-purple-400"
+                        collapsed={collapsedPanels.whiteboard}
+                        onToggle={togglePanel}
                     >
                         <div className="flex items-center justify-between p-1">
                             <div>
@@ -1681,13 +1722,15 @@ const SwapClassroom = () => {
                                 Open Whiteboard
                             </button>
                         </div>
-                    </Panel>
+                    </ClassroomPanel>
 
-                    <Panel
+                    <ClassroomPanel
                         panelKey="tasks"
                         title="Action Items"
                         icon={ListChecks}
                         iconClass="text-green-400"
+                        collapsed={collapsedPanels.tasks}
+                        onToggle={togglePanel}
                         actions={!isFinished ? (
                             <button
                                 type="button"
@@ -1719,13 +1762,15 @@ const SwapClassroom = () => {
                             parseTaskAssignedUserId={parseTaskAssignedUserId}
                             handleToggleTodo={handleToggleTodo}
                         />
-                    </Panel>
+                    </ClassroomPanel>
 
-                    <Panel
+                    <ClassroomPanel
                         panelKey="notes"
                         title="Shared Notes"
                         icon={StickyNote}
                         iconClass="text-blue-400"
+                        collapsed={collapsedPanels.notes}
+                        onToggle={togglePanel}
                         actions={
                             <span className="text-xs text-[#8DA0BF]">
                                 {getNotesPanelStatusText({
@@ -1752,10 +1797,17 @@ const SwapClassroom = () => {
                             handleSharedNoteChange={handleSharedNoteChange}
                             handleSharedNoteBlur={handleSharedNoteBlur}
                         />
-                    </Panel>
+                    </ClassroomPanel>
 
                     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                        <Panel panelKey="snippets" title="Code Snippets" icon={Code2} iconClass="text-indigo-400">
+                        <ClassroomPanel
+                            panelKey="snippets"
+                            title="Code Snippets"
+                            icon={Code2}
+                            iconClass="text-indigo-400"
+                            collapsed={collapsedPanels.snippets}
+                            onToggle={togglePanel}
+                        >
                             <ClassroomSnippetsPanel
                                 editingSnippetId={editingSnippetId}
                                 editSnippetTitle={editSnippetTitle}
@@ -1783,13 +1835,15 @@ const SwapClassroom = () => {
                                 codeBlockClass={codeBlockClass}
                                 renderHighlightedCodeLine={renderHighlightedCodeLine}
                             />
-                        </Panel>
+                        </ClassroomPanel>
 
-                        <Panel
+                        <ClassroomPanel
                             panelKey="files"
                             title="File History"
                             icon={FileText}
                             iconClass="text-purple-400"
+                            collapsed={collapsedPanels.files}
+                            onToggle={togglePanel}
                         >
                             <ClassroomFilesPanel
                                 classroomFileInputRef={classroomFileInputRef}
@@ -1802,10 +1856,17 @@ const SwapClassroom = () => {
                                 handlePreviewClassroomFile={handlePreviewClassroomFile}
                                 handleDeleteClassroomFile={handleDeleteClassroomFile}
                             />
-                        </Panel>
+                        </ClassroomPanel>
                     </div>
 
-                    <Panel panelKey="resources" title="Pinned Resources" icon={Pin} iconClass="text-cyan-400">
+                    <ClassroomPanel
+                        panelKey="resources"
+                        title="Pinned Resources"
+                        icon={Pin}
+                        iconClass="text-cyan-400"
+                        collapsed={collapsedPanels.resources}
+                        onToggle={togglePanel}
+                    >
                         <ClassroomResourcesPanel
                             handleAddResource={handleAddResource}
                             resourceTitle={resourceTitle}
@@ -1816,10 +1877,17 @@ const SwapClassroom = () => {
                             resources={resources}
                             handleDeleteResource={handleDeleteResource}
                         />
-                    </Panel>
+                    </ClassroomPanel>
 
                     {isFinished && (
-                        <Panel panelKey="reviews" title="Reviews" icon={Star} iconClass="text-yellow-400">
+                        <ClassroomPanel
+                            panelKey="reviews"
+                            title="Reviews"
+                            icon={Star}
+                            iconClass="text-yellow-400"
+                            collapsed={collapsedPanels.reviews}
+                            onToggle={togglePanel}
+                        >
                             <ClassroomReviewsPanel
                                 myReviewStatus={myReviewStatus}
                                 REVIEW_CATEGORY_CONFIG={REVIEW_CATEGORY_CONFIG}
@@ -1836,7 +1904,7 @@ const SwapClassroom = () => {
                                 mostHelpfulReview={mostHelpfulReview}
                                 handleHelpfulVote={handleHelpfulVote}
                             />
-                        </Panel>
+                        </ClassroomPanel>
                     )}
             </div>
 

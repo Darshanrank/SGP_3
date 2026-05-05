@@ -1173,11 +1173,12 @@ const Profile = () => {
                             setDeleteDialogOpen(false);
                             setDeleting(true);
                             try {
-                                await deleteAccount();
+                                await deleteAccount(deleteConfirmText);
                                 toast.success('Your account has been deleted.');
                                 localStorage.removeItem('token');
                                 sessionStorage.removeItem('token');
-                                window.location.href = '/';
+                                localStorage.removeItem('auth_storage');
+                                window.location.href = '/login';
                             } catch (err) {
                                 toast.error(err.response?.data?.message || 'Failed to delete account');
                             } finally {

@@ -92,6 +92,10 @@ export const getPublicProfile = async (req, res, next) => {
 export const deleteAccount = async (req, res, next) => {
     try {
         const userId = req.user.userId;
+        const confirmationText = String(req.body?.confirmationText || '').trim();
+        if (confirmationText !== 'DELETE') {
+            throw new ValidationError('Please type DELETE to confirm account removal.', 'DELETE_CONFIRMATION_REQUIRED');
+        }
         const result = await deleteAccountService(userId);
         // Clear cookies
         res.clearCookie('refreshToken', { httpOnly: true, sameSite: 'strict' });

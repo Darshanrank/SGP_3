@@ -246,7 +246,10 @@ const ClassroomChatDrawer = ({
                             </div>
                         )}
 
-                        <form onSubmit={onSendMessage} className="flex items-center gap-2">
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            onSendMessage(e);
+                        }} className="flex items-center gap-2">
                             <input
                                 ref={fileInputRef}
                                 type="file"
@@ -266,8 +269,17 @@ const ClassroomChatDrawer = ({
 
                             <input
                                 type="text"
+                                name="message"
                                 value={newMessage}
                                 onChange={onInputChange}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        if (newMessage.trim() || selectedFile) {
+                                            onSendMessage(e);
+                                        }
+                                    }
+                                }}
                                 placeholder={selectedFile ? 'Add a caption (optional)...' : 'Type message...'}
                                 className="flex-1 rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-[#E6EEF8] placeholder:text-[#8DA0BF] focus:border-[#0A4D9F] focus:outline-none"
                                 disabled={isFinished || sendingMessage}
